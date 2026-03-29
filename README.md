@@ -4,7 +4,7 @@ Backend service for [Angle HR](https://github.com/Angle-HR/server), written in G
 
 ## Requirements
 
-- [Go](https://go.dev/dl/) **1.23.10** or newer (matches [CI](.github/workflows/code-quality.yml); includes security fixes in the toolchain)
+- [Go](https://go.dev/dl/) **1.23.10** or newer (matches [CI](.github/workflows/code-quality.yml))
 - Optional for local parity with CI: [golangci-lint](https://golangci-lint.run/), `goimports`, [gosec](https://github.com/securego/gosec), [govulncheck](https://go.dev/security/vuln/)
 
 ## Quick start

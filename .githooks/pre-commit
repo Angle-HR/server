@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Run the same quality gate as CI before allowing a commit.
+#
+# To bypass in a pinch:
+#   SKIP_PRECOMMIT=1 git commit ...
+# or:
+#   git commit --no-verify
+
+if [[ "${SKIP_PRECOMMIT:-}" == "1" ]]; then
+  echo "↪ SKIP_PRECOMMIT=1 set; skipping pre-commit checks."
+  exit 0
+fi
+
+if ! command -v make >/dev/null 2>&1; then
+  echo "❌ make not found; cannot run pre-commit checks."
+  exit 1
+fi
+
+echo "→ Pre-commit: running 'make check'..."
+make check

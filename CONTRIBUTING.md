@@ -84,14 +84,13 @@ git clone https://github.com/<your-username>/<repo-name>.git
 cd <repo-name>
 
 # 2. Install dependencies
-# [Replace with your project's install command, e.g.:]
-# npm install | pip install -r requirements.txt | go mod download
+go mod download
 
-# 3. Copy environment variables
-cp .env.example .env
+# 3. (Optional) Install dev tools used by Makefile
+make tools
 
-# 4. Run the project locally
-# [Replace with your start command]
+# 4. Install the git pre-commit hook (runs `make check` before commit)
+make hooks
 ```
 
 > **Note:** See `README.md` for full environment setup details.
@@ -157,11 +156,13 @@ Breaking changes must include `BREAKING CHANGE:` in the commit footer or a `!` a
 ## Code Style
 
 - Follow the existing style and conventions in the codebase.
-- Run the linter and formatter before committing:
-  ```bash
-  # [Replace with your lint/format command, e.g.:]
-  # npm run lint | golangci-lint run | ruff check .
-  ```
+- Run the full local quality gate before committing:
+
+```bash
+make check
+```
+
+- If you installed hooks via `make hooks`, commits will automatically run `make check`.
 - Do not commit commented-out code or debug statements (`console.log`, `fmt.Println`, `print`, etc.).
 - Keep functions small and well-named. Prefer clarity over cleverness.
 
@@ -171,10 +172,10 @@ Breaking changes must include `BREAKING CHANGE:` in the commit footer or a `!` a
 
 - All new features and bug fixes must include tests.
 - Run the full test suite before opening a PR:
-  ```bash
-  # [Replace with your test command, e.g.:]
-  # npm test | go test ./... | pytest
-  ```
+
+```bash
+make test
+```
 - Aim to maintain or improve current code coverage — do not open PRs that significantly reduce it.
 - Tests should be deterministic and isolated — avoid relying on external services or global state.
 

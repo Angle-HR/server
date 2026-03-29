@@ -1,4 +1,4 @@
-.PHONY: fmt lint test cover security check tidy pr-description
+.PHONY: fmt lint test cover security check tidy pr-description hooks hooks-uninstall
 
 PR_TEMPLATE := .github/pull_request_template.md
 PR_OUT_DIR := pr_template
@@ -100,6 +100,18 @@ tools:
 check: tidy fmt-check lint test cover cover-threshold security
 	@echo ""
 	@echo "✅ All quality checks passed."
+
+# ─────────────────────────────────────────────
+# Git hooks
+# ─────────────────────────────────────────────
+
+hooks:
+	@test -f .githooks/pre-commit || (echo "❌ Missing .githooks/pre-commit"; exit 1)
+	@mkdir -p .git/hooks
+	@cp .githooks/pre-commit .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "✅ Installed git pre-commit hook (runs: make check)"
+
 
 # ─────────────────────────────────────────────
 # Pull request draft (active branch)

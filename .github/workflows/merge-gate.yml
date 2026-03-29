@@ -10,7 +10,7 @@ permissions:
   security-events: write
 
 env:
-  GO_VERSION: "1.22"
+  GO_VERSION: "1.23.10"
 
 jobs:
   # Full regression suite — runs only on merge to main
@@ -40,9 +40,9 @@ jobs:
         run: go test -race -count=1 -timeout=180s ./...
 
       - name: Run golangci-lint (strict)
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          version: v2.11.4
           args: --timeout=5m --max-same-issues=0 --max-issues-per-linter=0
 
       - name: Run govulncheck

@@ -8,14 +8,16 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write  # needed to post coverage comments on PRs
+  pull-requests: write    # needed to post coverage comments on PRs
+  security-events: write  # needed to upload SARIF results to GitHub Security tab
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.22"
+  # >= 1.23.10 fixes GO-2025-3750 (stdlib); keeps govulncheck green.
+  GO_VERSION: "1.23.10"
   COVERAGE_THRESHOLD: 70
 
 jobs:
@@ -73,9 +75,10 @@ jobs:
           cache: true
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        # v7+ required for golangci-lint v2 (see `.golangci.yml` `version: "2"`).
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          version: v2.11.4
           args: --timeout=5m
 
   # ─────────────────────────────────────────────
@@ -161,7 +164,7 @@ jobs:
           args: "-fmt sarif -out gosec.sarif ./..."
 
       - name: Upload Gosec SARIF to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: gosec.sarif

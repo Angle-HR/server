@@ -1,151 +1,149 @@
-# .golangci.yml
-# golangci-lint configuration
+# .golangci.yml — golangci-lint v2
 # Docs: https://golangci-lint.run/usage/configuration/
+
+version: "2"
 
 run:
   timeout: 5m
   tests: true
-  # Fail on new issues only when running on PRs (set via CLI flag if needed)
   allow-parallel-runners: true
 
 output:
   formats:
-    - format: colored-line-number
-  sort-results: true
+    text:
+      path: stdout
+      colors: true
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/Angle-HR/server
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/Angle-HR/server)
 
 linters:
   enable:
-    # Default linters
-    - errcheck        # Check for unchecked errors
-    - gosimple        # Simplification suggestions
-    - govet           # Correctness checks
-    - ineffassign     # Detect ineffectual assignments
-    - staticcheck     # Advanced static analysis
-    - unused          # Unused code detection
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - contextcheck
+    - copyloopvar
+    - cyclop
+    - dupl
+    - durationcheck
+    - exhaustive
+    - forbidigo
+    - gocognit
+    - goconst
+    - gocritic
+    - godot
+    - goprintffuncname
+    - gosec
+    - lll
+    - makezero
+    - misspell
+    - mnd
+    - nakedret
+    - nilerr
+    - noctx
+    - nolintlint
+    - prealloc
+    - predeclared
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - tparallel
+    - usetesting
+    - unconvert
+    - unparam
+    - wastedassign
+    - whitespace
 
-    # Additional recommended linters
-    - bodyclose       # HTTP response body must be closed
-    - contextcheck    # Check context usage
-    - cyclop          # Cyclomatic complexity
-    - dupl            # Code duplication detection
-    - durationcheck   # Duration multiplication check
-    - exhaustive      # Exhaustive switch statements
-    - exportloopref   # Loop variable capture in goroutines
-    - forbidigo       # Forbid specific identifiers (e.g. fmt.Print in production)
-    - gci             # Import ordering
-    - gocognit        # Cognitive complexity
-    - goconst         # Repeated string constants
-    - gocritic        # Opinionated code checks
-    - godot           # Check comment formatting
-    - gofmt           # Formatting check
-    - goimports       # Import formatting
-    - gomnd           # Magic number detection
-    - goprintffuncname # Printf-style function naming
-    - gosec           # Security checks
-    - lll             # Line length limit
-    - makezero        # Slice initialisation issues
-    - misspell        # Spelling mistakes
-    - nakedret        # Naked returns in long functions
-    - nilerr          # Return nil with non-nil error
-    - noctx           # HTTP requests without context
-    - nolintlint      # Ill-formed nolint directives
-    - prealloc        # Slice pre-allocation
-    - predeclared     # Shadowing predeclared identifiers
-    - revive          # Drop-in replacement for golint
-    - rowserrcheck    # sql.Rows.Err() check
-    - sqlclosecheck   # sql.Rows/Stmt.Close() check
-    - stylecheck      # Style checks
-    - tenv            # t.Setenv usage in tests
-    - tparallel       # Detect missing t.Parallel() in tests
-    - unconvert       # Unnecessary type conversions
-    - unparam         # Unused function parameters
-    - wastedassign    # Wasted assignments
-    - whitespace      # Unnecessary whitespace
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
 
-  govet:
-    enable-all: true
+    lll:
+      line-length: 120
 
-  gofmt:
-    simplify: true
+    cyclop:
+      max-complexity: 15
 
-  goimports:
-    local-prefixes: github.com/[owner]/[repo]
+    gocognit:
+      min-complexity: 20
 
-  gci:
-    sections:
-      - standard
-      - default
-      - prefix(github.com/[owner]/[repo])
+    mnd:
+      ignored-numbers:
+        - "0"
+        - "1"
+        - "2"
+        - "10"
+        - "100"
+      ignored-functions:
+        - "math.*"
+        - "time.*"
 
-  lll:
-    line-length: 120
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
 
-  cyclop:
-    max-complexity: 15
+    misspell:
+      locale: US
 
-  gocognit:
-    min-complexity: 20
+    revive:
+      rules:
+        - name: exported
+        - name: var-naming
+        - name: indent-error-flow
+        - name: error-strings
+        - name: error-return
+        - name: receiver-naming
 
-  gomnd:
-    ignored-numbers:
-      - "0"
-      - "1"
-      - "2"
-      - "10"
-      - "100"
-    ignored-functions:
-      - "math.*"
-      - "time.*"
+    forbidigo:
+      forbid:
+        - pattern: "^fmt\\.Print(ln|f)?$"
+          msg: "Use a structured logger instead of fmt.Print"
 
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
-      - performance
+    gosec:
+      excludes:
+        - G104
 
-  misspell:
-    locale: US
-
-  revive:
+  exclusions:
     rules:
-      - name: exported
-      - name: var-naming
-      - name: indent-error-flow
-      - name: error-strings
-      - name: error-return
-      - name: receiver-naming
-
-  forbidigo:
-    forbid:
-      - pattern: "^fmt\\.Print(ln|f)?$"
-        msg: "Use a structured logger instead of fmt.Print"
-
-  gosec:
-    excludes:
-      - G104  # Errors unhandled — covered by errcheck
+      - path: "_test\\.go"
+        linters:
+          - mnd
+          - dupl
+          - lll
+          - gocritic
+          - unparam
+          - gosec
+      - path: "migration"
+        linters:
+          - mnd
 
 issues:
-  exclude-rules:
-    # Relax some rules in test files
-    - path: "_test\\.go"
-      linters:
-        - gomnd
-        - dupl
-        - lll
-        - gocritic
-        - unparam
-        - gosec
-
-    # Relax magic numbers in migrations/seeds
-    - path: "migration"
-      linters:
-        - gomnd
-
   max-issues-per-linter: 50
   max-same-issues: 10
-  new: false  # Set to true to only report new issues on diffs
+  new: false

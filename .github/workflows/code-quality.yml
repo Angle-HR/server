@@ -15,7 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.22"
+  # >= 1.23.10 fixes GO-2025-3750 (stdlib); keeps govulncheck green.
+  GO_VERSION: "1.23.10"
   COVERAGE_THRESHOLD: 70
 
 jobs:

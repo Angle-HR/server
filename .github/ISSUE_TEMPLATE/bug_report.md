@@ -29,7 +29,7 @@ assignees: ""
 | Field             | Value             |
 |-------------------|-------------------|
 | OS                | e.g. Ubuntu 22.04 |
-| Runtime / Version | e.g. Go 1.22      |
+| Runtime / Version | e.g. Go 1.23      |
 | Project Version   | e.g. v1.3.0       |
 | Browser (if applicable) | e.g. Chrome 123 |
 

@@ -1,4 +1,7 @@
-.PHONY: fmt lint test cover security check tidy
+.PHONY: fmt lint test cover security check tidy pr-description
+
+PR_TEMPLATE := .github/pull_request_template.md
+PR_OUT_DIR := pr_template
 
 # ─────────────────────────────────────────────
 # Formatting
@@ -97,3 +100,49 @@ tools:
 check: tidy fmt-check lint test cover cover-threshold security
 	@echo ""
 	@echo "✅ All quality checks passed."
+
+# ─────────────────────────────────────────────
+# Pull request draft (active branch)
+# ─────────────────────────────────────────────
+
+# Scaffolds a PR body from the repo template into pr_template/ (gitignored).
+pr-description:
+	@test -f $(PR_TEMPLATE) || (echo "❌ Missing $(PR_TEMPLATE)"; exit 1)
+	@mkdir -p $(PR_OUT_DIR)
+	@branch=$$(git branch --show-current); \
+	safe=$$(printf '%s' "$$branch" | sed 's/[^A-Za-z0-9._-]/-/g'); \
+	out="$(PR_OUT_DIR)/pr-$$safe.md"; \
+	cp $(PR_TEMPLATE) "$$out"; \
+	{ \
+		echo ""; \
+		echo "---"; \
+		echo ""; \
+		echo "## Draft context (auto-generated)"; \
+		echo ""; \
+		echo "**Branch:** \`$$branch\`"; \
+		echo ""; \
+		base=""; \
+		for candidate in main origin/main master origin/master; do \
+			if git rev-parse --verify "$$candidate" >/dev/null 2>&1; then \
+				mb=$$(git merge-base HEAD "$$candidate" 2>/dev/null); \
+				if [ -n "$$mb" ]; then \
+					base="$$candidate"; \
+					break; \
+				fi; \
+			fi; \
+		done; \
+		if [ -n "$$base" ]; then \
+			echo "**Commits (vs \`$$base\`):**"; \
+			echo ""; \
+			echo '```'; \
+			git log "$$base"..HEAD --oneline || true; \
+			echo '```'; \
+		else \
+			echo "**Recent commits (no \`main\`/\`master\` base found):**"; \
+			echo ""; \
+			echo '```'; \
+			git log -20 --oneline || true; \
+			echo '```'; \
+		fi; \
+	} >> "$$out"; \
+	echo "✅ Wrote $$out"

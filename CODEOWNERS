@@ -1,0 +1,69 @@
+# CODEOWNERS
+#
+# This file defines who is automatically requested for review when a pull
+# request touches specific files or directories.
+#
+# Syntax: <pattern>  <owner> [<owner> ...]
+#
+# Owners can be GitHub usernames (@username) or teams (@org/team-name).
+# Rules are evaluated top to bottom; the last matching rule takes precedence.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# ──────────────────────────────────────────────
+# Default — catch-all for anything not matched below
+# ──────────────────────────────────────────────
+*                           @[owner-username]
+
+# ──────────────────────────────────────────────
+# Core application source
+# ──────────────────────────────────────────────
+/src/                       @[owner-username]
+/internal/                  @[owner-username]
+/pkg/                       @[owner-username]
+
+# ──────────────────────────────────────────────
+# API / contracts
+# ──────────────────────────────────────────────
+/api/                       @[owner-username]
+/proto/                     @[owner-username]
+
+# ──────────────────────────────────────────────
+# Infrastructure & deployment
+# ──────────────────────────────────────────────
+/infra/                     @[owner-username]
+/deploy/                    @[owner-username]
+docker-compose*.yml         @[owner-username]
+Dockerfile*                 @[owner-username]
+*.tf                        @[owner-username]
+
+# ──────────────────────────────────────────────
+# CI/CD
+# ──────────────────────────────────────────────
+/.github/workflows/         @[owner-username]
+
+# ──────────────────────────────────────────────
+# Configuration & secrets management
+# ──────────────────────────────────────────────
+*.env.example               @[owner-username]
+/config/                    @[owner-username]
+
+# ──────────────────────────────────────────────
+# Tests
+# ──────────────────────────────────────────────
+/tests/                     @[owner-username]
+/test/                      @[owner-username]
+
+# ──────────────────────────────────────────────
+# Documentation
+# ──────────────────────────────────────────────
+/docs/                      @[owner-username]
+*.md                        @[owner-username]
+
+# ──────────────────────────────────────────────
+# Community health files (require maintainer sign-off)
+# ──────────────────────────────────────────────
+CONTRIBUTING.md             @[owner-username]
+CODE_OF_CONDUCT.md          @[owner-username]
+SECURITY.md                 @[owner-username]
+LICENSE                     @[owner-username]

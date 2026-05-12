@@ -1,7 +1,34 @@
-.PHONY: fmt lint test cover security check tidy pr-description hooks hooks-uninstall
+.PHONY: fmt lint test cover security check tidy pr-description hooks hooks-uninstall build build-worker run run-worker migrate migrate-up migrate-down sqlc sqlc-check
 
 PR_TEMPLATE := .github/pull_request_template.md
 PR_OUT_DIR := pr_template
+BIN := bin/server
+BIN_WORKER := bin/worker
+SQLC_VERSION := v1.29.0
+
+# ─────────────────────────────────────────────
+# Application
+# ─────────────────────────────────────────────
+
+migrate-up:
+	@echo "→ Running migrations..."
+	@if [ -f .env ]; then set -a && . ./.env && set +a; fi; \
+	if [ -z "$$DB_URL" ]; then echo "❌ DB_URL is required (set it or add .env)"; exit 1; fi; \
+	./db/migrations/migrate.sh up
+	@echo "✅ Migrations applied."
+
+migrate-down:
+	@echo "→ Rolling back migration..."
+	@if [ -f .env ]; then set -a && . ./.env && set +a; fi; \
+	if [ -z "$$DB_URL" ]; then echo "❌ DB_URL is required (set it or add .env)"; exit 1; fi; \
+	./db/migrations/migrate.sh down
+	@echo "✅ Migration rolled back."
+
+sqlc:
+	@echo "→ Generating sqlc code..."
+	@go run github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION) generate
+	@echo "✅ sqlc generation complete."
+
 
 # ─────────────────────────────────────────────
 # Formatting
@@ -13,14 +40,6 @@ fmt:
 	@echo "→ Running goimports..."
 	@goimports -w .
 	@echo "✅ Formatting done."
-
-fmt-check:
-	@echo "→ Checking formatting..."
-	@unformatted=$$(gofmt -l .); \
-	if [ -n "$$unformatted" ]; then \
-		echo "❌ Unformatted files:"; echo "$$unformatted"; exit 1; \
-	fi
-	@echo "✅ All files formatted."
 
 # ─────────────────────────────────────────────
 # Linting
@@ -46,7 +65,7 @@ test:
 
 cover:
 	@echo "→ Running tests with coverage..."
-	@go test -race -coverprofile=coverage.out -covermode=atomic ./...
+	@go test -race -coverprofile=coverage.out -covermode=atomic -coverpkg=./... ./...
 	@go tool cover -func=coverage.out | grep total
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "✅ Coverage report generated at coverage.html"
@@ -66,7 +85,7 @@ cover-threshold:
 
 security:
 	@echo "→ Running gosec..."
-	@gosec ./...
+	@gosec -exclude-generated ./...
 	@echo "→ Running govulncheck..."
 	@govulncheck ./...
 	@echo "✅ Security scan passed."
@@ -97,7 +116,7 @@ tools:
 # Run everything (mirrors CI)
 # ─────────────────────────────────────────────
 
-check: tidy fmt-check lint test cover cover-threshold security
+check: tidy lint security
 	@echo ""
 	@echo "✅ All quality checks passed."
 

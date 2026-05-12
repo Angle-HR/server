@@ -1,0 +1,8 @@
+.git
+.github
+bin
+coverage.out
+pr_template
+.env
+.env.*
+!.env.example

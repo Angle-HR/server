@@ -1,0 +1,105 @@
+services:
+  postgres:
+    image: postgres:18.3-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: anglehr
+    volumes:
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d anglehr"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      target: server
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_PORT: 8080
+      DB_URL: postgres://postgres:postgres@postgres:5432/anglehr?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      target: worker
+    environment:
+      DB_URL: postgres://postgres:postgres@postgres:5432/anglehr?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: development
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  asynqmon:
+    image: hibiken/asynqmon:0.7
+    platform: linux/amd64
+    ports:
+      - "8081:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["--redis-addr=redis:6379"]
+
+  appsmith:
+    image: index.docker.io/appsmith/appsmith-ce:release
+    ports:
+      - "8090:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APPSMITH_ENCRYPTION_PASSWORD: ${APPSMITH_ENCRYPTION_PASSWORD:-appsmith}
+      APPSMITH_ENCRYPTION_SALT: ${APPSMITH_ENCRYPTION_SALT:-appsmith}
+      APPSMITH_KEYCLOAK_DB_URL: postgresql://postgres:postgres@postgres:5432/appsmith
+      APPSMITH_KEYCLOAK_DB_DRIVER: postgresql
+    volumes:
+      - appsmith_stacks:/appsmith-stacks
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  appsmith_stacks:
+  minio_data:

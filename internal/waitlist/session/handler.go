@@ -32,6 +32,15 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/waitlist/session/{token}/submit", h.submit)
 }
 
+// createSession godoc
+//
+//	@Summary		Create onboarding session
+//	@Description	Starts a new waitlist onboarding session and returns a session token.
+//	@Tags			session
+//	@Produce		json
+//	@Success		201	{object}	session.CreateSessionEnvelope
+//	@Failure		500	{object}	apidoc.ErrorEnvelope
+//	@Router			/waitlist/session [post]
 func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 	token, currentStep, expiresAt, err := h.service.CreateSession(r.Context())
 	if err != nil {
@@ -46,6 +55,18 @@ func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// getSession godoc
+//
+//	@Summary		Get onboarding session
+//	@Description	Returns the current step and saved partial progress for a session token.
+//	@Tags			session
+//	@Produce		json
+//	@Param			token	path		string	true	"Session token"
+//	@Success		200		{object}	session.GetSessionEnvelope
+//	@Failure		404		{object}	apidoc.ErrorEnvelope
+//	@Failure		410		{object}	apidoc.ErrorEnvelope
+//	@Failure		500		{object}	apidoc.ErrorEnvelope
+//	@Router			/waitlist/session/{token} [get]
 func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
 	currentStep, partial, err := h.service.GetSession(r.Context(), token)
@@ -60,11 +81,23 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// saveStep1 godoc
+//
+//	@Summary		Save step 1
+//	@Description	Saves industry selections for the onboarding session.
+//	@Tags			session
+//	@Accept			json
+//	@Produce		json
+//	@Param			token	path		string				true	"Session token"
+//	@Param			body	body		session.Step1Request	true	"Step 1 payload"
+//	@Success		200		{object}	session.StepProgressEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		404		{object}	apidoc.ErrorEnvelope
+//	@Failure		410		{object}	apidoc.ErrorEnvelope
+//	@Failure		500		{object}	apidoc.ErrorEnvelope
+//	@Router			/waitlist/session/{token}/step/1 [patch]
 func (h *Handler) saveStep1(w http.ResponseWriter, r *http.Request) {
-	var payload struct {
-		IndustryIDs   []string `json:"industry_ids"`
-		OtherIndustry *string  `json:"other_industry"`
-	}
+	var payload Step1Request
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
 		return
@@ -85,11 +118,23 @@ func (h *Handler) saveStep1(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, r, http.StatusOK, map[string]int{"current_step": nextStep})
 }
 
+// saveStep2 godoc
+//
+//	@Summary		Save step 2
+//	@Description	Saves hiring tool selections for the onboarding session.
+//	@Tags			session
+//	@Accept			json
+//	@Produce		json
+//	@Param			token	path		string				true	"Session token"
+//	@Param			body	body		session.Step2Request	true	"Step 2 payload"
+//	@Success		200		{object}	session.StepProgressEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		404		{object}	apidoc.ErrorEnvelope
+//	@Failure		410		{object}	apidoc.ErrorEnvelope
+//	@Failure		500		{object}	apidoc.ErrorEnvelope
+//	@Router			/waitlist/session/{token}/step/2 [patch]
 func (h *Handler) saveStep2(w http.ResponseWriter, r *http.Request) {
-	var payload struct {
-		ToolIDs   []string `json:"tool_ids"`
-		OtherTool *string  `json:"other_tool"`
-	}
+	var payload Step2Request
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
 		return
@@ -110,11 +155,23 @@ func (h *Handler) saveStep2(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, r, http.StatusOK, map[string]int{"current_step": nextStep})
 }
 
+// saveStep3 godoc
+//
+//	@Summary		Save step 3
+//	@Description	Saves hiring frustration selections for the onboarding session.
+//	@Tags			session
+//	@Accept			json
+//	@Produce		json
+//	@Param			token	path		string				true	"Session token"
+//	@Param			body	body		session.Step3Request	true	"Step 3 payload"
+//	@Success		200		{object}	session.StepProgressEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		404		{object}	apidoc.ErrorEnvelope
+//	@Failure		410		{object}	apidoc.ErrorEnvelope
+//	@Failure		500		{object}	apidoc.ErrorEnvelope
+//	@Router			/waitlist/session/{token}/step/3 [patch]
 func (h *Handler) saveStep3(w http.ResponseWriter, r *http.Request) {
-	var payload struct {
-		FrustrationIDs   []string `json:"frustration_ids"`
-		OtherFrustration *string  `json:"other_frustration"`
-	}
+	var payload Step3Request
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
 		return
@@ -135,11 +192,23 @@ func (h *Handler) saveStep3(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, r, http.StatusOK, map[string]int{"current_step": nextStep})
 }
 
+// saveStep4 godoc
+//
+//	@Summary		Save step 4
+//	@Description	Saves role and team size selections for the onboarding session.
+//	@Tags			session
+//	@Accept			json
+//	@Produce		json
+//	@Param			token	path		string				true	"Session token"
+//	@Param			body	body		session.Step4Request	true	"Step 4 payload"
+//	@Success		200		{object}	session.StepProgressEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		404		{object}	apidoc.ErrorEnvelope
+//	@Failure		410		{object}	apidoc.ErrorEnvelope
+//	@Failure		500		{object}	apidoc.ErrorEnvelope
+//	@Router			/waitlist/session/{token}/step/4 [patch]
 func (h *Handler) saveStep4(w http.ResponseWriter, r *http.Request) {
-	var payload struct {
-		RoleID     string `json:"role_id"`
-		TeamSizeID string `json:"team_size_id"`
-	}
+	var payload Step4Request
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
 		return
@@ -166,22 +235,30 @@ func (h *Handler) saveStep4(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, r, http.StatusOK, map[string]int{"current_step": nextStep})
 }
 
+// submit godoc
+//
+//	@Summary		Submit onboarding session
+//	@Description	Finalizes the onboarding flow and creates a waitlist submission.
+//	@Tags			session
+//	@Accept			json
+//	@Produce		json
+//	@Param			token	path		string				true	"Session token"
+//	@Param			body	body		session.SubmitRequest	true	"Submit payload"
+//	@Success		201		{object}	session.SubmitEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		404		{object}	apidoc.ErrorEnvelope
+//	@Failure		409		{object}	apidoc.ErrorEnvelope
+//	@Failure		410		{object}	apidoc.ErrorEnvelope
+//	@Failure		500		{object}	apidoc.ErrorEnvelope
+//	@Router			/waitlist/session/{token}/submit [post]
 func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
-	var payload struct {
-		Name             string `json:"name"`
-		WantsEarlyAccess bool   `json:"wants_early_access"`
-		WantsUserTesting bool   `json:"wants_user_testing"`
-	}
+	var payload SubmitRequest
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
 		return
 	}
 
-	result, err := h.service.Submit(r.Context(), chi.URLParam(r, "token"), SubmitInput{
-		Name:             payload.Name,
-		WantsEarlyAccess: payload.WantsEarlyAccess,
-		WantsUserTesting: payload.WantsUserTesting,
-	})
+	result, err := h.service.Submit(r.Context(), chi.URLParam(r, "token"), SubmitInput(payload))
 	if err != nil {
 		response.Error(w, r, err)
 		return

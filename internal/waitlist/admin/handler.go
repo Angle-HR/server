@@ -41,6 +41,28 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/stats", h.stats)
 }
 
+// listSubmissions godoc
+//
+//	@Summary		List submissions
+//	@Description	Returns a cursor-paginated list of waitlist submissions.
+//	@Tags			admin
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			cursor				query		string	false	"Pagination cursor"
+//	@Param			limit				query		int		false	"Page size (1-100)"
+//	@Param			industry_id			query		string	false	"Filter by industry UUID"
+//	@Param			role_id				query		string	false	"Filter by role UUID"
+//	@Param			team_size_id		query		string	false	"Filter by team size UUID"
+//	@Param			wants_early_access	query		bool	false	"Filter by early access opt-in"
+//	@Param			wants_user_testing	query		bool	false	"Filter by user testing opt-in"
+//	@Param			submitted_from		query		string	false	"Filter from timestamp (RFC3339)"
+//	@Param			submitted_to		query		string	false	"Filter to timestamp (RFC3339)"
+//	@Success		200					{object}	admin.SubmissionListEnvelope
+//	@Failure		400					{object}	apidoc.ErrorEnvelope
+//	@Failure		401					{object}	apidoc.ErrorEnvelope
+//	@Failure		403					{object}	apidoc.ErrorEnvelope
+//	@Failure		500					{object}	apidoc.ErrorEnvelope
+//	@Router			/admin/submissions [get]
 func (h *Handler) listSubmissions(w http.ResponseWriter, r *http.Request) {
 	filter, err := parseListFilter(r)
 	if err != nil {
@@ -61,6 +83,21 @@ func (h *Handler) listSubmissions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// getSubmission godoc
+//
+//	@Summary		Get submission
+//	@Description	Returns a full waitlist submission by public ID.
+//	@Tags			admin
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path		string	true	"Submission public ID"
+//	@Success		200	{object}	admin.SubmissionDetailEnvelope
+//	@Failure		400	{object}	apidoc.ErrorEnvelope
+//	@Failure		401	{object}	apidoc.ErrorEnvelope
+//	@Failure		403	{object}	apidoc.ErrorEnvelope
+//	@Failure		404	{object}	apidoc.ErrorEnvelope
+//	@Failure		500	{object}	apidoc.ErrorEnvelope
+//	@Router			/admin/submissions/{id} [get]
 func (h *Handler) getSubmission(w http.ResponseWriter, r *http.Request) {
 	publicID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -77,6 +114,23 @@ func (h *Handler) getSubmission(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, r, http.StatusOK, detail)
 }
 
+// createNote godoc
+//
+//	@Summary		Create submission note
+//	@Description	Adds an internal admin note to a submission.
+//	@Tags			admin
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string					true	"Submission public ID"
+//	@Param			body	body		admin.CreateNoteRequest	true	"Note payload"
+//	@Success		201		{object}	admin.NoteEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		401		{object}	apidoc.ErrorEnvelope
+//	@Failure		403		{object}	apidoc.ErrorEnvelope
+//	@Failure		404		{object}	apidoc.ErrorEnvelope
+//	@Failure		500		{object}	apidoc.ErrorEnvelope
+//	@Router			/admin/submissions/{id}/notes [post]
 func (h *Handler) createNote(w http.ResponseWriter, r *http.Request) {
 	publicID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -84,10 +138,7 @@ func (h *Handler) createNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var payload struct {
-		Note      string `json:"note"`
-		CreatedBy string `json:"created_by"`
-	}
+	var payload CreateNoteRequest
 	if decodeErr := json.NewDecoder(r.Body).Decode(&payload); decodeErr != nil {
 		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
 		return
@@ -116,6 +167,18 @@ func (h *Handler) createNote(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, r, http.StatusCreated, created)
 }
 
+// stats godoc
+//
+//	@Summary		Get submission stats
+//	@Description	Returns aggregate waitlist submission statistics.
+//	@Tags			admin
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Success		200	{object}	admin.StatsEnvelope
+//	@Failure		401	{object}	apidoc.ErrorEnvelope
+//	@Failure		403	{object}	apidoc.ErrorEnvelope
+//	@Failure		500	{object}	apidoc.ErrorEnvelope
+//	@Router			/admin/stats [get]
 func (h *Handler) stats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.repo.Stats(r.Context())
 	if err != nil {

@@ -40,30 +40,80 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/team-sizes", h.listTeamSizes)
 }
 
+// listIndustries godoc
+//
+//	@Summary		List industries
+//	@Description	Returns active industry options for onboarding step 1.
+//	@Tags			catalog
+//	@Produce		json
+//	@Success		200	{object}	catalog.IndustryListEnvelope
+//	@Success		304	"Not Modified"
+//	@Failure		500	{object}	apidoc.ErrorEnvelope
+//	@Router			/industries [get]
 func (h *Handler) listIndustries(w http.ResponseWriter, r *http.Request) {
 	h.writeList(w, r, "industries", func(ctx context.Context) (any, error) {
 		return h.repo.ListIndustries(ctx)
 	})
 }
 
+// listHiringTools godoc
+//
+//	@Summary		List hiring tools
+//	@Description	Returns active hiring tool options for onboarding step 2.
+//	@Tags			catalog
+//	@Produce		json
+//	@Success		200	{object}	catalog.HiringToolListEnvelope
+//	@Success		304	"Not Modified"
+//	@Failure		500	{object}	apidoc.ErrorEnvelope
+//	@Router			/hiring-tools [get]
 func (h *Handler) listHiringTools(w http.ResponseWriter, r *http.Request) {
 	h.writeList(w, r, "hiring_tools", func(ctx context.Context) (any, error) {
 		return h.repo.ListHiringTools(ctx)
 	})
 }
 
+// listHiringFrustrations godoc
+//
+//	@Summary		List hiring frustrations
+//	@Description	Returns active hiring frustration options for onboarding step 3.
+//	@Tags			catalog
+//	@Produce		json
+//	@Success		200	{object}	catalog.HiringFrustrationListEnvelope
+//	@Success		304	"Not Modified"
+//	@Failure		500	{object}	apidoc.ErrorEnvelope
+//	@Router			/hiring-frustrations [get]
 func (h *Handler) listHiringFrustrations(w http.ResponseWriter, r *http.Request) {
 	h.writeList(w, r, "hiring_frustrations", func(ctx context.Context) (any, error) {
 		return h.repo.ListHiringFrustrations(ctx)
 	})
 }
 
+// listRoles godoc
+//
+//	@Summary		List roles
+//	@Description	Returns active role options for onboarding step 4.
+//	@Tags			catalog
+//	@Produce		json
+//	@Success		200	{object}	catalog.RoleListEnvelope
+//	@Success		304	"Not Modified"
+//	@Failure		500	{object}	apidoc.ErrorEnvelope
+//	@Router			/roles [get]
 func (h *Handler) listRoles(w http.ResponseWriter, r *http.Request) {
 	h.writeList(w, r, "roles", func(ctx context.Context) (any, error) {
 		return h.repo.ListRoles(ctx)
 	})
 }
 
+// listTeamSizes godoc
+//
+//	@Summary		List team sizes
+//	@Description	Returns active team size options for onboarding step 4.
+//	@Tags			catalog
+//	@Produce		json
+//	@Success		200	{object}	catalog.TeamSizeListEnvelope
+//	@Success		304	"Not Modified"
+//	@Failure		500	{object}	apidoc.ErrorEnvelope
+//	@Router			/team-sizes [get]
 func (h *Handler) listTeamSizes(w http.ResponseWriter, r *http.Request) {
 	h.writeList(w, r, "team_sizes", func(ctx context.Context) (any, error) {
 		return h.repo.ListTeamSizes(ctx)

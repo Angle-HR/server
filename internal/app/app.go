@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
+	"github.com/Angle-HR/server/internal/docs"
 	"github.com/Angle-HR/server/internal/jobs"
 	appmiddleware "github.com/Angle-HR/server/internal/middleware"
 	waitlistadmin "github.com/Angle-HR/server/internal/waitlist/admin"
@@ -77,6 +78,10 @@ func Run() error {
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.RealIP)
 	router.Use(chimiddleware.Recoverer)
+
+	if docs.IsEnabled(cfg.AppEnv) {
+		docs.RegisterRoutes(router)
+	}
 
 	router.Route("/api/v1", func(r chi.Router) {
 		catalogHandler.RegisterRoutes(r)

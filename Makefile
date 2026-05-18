@@ -1,10 +1,11 @@
-.PHONY: fmt lint test cover security check tidy pr-description hooks hooks-uninstall build build-worker run run-worker migrate migrate-up migrate-down sqlc sqlc-check
+.PHONY: fmt lint test cover security check tidy pr-description hooks hooks-uninstall build build-worker run run-worker migrate migrate-up migrate-down sqlc sqlc-check swagger swagger-check
 
 PR_TEMPLATE := .github/pull_request_template.md
 PR_OUT_DIR := pr_template
 BIN := bin/server
 BIN_WORKER := bin/worker
 SQLC_VERSION := v1.29.0
+SWAG_VERSION := v1.16.4
 
 # ─────────────────────────────────────────────
 # Application
@@ -28,6 +29,33 @@ sqlc:
 	@echo "→ Generating sqlc code..."
 	@go run github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION) generate
 	@echo "✅ sqlc generation complete."
+
+sqlc-check:
+	@echo "→ Checking sqlc generated code..."
+	@go run github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION) generate
+	@git diff --exit-code internal/db/sqlc || \
+		(echo "❌ sqlc output is out of date. Run 'make sqlc' and commit the result." && exit 1)
+	@echo "✅ sqlc output is up to date."
+
+swagger:
+	@echo "→ Generating OpenAPI docs..."
+	@go run github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION) init \
+		-g cmd/server/main.go \
+		-o internal/docs/spec \
+		--parseDependency \
+		--parseInternal
+	@echo "✅ OpenAPI docs generated."
+
+swagger-check:
+	@echo "→ Checking OpenAPI docs..."
+	@go run github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION) init \
+		-g cmd/server/main.go \
+		-o internal/docs/spec \
+		--parseDependency \
+		--parseInternal
+	@git diff --exit-code internal/docs/spec || \
+		(echo "❌ OpenAPI docs are out of date. Run 'make swagger' and commit the result." && exit 1)
+	@echo "✅ OpenAPI docs are up to date."
 
 
 # ─────────────────────────────────────────────

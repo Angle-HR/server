@@ -22,7 +22,7 @@ func IsEnabled(appEnv string) bool {
 // RegisterRoutes mounts OpenAPI and Scalar documentation routes.
 func RegisterRoutes(r chi.Router) {
 	r.Get("/openapi.json", serveOpenAPI)
-	r.Get("/docs", serveScalar)
+	r.Get("/", serveScalar)
 }
 
 func serveOpenAPI(w http.ResponseWriter, _ *http.Request) {

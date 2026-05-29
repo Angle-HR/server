@@ -1,22 +1,22 @@
-# Runs database migrations on push to staging and main.
+# Runs database migrations on push to staging and production.
 #
 # GitHub Environment setup (Settings → Environments):
 #
 #   staging     — used when pushing to the staging branch
-#   production  — used when pushing to the main branch
+#   production  — used when pushing to the production branch
 #
 # Each environment needs these secrets (same names, different DSNs per env):
 #   DB_URL_UK, DB_URL_US, DB_URL_AFRICA, DB_URL_EU, DB_URL_GLOBAL
 #
 # Optional: enable Required reviewers on production; restrict each environment
-# to its deployment branch (staging → staging, production → main).
+# to its deployment branch (staging → staging, production → production).
 
 name: Database Migrations
 
 on:
   push:
     branches:
-      - main
+      - production
       - staging
 
 concurrency:
@@ -27,7 +27,7 @@ jobs:
   migrate:
     name: Migrate (${{ github.ref_name }})
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    environment: ${{ github.ref_name == 'production' && 'production' || 'staging' }}
     steps:
       - uses: actions/checkout@v4
 

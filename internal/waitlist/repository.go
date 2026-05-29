@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Angle-HR/server/internal/db/sqlc"
+	qb "github.com/Software78/sql-go-query-builder"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/Angle-HR/server/pkg/db"
 )
 
@@ -19,30 +21,29 @@ type WaitlistRepository interface {
 
 // PostgresWaitlistRepository stores waitlist entries in PostgreSQL.
 type PostgresWaitlistRepository struct {
-	queries *sqlc.Queries
+	pool *pgxpool.Pool
+	qb   *qb.QB
 }
 
 // NewPostgresWaitlistRepository returns a PostgreSQL-backed waitlist repository.
-func NewPostgresWaitlistRepository(queries *sqlc.Queries) *PostgresWaitlistRepository {
-	return &PostgresWaitlistRepository{queries: queries}
+func NewPostgresWaitlistRepository(pool *pgxpool.Pool) *PostgresWaitlistRepository {
+	return &PostgresWaitlistRepository{pool: pool, qb: qb.NewPostgres()}
 }
 
 // Insert stores a waitlist entry.
 //
 //nolint:gocritic // Repository API passes the entry by value by design.
 func (r *PostgresWaitlistRepository) Insert(ctx context.Context, entry WaitlistEntry) error {
-	companyName := entry.CompanyName
-	companySize := entry.CompanySize
-	role := entry.Role
-
-	err := r.queries.InsertWaitlistEntry(ctx, sqlc.InsertWaitlistEntryParams{
-		Email:       entry.Email,
-		CompanyName: &companyName,
-		CompanySize: &companySize,
-		Role:        &role,
-	})
+	sql, args, err := r.qb.Insert("waitlist").
+		Columns("email", "company_name", "company_size", "role").
+		Values(entry.Email, entry.CompanyName, entry.CompanySize, entry.Role).
+		ToSQL()
 	if err != nil {
-		return db.Wrap(err, "insert waitlist entry")
+		return db.Wrap(fmt.Errorf("build insert waitlist entry: %w", err), "insert waitlist entry")
+	}
+
+	if _, execErr := r.pool.Exec(ctx, sql, args...); execErr != nil {
+		return db.Wrap(execErr, "insert waitlist entry")
 	}
 
 	return nil
@@ -50,8 +51,16 @@ func (r *PostgresWaitlistRepository) Insert(ctx context.Context, entry WaitlistE
 
 // ExistsByEmail reports whether the email is already registered.
 func (r *PostgresWaitlistRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
-	exists, err := r.queries.WaitlistEmailExists(ctx, email)
-	if err != nil {
+	const query = `
+SELECT EXISTS (
+    SELECT 1
+    FROM waitlist
+    WHERE email = $1
+      AND deleted_at IS NULL
+)`
+
+	var exists bool
+	if err := r.pool.QueryRow(ctx, query, email).Scan(&exists); err != nil {
 		return false, fmt.Errorf("check waitlist email: %w", err)
 	}
 
@@ -60,9 +69,17 @@ func (r *PostgresWaitlistRepository) ExistsByEmail(ctx context.Context, email st
 
 // Count returns the total number of waitlist signups.
 func (r *PostgresWaitlistRepository) Count(ctx context.Context) (int64, error) {
-	count, err := r.queries.CountWaitlistEntries(ctx)
+	sql, args, err := r.qb.Select("COUNT(*)").
+		From("waitlist").
+		WhereNull("deleted_at").
+		ToSQL()
 	if err != nil {
-		return 0, fmt.Errorf("count waitlist entries: %w", err)
+		return 0, fmt.Errorf("build count waitlist entries: %w", err)
+	}
+
+	var count int64
+	if queryErr := r.pool.QueryRow(ctx, sql, args...).Scan(&count); queryErr != nil {
+		return 0, fmt.Errorf("count waitlist entries: %w", queryErr)
 	}
 
 	return count, nil

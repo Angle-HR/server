@@ -1,105 +1,246 @@
 services:
-  postgres:
-    image: postgres:18.3-alpine
+  # ========== United Kingdom (uk) ==========
+  postgres_uk:
+    image: postgres:16-alpine
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: anglehr
+      POSTGRES_USER: anglehr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_UK}
+      POSTGRES_DB: anglehr_uk
     volumes:
-      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      - postgres_uk_data:/var/lib/postgresql/data
+    networks:
+      - anglehr_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d anglehr"]
+      test: ["CMD-SHELL", "pg_isready -U anglehr -d anglehr_uk"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  minio:
+  minio_uk:
     image: minio/minio:latest
     ports:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: minio_user
-      MINIO_ROOT_PASSWORD: minio_password
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER_UK}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD_UK}
     command: server /data --console-address ":9001"
     volumes:
-      - minio_data:/data
+      - minio_uk_data:/data
+    networks:
+      - anglehr_net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 5s
       timeout: 5s
       retries: 5
-
-  server:
-    build:
-      context: .
-      target: server
-    ports:
-      - "8080:8080"
-    environment:
-      SERVER_PORT: 8080
-      DB_URL: postgres://postgres:postgres@postgres:5432/anglehr?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
-      APP_ENV: development
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     restart: unless-stopped
 
-  worker:
-    build:
-      context: .
-      target: worker
-    environment:
-      DB_URL: postgres://postgres:postgres@postgres:5432/anglehr?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
-      APP_ENV: development
-    depends_on:
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-
-  asynqmon:
-    image: hibiken/asynqmon:0.7
-    platform: linux/amd64
+  # ========== United States (us) ==========
+  postgres_us:
+    image: postgres:16-alpine
     ports:
-      - "8081:8080"
-    depends_on:
-      redis:
-        condition: service_healthy
-    command: ["--redis-addr=redis:6379"]
-
-  appsmith:
-    image: index.docker.io/appsmith/appsmith-ce:release
-    ports:
-      - "8090:80"
-    depends_on:
-      postgres:
-        condition: service_healthy
+      - "5433:5432"
     environment:
-      APPSMITH_ENCRYPTION_PASSWORD: ${APPSMITH_ENCRYPTION_PASSWORD:-appsmith}
-      APPSMITH_ENCRYPTION_SALT: ${APPSMITH_ENCRYPTION_SALT:-appsmith}
-      APPSMITH_KEYCLOAK_DB_URL: postgresql://postgres:postgres@postgres:5432/appsmith
-      APPSMITH_KEYCLOAK_DB_DRIVER: postgresql
+      POSTGRES_USER: anglehr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_US}
+      POSTGRES_DB: anglehr_us
     volumes:
-      - appsmith_stacks:/appsmith-stacks
+      - postgres_us_data:/var/lib/postgresql/data
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anglehr -d anglehr_us"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
+
+  minio_us:
+    image: minio/minio:latest
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER_US}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD_US}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_us_data:/data
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ========== Africa (africa) ==========
+  postgres_africa:
+    image: postgres:16-alpine
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: anglehr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_AFRICA}
+      POSTGRES_DB: anglehr_africa
+    volumes:
+      - postgres_africa_data:/var/lib/postgresql/data
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anglehr -d anglehr_africa"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio_africa:
+    image: minio/minio:latest
+    ports:
+      - "9004:9000"
+      - "9005:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER_AFRICA}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD_AFRICA}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_africa_data:/data
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ========== European Union (eu) ==========
+  postgres_eu:
+    image: postgres:16-alpine
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_USER: anglehr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_EU}
+      POSTGRES_DB: anglehr_eu
+    volumes:
+      - postgres_eu_data:/var/lib/postgresql/data
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anglehr -d anglehr_eu"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio_eu:
+    image: minio/minio:latest
+    ports:
+      - "9006:9000"
+      - "9007:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER_EU}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD_EU}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_eu_data:/data
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ========== Global registry (routing metadata) ==========
+  postgres_global:
+    image: postgres:16-alpine
+    ports:
+      - "5436:5432"
+    environment:
+      POSTGRES_USER: anglehr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_GLOBAL}
+      POSTGRES_DB: anglehr_global
+    volumes:
+      - postgres_global_data:/var/lib/postgresql/data
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anglehr -d anglehr_global"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ========== Shared ==========
+  migrate:
+    image: postgres:16-alpine
+    volumes:
+      - ./db/migrations:/migrations:ro
+    entrypoint: ["/bin/bash", "/migrations/migrate-all.sh"]
+    environment:
+      DB_URL_UK: postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres_uk:5432/anglehr_uk?sslmode=disable
+      DB_URL_US: postgres://anglehr:${POSTGRES_PASSWORD_US}@postgres_us:5432/anglehr_us?sslmode=disable
+      DB_URL_AFRICA: postgres://anglehr:${POSTGRES_PASSWORD_AFRICA}@postgres_africa:5432/anglehr_africa?sslmode=disable
+      DB_URL_EU: postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres_eu:5432/anglehr_eu?sslmode=disable
+    depends_on:
+      postgres_uk:
+        condition: service_healthy
+      postgres_us:
+        condition: service_healthy
+      postgres_africa:
+        condition: service_healthy
+      postgres_eu:
+        condition: service_healthy
+    networks:
+      - anglehr_net
+    restart: "no"
+
+  migrate_global:
+    image: postgres:16-alpine
+    volumes:
+      - ./db/migrations/global_registry:/migrations:ro
+    entrypoint: ["/bin/bash", "/migrations/migrate.sh", "up"]
+    environment:
+      DB_URL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
+    depends_on:
+      postgres_global:
+        condition: service_healthy
+    networks:
+      - anglehr_net
+    restart: "no"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+networks:
+  anglehr_net:
+    name: anglehr_net
 
 volumes:
-  postgres_data:
-  appsmith_stacks:
-  minio_data:
+  postgres_uk_data:
+  postgres_us_data:
+  postgres_africa_data:
+  postgres_eu_data:
+  postgres_global_data:
+  minio_uk_data:
+  minio_us_data:
+  minio_africa_data:
+  minio_eu_data:

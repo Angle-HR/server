@@ -12,18 +12,25 @@ import (
 	"strings"
 	"time"
 
+	qb "github.com/Software78/sql-go-query-builder"
+	"github.com/Software78/sql-go-query-builder/expr"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/Angle-HR/server/internal/db/sqlc"
 	"github.com/Angle-HR/server/internal/waitlist/catalog"
 	"github.com/Angle-HR/server/pkg/apperror"
 )
 
 const sessionTTL = 7 * 24 * time.Hour
 const sessionTokenBytes = 32
+
+type dbtx interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
 
 // PartialState stores resolved internal IDs for each onboarding step.
 type PartialState struct {
@@ -68,13 +75,13 @@ type Record struct {
 
 // Repository persists onboarding sessions and submissions.
 type Repository struct {
-	pool    *pgxpool.Pool
-	queries *sqlc.Queries
+	pool *pgxpool.Pool
+	qb   *qb.QB
 }
 
 // NewRepository returns a PostgreSQL-backed session repository.
-func NewRepository(pool *pgxpool.Pool, queries *sqlc.Queries) *Repository {
-	return &Repository{pool: pool, queries: queries}
+func NewRepository(pool *pgxpool.Pool) *Repository {
+	return &Repository{pool: pool, qb: qb.NewPostgres()}
 }
 
 // Create inserts a new session and returns the raw token.
@@ -85,15 +92,38 @@ func (r *Repository) Create(ctx context.Context) (string, *Record, error) {
 	}
 
 	expiresAt := catalog.NowUTC().Add(sessionTTL)
-	row, err := r.queries.CreateSubmissionSession(ctx, sqlc.CreateSubmissionSessionParams{
-		TokenHash: tokenHash,
-		ExpiresAt: expiresAt,
-	})
+	sql, args, err := r.qb.Insert("submission_sessions").
+		Columns("token_hash", "current_step", "expires_at", "partial_state").
+		Values(tokenHash, int16(1), expiresAt, []byte("{}")).
+		Returning("id", "current_step", "expires_at", "partial_state", "completed_at").
+		ToSQL()
 	if err != nil {
 		return "", nil, fmt.Errorf("insert session: %w", err)
 	}
 
-	record, err := recordFromSessionRow(row.ID, row.CurrentStep, row.ExpiresAt, row.PartialState, row.CompletedAt)
+	var (
+		id           int64
+		currentStep  int16
+		expires      time.Time
+		rawState     []byte
+		completedAt  *time.Time
+		completedRaw *time.Time
+	)
+	scanErr := r.pool.QueryRow(ctx, sql, args...).Scan(
+		&id,
+		&currentStep,
+		&expires,
+		&rawState,
+		&completedRaw,
+	)
+	if scanErr != nil {
+		return "", nil, fmt.Errorf("insert session: %w", scanErr)
+	}
+	if completedRaw != nil {
+		completedAt = completedRaw
+	}
+
+	record, err := recordFromSessionRow(id, currentStep, expires, rawState, completedAt)
 	if err != nil {
 		return "", nil, err
 	}
@@ -103,16 +133,42 @@ func (r *Repository) Create(ctx context.Context) (string, *Record, error) {
 
 // FindByToken loads a session by raw token.
 func (r *Repository) FindByToken(ctx context.Context, token string) (*Record, error) {
-	row, err := r.queries.GetSubmissionSessionByToken(ctx, hashToken(token))
+	sql, args, err := r.qb.Select("id", "current_step", "expires_at", "partial_state", "completed_at").
+		From("submission_sessions").
+		Where("token_hash", "=", hashToken(token)).
+		ToSQL()
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, apperror.New(apperror.CodeSessionNotFound, apperror.MsgSessionNotFound)
-		}
-
 		return nil, fmt.Errorf("find session: %w", err)
 	}
 
-	return recordFromSessionRow(row.ID, row.CurrentStep, row.ExpiresAt, row.PartialState, row.CompletedAt)
+	var (
+		id           int64
+		currentStep  int16
+		expires      time.Time
+		rawState     []byte
+		completedRaw *time.Time
+	)
+	scanErr := r.pool.QueryRow(ctx, sql, args...).Scan(
+		&id,
+		&currentStep,
+		&expires,
+		&rawState,
+		&completedRaw,
+	)
+	if scanErr != nil {
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			return nil, apperror.New(apperror.CodeSessionNotFound, apperror.MsgSessionNotFound)
+		}
+
+		return nil, fmt.Errorf("find session: %w", scanErr)
+	}
+
+	var completedAt *time.Time
+	if completedRaw != nil {
+		completedAt = completedRaw
+	}
+
+	return recordFromSessionRow(id, currentStep, expires, rawState, completedAt)
 }
 
 func currentStepValue(step int) (int16, error) {
@@ -150,16 +206,23 @@ func (r *Repository) SaveStep(ctx context.Context, sessionID int64, step int, st
 		return err
 	}
 
-	rowsAffected, err := r.queries.UpdateSubmissionSessionStep(ctx, sqlc.UpdateSubmissionSessionStepParams{
-		ID:          sessionID,
-		Column2:     rawState,
-		CurrentStep: currentStep,
-	})
+	sql, args, err := r.qb.Update("submission_sessions").
+		Set("partial_state", rawState).
+		Set("current_step", currentStep).
+		SetExpr("updated_at", expr.Raw{SQL: "now()"}).
+		Where("id", "=", sessionID).
+		WhereNull("completed_at").
+		ToSQL()
 	if err != nil {
 		return fmt.Errorf("save session step: %w", err)
 	}
 
-	if rowsAffected == 0 {
+	result, err := r.pool.Exec(ctx, sql, args...)
+	if err != nil {
+		return fmt.Errorf("save session step: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
 		return apperror.New(apperror.CodeSessionNotFound, apperror.MsgSessionNotFound)
 	}
 
@@ -200,23 +263,24 @@ func (r *Repository) Submit(
 		}
 	}()
 
-	qtx := r.queries.WithTx(tx)
-
-	submission, err := qtx.InsertWaitlistSubmission(ctx, sqlc.InsertWaitlistSubmissionParams{
-		Name:             input.Name,
-		WantsEarlyAccess: input.WantsEarlyAccess,
-		WantsUserTesting: input.WantsUserTesting,
-		RoleID:           state.Step4.RoleID,
-		TeamSizeID:       state.Step4.TeamSizeID,
-	})
+	submission, err := r.insertWaitlistSubmission(
+		ctx,
+		tx,
+		input.Name,
+		input.WantsEarlyAccess,
+		input.WantsUserTesting,
+		state.Step4.RoleID,
+		state.Step4.TeamSizeID,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("insert submission: %w", err)
+		return nil, err
 	}
 
 	if insertErr := insertIndustryRows(
 		ctx,
-		qtx,
-		submission.ID,
+		tx,
+		r.qb,
+		submission.id,
 		state.Step1.IndustryIDs,
 		state.Step1.OtherIndustry,
 	); insertErr != nil {
@@ -225,8 +289,9 @@ func (r *Repository) Submit(
 
 	if insertErr := insertHiringToolRows(
 		ctx,
-		qtx,
-		submission.ID,
+		tx,
+		r.qb,
+		submission.id,
 		state.Step2.ToolIDs,
 		state.Step2.OtherTool,
 	); insertErr != nil {
@@ -235,20 +300,18 @@ func (r *Repository) Submit(
 
 	if insertErr := insertFrustrationRows(
 		ctx,
-		qtx,
-		submission.ID,
+		tx,
+		r.qb,
+		submission.id,
 		state.Step3.FrustrationIDs,
 		state.Step3.OtherFrustration,
 	); insertErr != nil {
 		return nil, insertErr
 	}
 
-	rowsAffected, err := qtx.CompleteSubmissionSession(ctx, sqlc.CompleteSubmissionSessionParams{
-		ID:           sessionID,
-		SubmissionID: &submission.ID,
-	})
+	rowsAffected, err := r.completeSubmissionSession(ctx, tx, sessionID, submission.id)
 	if err != nil {
-		return nil, fmt.Errorf("complete session: %w", err)
+		return nil, err
 	}
 
 	if rowsAffected == 0 {
@@ -260,10 +323,67 @@ func (r *Repository) Submit(
 	}
 
 	return &SubmitResult{
-		PublicID:    submission.Uuid,
+		PublicID:    submission.uuid,
 		Name:        input.Name,
-		SubmittedAt: submission.SubmittedAt,
+		SubmittedAt: submission.submittedAt,
 	}, nil
+}
+
+type submissionRow struct {
+	id          int64
+	uuid        uuid.UUID
+	submittedAt time.Time
+}
+
+func (r *Repository) insertWaitlistSubmission(
+	ctx context.Context,
+	tx dbtx,
+	name string,
+	wantsEarlyAccess bool,
+	wantsUserTesting bool,
+	roleID int64,
+	teamSizeID int64,
+) (*submissionRow, error) {
+	sql, args, err := r.qb.Insert("waitlist_submissions").
+		Columns("name", "wants_early_access", "wants_user_testing", "role_id", "team_size_id").
+		Values(name, wantsEarlyAccess, wantsUserTesting, roleID, teamSizeID).
+		Returning("id", "uuid", "submitted_at").
+		ToSQL()
+	if err != nil {
+		return nil, fmt.Errorf("insert submission: %w", err)
+	}
+
+	var row submissionRow
+	if scanErr := tx.QueryRow(ctx, sql, args...).Scan(&row.id, &row.uuid, &row.submittedAt); scanErr != nil {
+		return nil, fmt.Errorf("insert submission: %w", scanErr)
+	}
+
+	return &row, nil
+}
+
+func (r *Repository) completeSubmissionSession(
+	ctx context.Context,
+	tx dbtx,
+	sessionID int64,
+	submissionID int64,
+) (int64, error) {
+	sql, args, err := r.qb.Update("submission_sessions").
+		SetExpr("completed_at", expr.Raw{SQL: "now()"}).
+		Set("submission_id", submissionID).
+		SetExpr("updated_at", expr.Raw{SQL: "now()"}).
+		Where("id", "=", sessionID).
+		WhereNull("completed_at").
+		ToSQL()
+	if err != nil {
+		return 0, fmt.Errorf("complete session: %w", err)
+	}
+
+	result, err := tx.Exec(ctx, sql, args...)
+	if err != nil {
+		return 0, fmt.Errorf("complete session: %w", err)
+	}
+
+	return result.RowsAffected(), nil
 }
 
 func recordFromSessionRow(
@@ -271,38 +391,33 @@ func recordFromSessionRow(
 	currentStep int16,
 	expiresAt time.Time,
 	rawState []byte,
-	completedAt pgtype.Timestamptz,
+	completedAt *time.Time,
 ) (*Record, error) {
 	var state PartialState
 	if err := json.Unmarshal(rawState, &state); err != nil {
 		return nil, fmt.Errorf("decode session state: %w", err)
 	}
 
-	var completed *time.Time
-	if completedAt.Valid {
-		value := completedAt.Time
-		completed = &value
-	}
-
 	return &Record{
 		ID:           id,
 		CurrentStep:  int(currentStep),
 		ExpiresAt:    expiresAt,
-		CompletedAt:  completed,
+		CompletedAt:  completedAt,
 		PartialState: state,
 	}, nil
 }
 
 func insertIndustryRows(
 	ctx context.Context,
-	q *sqlc.Queries,
+	tx dbtx,
+	q *qb.QB,
 	submissionID int64,
 	ids []int64,
 	otherText *string,
 ) error {
 	var otherID int64
 	if otherText != nil {
-		value, err := q.GetOtherIndustryID(ctx)
+		value, err := getOtherID(ctx, tx, q, "industries")
 		if err != nil {
 			return fmt.Errorf("load other industries id: %w", err)
 		}
@@ -316,11 +431,7 @@ func insertIndustryRows(
 			text = otherText
 		}
 
-		if err := q.InsertSubmissionIndustry(ctx, sqlc.InsertSubmissionIndustryParams{
-			SubmissionID: submissionID,
-			IndustryID:   id,
-			OtherText:    text,
-		}); err != nil {
+		if err := insertJunctionRow(ctx, tx, q, "submission_industries", "industry_id", submissionID, id, text); err != nil {
 			return fmt.Errorf("insert submission_industries row: %w", err)
 		}
 	}
@@ -330,14 +441,15 @@ func insertIndustryRows(
 
 func insertHiringToolRows(
 	ctx context.Context,
-	q *sqlc.Queries,
+	tx dbtx,
+	q *qb.QB,
 	submissionID int64,
 	ids []int64,
 	otherText *string,
 ) error {
 	var otherID int64
 	if otherText != nil {
-		value, err := q.GetOtherHiringToolID(ctx)
+		value, err := getOtherID(ctx, tx, q, "hiring_tools")
 		if err != nil {
 			return fmt.Errorf("load other hiring_tools id: %w", err)
 		}
@@ -351,11 +463,9 @@ func insertHiringToolRows(
 			text = otherText
 		}
 
-		if err := q.InsertSubmissionHiringTool(ctx, sqlc.InsertSubmissionHiringToolParams{
-			SubmissionID: submissionID,
-			HiringToolID: id,
-			OtherText:    text,
-		}); err != nil {
+		if err := insertJunctionRow(
+			ctx, tx, q, "submission_hiring_tools", "hiring_tool_id", submissionID, id, text,
+		); err != nil {
 			return fmt.Errorf("insert submission_hiring_tools row: %w", err)
 		}
 	}
@@ -365,14 +475,15 @@ func insertHiringToolRows(
 
 func insertFrustrationRows(
 	ctx context.Context,
-	q *sqlc.Queries,
+	tx dbtx,
+	q *qb.QB,
 	submissionID int64,
 	ids []int64,
 	otherText *string,
 ) error {
 	var otherID int64
 	if otherText != nil {
-		value, err := q.GetOtherFrustrationID(ctx)
+		value, err := getOtherID(ctx, tx, q, "hiring_frustrations")
 		if err != nil {
 			return fmt.Errorf("load other hiring_frustrations id: %w", err)
 		}
@@ -386,16 +497,53 @@ func insertFrustrationRows(
 			text = otherText
 		}
 
-		if err := q.InsertSubmissionFrustration(ctx, sqlc.InsertSubmissionFrustrationParams{
-			SubmissionID:  submissionID,
-			FrustrationID: id,
-			OtherText:     text,
-		}); err != nil {
+		if err := insertJunctionRow(
+			ctx, tx, q, "submission_frustrations", "frustration_id", submissionID, id, text,
+		); err != nil {
 			return fmt.Errorf("insert submission_frustrations row: %w", err)
 		}
 	}
 
 	return nil
+}
+
+func getOtherID(ctx context.Context, tx dbtx, q *qb.QB, table string) (int64, error) {
+	sql, args, err := q.Select("id").
+		From(table).
+		Where("slug", "=", "other").
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+
+	var id int64
+	if scanErr := tx.QueryRow(ctx, sql, args...).Scan(&id); scanErr != nil {
+		return 0, scanErr
+	}
+
+	return id, nil
+}
+
+func insertJunctionRow(
+	ctx context.Context,
+	tx dbtx,
+	q *qb.QB,
+	table string,
+	refColumn string,
+	submissionID int64,
+	refID int64,
+	otherText *string,
+) error {
+	sql, args, err := q.Insert(table).
+		Columns("submission_id", refColumn, "other_text").
+		Values(submissionID, refID, otherText).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx, sql, args...)
+	return err
 }
 
 func newSessionToken() (token string, hash []byte, err error) {

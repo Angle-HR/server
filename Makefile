@@ -1,10 +1,9 @@
-.PHONY: fmt lint test cover security check tidy pr-description hooks hooks-uninstall build build-worker run run-worker migrate migrate-up migrate-down sqlc sqlc-check swagger swagger-check
+.PHONY: fmt lint test cover security check tidy pr-description hooks hooks-uninstall build build-worker run run-worker migrate migrate-up migrate-down migrate-all migrate-global migrate-global-up migrate-global-down swagger swagger-check
 
 PR_TEMPLATE := .github/pull_request_template.md
 PR_OUT_DIR := pr_template
 BIN := bin/server
 BIN_WORKER := bin/worker
-SQLC_VERSION := v1.29.0
 SWAG_VERSION := v1.16.4
 
 # ─────────────────────────────────────────────
@@ -25,17 +24,29 @@ migrate-down:
 	./db/migrations/migrate.sh down
 	@echo "✅ Migration rolled back."
 
-sqlc:
-	@echo "→ Generating sqlc code..."
-	@go run github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION) generate
-	@echo "✅ sqlc generation complete."
+migrate-all:
+	@echo "→ Running migrations on all regional databases..."
+	@docker compose run --rm migrate
+	@echo "✅ All regional migrations applied."
 
-sqlc-check:
-	@echo "→ Checking sqlc generated code..."
-	@go run github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION) generate
-	@git diff --exit-code internal/db/sqlc || \
-		(echo "❌ sqlc output is out of date. Run 'make sqlc' and commit the result." && exit 1)
-	@echo "✅ sqlc output is up to date."
+migrate-global:
+	@echo "→ Running global registry migrations..."
+	@docker compose run --rm migrate_global
+	@echo "✅ Global registry migrations applied."
+
+migrate-global-up:
+	@echo "→ Running global registry migrations..."
+	@if [ -f .env ]; then set -a && . ./.env && set +a; fi; \
+	if [ -z "$$DB_URL_GLOBAL" ]; then echo "❌ DB_URL_GLOBAL is required (set it or add .env)"; exit 1; fi; \
+	DB_URL="$$DB_URL_GLOBAL" ./db/migrations/global_registry/migrate.sh up
+	@echo "✅ Global registry migrations applied."
+
+migrate-global-down:
+	@echo "→ Rolling back global registry migration..."
+	@if [ -f .env ]; then set -a && . ./.env && set +a; fi; \
+	if [ -z "$$DB_URL_GLOBAL" ]; then echo "❌ DB_URL_GLOBAL is required (set it or add .env)"; exit 1; fi; \
+	DB_URL="$$DB_URL_GLOBAL" ./db/migrations/global_registry/migrate.sh down
+	@echo "✅ Global registry migration rolled back."
 
 swagger:
 	@echo "→ Generating OpenAPI docs..."

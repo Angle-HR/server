@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/Angle-HR/server/internal/db/sqlc"
 )
 
 const (
@@ -21,23 +19,19 @@ const (
 	defaultConnectTimeout  = 5 * time.Second
 )
 
-// Store exposes the shared connection pool and generated queries.
+// Store exposes the shared connection pool.
 type Store struct {
-	Pool    *pgxpool.Pool
-	Queries *sqlc.Queries
+	Pool *pgxpool.Pool
 }
 
-// NewStore creates and verifies a PostgreSQL pool and sqlc query handle.
+// NewStore creates and verifies a PostgreSQL pool.
 func NewStore(ctx context.Context, dbURL string) (*Store, error) {
 	pool, err := NewPool(ctx, dbURL)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Store{
-		Pool:    pool,
-		Queries: sqlc.New(pool),
-	}, nil
+	return &Store{Pool: pool}, nil
 }
 
 // NewPool creates and verifies a PostgreSQL connection pool.
@@ -52,6 +46,10 @@ func NewPool(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	cfg.MaxConnLifetime = envDuration("DB_POOL_MAX_CONN_LIFETIME", defaultMaxConnLifetime)
 	cfg.MaxConnIdleTime = envDuration("DB_POOL_MAX_CONN_IDLE_TIME", defaultMaxConnIdleTime)
 	cfg.ConnConfig.ConnectTimeout = envDuration("DB_CONNECT_TIMEOUT", defaultConnectTimeout)
+	if cfg.ConnConfig.RuntimeParams == nil {
+		cfg.ConnConfig.RuntimeParams = map[string]string{}
+	}
+	cfg.ConnConfig.RuntimeParams["search_path"] = "waitlist,public"
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
@@ -69,11 +67,6 @@ func NewPool(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 // New is a compatibility alias for NewPool.
 func New(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	return NewPool(ctx, dbURL)
-}
-
-// NewQueries returns a sqlc query handle backed by pool.
-func NewQueries(pool *pgxpool.Pool) *sqlc.Queries {
-	return sqlc.New(pool)
 }
 
 func envInt32(key string, fallback int32) int32 {

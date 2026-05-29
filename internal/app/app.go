@@ -66,9 +66,9 @@ func Run() error {
 
 	_ = jobs.NewPublisher(taskClient)
 
-	catalogRepo := catalog.NewRepository(store.Queries)
-	sessionRepo := session.NewRepository(store.Pool, store.Queries)
-	adminRepo := waitlistadmin.NewRepository(store.Queries)
+	catalogRepo := catalog.NewRepository(store.Pool)
+	sessionRepo := session.NewRepository(store.Pool)
+	adminRepo := waitlistadmin.NewRepository(store.Pool)
 
 	catalogHandler := catalog.NewHandler(catalogRepo)
 	sessionHandler := session.NewHandler(session.NewService(sessionRepo, catalogRepo))

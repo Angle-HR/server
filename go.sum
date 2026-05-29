@@ -4,6 +4,8 @@ github.com/PuerkitoBio/purell v1.1.1 h1:WEQqlqaGbrPkxLJWfBwQmfEAE1Z7ONdDLqrN38tN
 github.com/PuerkitoBio/purell v1.1.1/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 h1:d+Bc7a5rLufV/sSk/8dngufqelfh6jnri85riMAaF/M=
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
+github.com/Software78/sql-go-query-builder v0.5.2 h1:mGfHVXWbbr/zAyWAF3TF2DV35WHM+EjhjHYbkH3EzIw=
+github.com/Software78/sql-go-query-builder v0.5.2/go.mod h1:1JvNOYxcqWEGkvCIY9gFKKRG9WCqDu0iwb6OogIXmDg=
 github.com/bdpiprava/scalar-go v0.13.0 h1:TuhOwYalDpLAziohyEwZlq4PqtEJ+6P/V92dDCdja9k=
 github.com/bdpiprava/scalar-go v0.13.0/go.mod h1:e5Nn4yIhcYjlucu4ACMqcs410nIAe5whqj78H3Qv7vw=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=

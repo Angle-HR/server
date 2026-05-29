@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	qb "github.com/Software78/sql-go-query-builder"
+	"github.com/Software78/sql-go-query-builder/builder"
 	"github.com/google/uuid"
-
-	"github.com/Angle-HR/server/internal/db/sqlc"
-	"github.com/Angle-HR/server/pkg/db"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Industry is an active industry option.
@@ -57,30 +57,52 @@ type TeamSize struct {
 
 // Repository loads onboarding reference data.
 type Repository struct {
-	queries *sqlc.Queries
+	pool *pgxpool.Pool
+	qb   *qb.QB
 }
 
 // NewRepository returns a catalog repository backed by PostgreSQL.
-func NewRepository(queries *sqlc.Queries) *Repository {
-	return &Repository{queries: queries}
+func NewRepository(pool *pgxpool.Pool) *Repository {
+	return &Repository{pool: pool, qb: qb.NewPostgres()}
 }
 
 // ListIndustries returns active industries ordered for display.
 func (r *Repository) ListIndustries(ctx context.Context) ([]Industry, error) {
-	rows, err := r.queries.ListIndustries(ctx)
+	sql, args, err := r.qb.Select(
+		"uuid",
+		"name",
+		"slug",
+		"COALESCE(icon_key, '') AS icon_key",
+		"sort_order",
+	).
+		From("industries").
+		Where("is_active", "=", true).
+		OrderBy("sort_order", builder.ASC).
+		OrderBy("name", builder.ASC).
+		ToSQL()
+	if err != nil {
+		return nil, fmt.Errorf("build list industries: %w", err)
+	}
+
+	rows, err := r.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list industries: %w", err)
 	}
+	defer rows.Close()
 
-	items := make([]Industry, 0, len(rows))
-	for _, row := range rows {
-		items = append(items, Industry{
-			ID:        row.Uuid,
-			Name:      row.Name,
-			Slug:      row.Slug,
-			IconKey:   row.IconKey,
-			SortOrder: int(row.SortOrder),
-		})
+	items := make([]Industry, 0)
+	for rows.Next() {
+		var item Industry
+		var sortOrder int32
+		if scanErr := rows.Scan(&item.ID, &item.Name, &item.Slug, &item.IconKey, &sortOrder); scanErr != nil {
+			return nil, fmt.Errorf("scan industry: %w", scanErr)
+		}
+		item.SortOrder = int(sortOrder)
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list industries: %w", err)
 	}
 
 	return items, nil
@@ -88,61 +110,118 @@ func (r *Repository) ListIndustries(ctx context.Context) ([]Industry, error) {
 
 // ListHiringTools returns active hiring tools ordered for display.
 func (r *Repository) ListHiringTools(ctx context.Context) ([]HiringTool, error) {
-	rows, err := r.queries.ListHiringTools(ctx)
+	sql, args, err := r.qb.Select(
+		"uuid",
+		"name",
+		"slug",
+		"COALESCE(icon_key, '') AS icon_key",
+		"COALESCE(category, '') AS category",
+		"sort_order",
+	).
+		From("hiring_tools").
+		Where("is_active", "=", true).
+		OrderBy("sort_order", builder.ASC).
+		OrderBy("name", builder.ASC).
+		ToSQL()
+	if err != nil {
+		return nil, fmt.Errorf("build list hiring tools: %w", err)
+	}
+
+	rows, err := r.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list hiring tools: %w", err)
 	}
+	defer rows.Close()
 
-	items := make([]HiringTool, 0, len(rows))
-	for _, row := range rows {
-		items = append(items, HiringTool{
-			ID:        row.Uuid,
-			Name:      row.Name,
-			Slug:      row.Slug,
-			IconKey:   row.IconKey,
-			Category:  row.Category,
-			SortOrder: int(row.SortOrder),
-		})
+	items := make([]HiringTool, 0)
+	for rows.Next() {
+		var item HiringTool
+		var sortOrder int32
+		if scanErr := rows.Scan(&item.ID, &item.Name, &item.Slug, &item.IconKey, &item.Category, &sortOrder); scanErr != nil {
+			return nil, fmt.Errorf("scan hiring tool: %w", scanErr)
+		}
+		item.SortOrder = int(sortOrder)
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list hiring tools: %w", err)
 	}
 
 	return items, nil
 }
 
 // ListHiringFrustrations returns active frustrations ordered for display.
+//
+//nolint:dupl // Same list pattern as ListRoles with different row types.
 func (r *Repository) ListHiringFrustrations(ctx context.Context) ([]HiringFrustration, error) {
-	rows, err := r.queries.ListHiringFrustrations(ctx)
+	sql, args, err := r.qb.Select("uuid", "description", "slug", "sort_order").
+		From("hiring_frustrations").
+		Where("is_active", "=", true).
+		OrderBy("sort_order", builder.ASC).
+		OrderBy("description", builder.ASC).
+		ToSQL()
+	if err != nil {
+		return nil, fmt.Errorf("build list hiring frustrations: %w", err)
+	}
+
+	rows, err := r.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list hiring frustrations: %w", err)
 	}
+	defer rows.Close()
 
-	items := make([]HiringFrustration, 0, len(rows))
-	for _, row := range rows {
-		items = append(items, HiringFrustration{
-			ID:          row.Uuid,
-			Description: row.Description,
-			Slug:        row.Slug,
-			SortOrder:   int(row.SortOrder),
-		})
+	items := make([]HiringFrustration, 0)
+	for rows.Next() {
+		var item HiringFrustration
+		var sortOrder int32
+		if scanErr := rows.Scan(&item.ID, &item.Description, &item.Slug, &sortOrder); scanErr != nil {
+			return nil, fmt.Errorf("scan hiring frustration: %w", scanErr)
+		}
+		item.SortOrder = int(sortOrder)
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list hiring frustrations: %w", err)
 	}
 
 	return items, nil
 }
 
 // ListRoles returns active roles ordered for display.
+//
+//nolint:dupl // Same list pattern as ListHiringFrustrations with different row types.
 func (r *Repository) ListRoles(ctx context.Context) ([]Role, error) {
-	rows, err := r.queries.ListRoles(ctx)
+	sql, args, err := r.qb.Select("uuid", "name", "slug", "sort_order").
+		From("roles").
+		Where("is_active", "=", true).
+		OrderBy("sort_order", builder.ASC).
+		OrderBy("name", builder.ASC).
+		ToSQL()
+	if err != nil {
+		return nil, fmt.Errorf("build list roles: %w", err)
+	}
+
+	rows, err := r.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list roles: %w", err)
 	}
+	defer rows.Close()
 
-	items := make([]Role, 0, len(rows))
-	for _, row := range rows {
-		items = append(items, Role{
-			ID:        row.Uuid,
-			Name:      row.Name,
-			Slug:      row.Slug,
-			SortOrder: int(row.SortOrder),
-		})
+	items := make([]Role, 0)
+	for rows.Next() {
+		var item Role
+		var sortOrder int32
+		if scanErr := rows.Scan(&item.ID, &item.Name, &item.Slug, &sortOrder); scanErr != nil {
+			return nil, fmt.Errorf("scan role: %w", scanErr)
+		}
+		item.SortOrder = int(sortOrder)
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list roles: %w", err)
 	}
 
 	return items, nil
@@ -150,32 +229,43 @@ func (r *Repository) ListRoles(ctx context.Context) ([]Role, error) {
 
 // ListTeamSizes returns team size bands ordered for display.
 func (r *Repository) ListTeamSizes(ctx context.Context) ([]TeamSize, error) {
-	rows, err := r.queries.ListTeamSizes(ctx)
+	sql, args, err := r.qb.Select("uuid", "label", "min_size", "max_size", "sort_order").
+		From("team_sizes").
+		OrderBy("sort_order", builder.ASC).
+		OrderBy("label", builder.ASC).
+		ToSQL()
+	if err != nil {
+		return nil, fmt.Errorf("build list team sizes: %w", err)
+	}
+
+	rows, err := r.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list team sizes: %w", err)
 	}
+	defer rows.Close()
 
-	items := make([]TeamSize, 0, len(rows))
-	for _, row := range rows {
-		var minSize *int
-		if row.MinSize != nil {
-			value := int(*row.MinSize)
-			minSize = &value
+	items := make([]TeamSize, 0)
+	for rows.Next() {
+		var item TeamSize
+		var sortOrder int32
+		var minSize, maxSize *int32
+		if scanErr := rows.Scan(&item.ID, &item.Label, &minSize, &maxSize, &sortOrder); scanErr != nil {
+			return nil, fmt.Errorf("scan team size: %w", scanErr)
 		}
-
-		var maxSize *int
-		if row.MaxSize != nil {
-			value := int(*row.MaxSize)
-			maxSize = &value
+		if minSize != nil {
+			value := int(*minSize)
+			item.MinSize = &value
 		}
+		if maxSize != nil {
+			value := int(*maxSize)
+			item.MaxSize = &value
+		}
+		item.SortOrder = int(sortOrder)
+		items = append(items, item)
+	}
 
-		items = append(items, TeamSize{
-			ID:        row.Uuid,
-			Label:     row.Label,
-			MinSize:   minSize,
-			MaxSize:   maxSize,
-			SortOrder: int(row.SortOrder),
-		})
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list team sizes: %w", err)
 	}
 
 	return items, nil
@@ -183,36 +273,31 @@ func (r *Repository) ListTeamSizes(ctx context.Context) ([]TeamSize, error) {
 
 // ReferenceVersion returns a version token for cache revalidation.
 func (r *Repository) ReferenceVersion(ctx context.Context, table string) (string, error) {
-	var (
-		value any
-		err   error
-	)
-
 	switch table {
-	case "industries":
-		value, err = r.queries.IndustriesReferenceVersion(ctx)
-	case "hiring_tools":
-		value, err = r.queries.HiringToolsReferenceVersion(ctx)
-	case "hiring_frustrations":
-		value, err = r.queries.HiringFrustrationsReferenceVersion(ctx)
-	case "roles":
-		value, err = r.queries.RolesReferenceVersion(ctx)
-	case "team_sizes":
-		value, err = r.queries.TeamSizesReferenceVersion(ctx)
+	case "industries", "hiring_tools", "hiring_frustrations", "roles", "team_sizes":
 	default:
 		return "", fmt.Errorf("reference version for %s: unknown table", table)
 	}
 
+	sql, args, err := r.qb.Select(
+		`COALESCE(MAX(updated_at), to_timestamp(0))::text || ':' || COUNT(*)::text AS version`,
+	).From(table).ToSQL()
 	if err != nil {
 		return "", fmt.Errorf("reference version for %s: %w", table, err)
 	}
 
-	version, err := db.StringValue(value)
-	if err != nil {
-		return "", fmt.Errorf("reference version for %s: %w", table, err)
+	var version string
+	if queryErr := r.pool.QueryRow(ctx, sql, args...).Scan(&version); queryErr != nil {
+		return "", fmt.Errorf("reference version for %s: %w", table, queryErr)
 	}
 
 	return version, nil
+}
+
+type resolvedIDRow struct {
+	id   int64
+	uuid uuid.UUID
+	slug string
 }
 
 // ResolveIndustryIDs maps public UUIDs to internal IDs and returns the other slug ID.
@@ -224,14 +309,12 @@ func (r *Repository) ResolveIndustryIDs(
 		return map[uuid.UUID]int64{}, 0, nil
 	}
 
-	rows, err := r.queries.ResolveIndustryIDs(ctx, ids)
+	rows, err := r.resolveIDs(ctx, "industries", ids)
 	if err != nil {
 		return nil, 0, fmt.Errorf("resolve industries ids: %w", err)
 	}
 
-	return mapResolvedIDs(rows, len(ids), func(row sqlc.ResolveIndustryIDsRow) (uuid.UUID, int64, string) {
-		return row.Uuid, row.ID, row.Slug
-	})
+	return mapResolvedRows(rows, len(ids))
 }
 
 // ResolveHiringToolIDs maps public UUIDs to internal IDs.
@@ -243,14 +326,12 @@ func (r *Repository) ResolveHiringToolIDs(
 		return map[uuid.UUID]int64{}, 0, nil
 	}
 
-	rows, err := r.queries.ResolveHiringToolIDs(ctx, ids)
+	rows, err := r.resolveIDs(ctx, "hiring_tools", ids)
 	if err != nil {
 		return nil, 0, fmt.Errorf("resolve hiring_tools ids: %w", err)
 	}
 
-	return mapResolvedIDs(rows, len(ids), func(row sqlc.ResolveHiringToolIDsRow) (uuid.UUID, int64, string) {
-		return row.Uuid, row.ID, row.Slug
-	})
+	return mapResolvedRows(rows, len(ids))
 }
 
 // ResolveFrustrationIDs maps public UUIDs to internal IDs.
@@ -262,21 +343,56 @@ func (r *Repository) ResolveFrustrationIDs(
 		return map[uuid.UUID]int64{}, 0, nil
 	}
 
-	rows, err := r.queries.ResolveFrustrationIDs(ctx, ids)
+	rows, err := r.resolveIDs(ctx, "hiring_frustrations", ids)
 	if err != nil {
 		return nil, 0, fmt.Errorf("resolve hiring_frustrations ids: %w", err)
 	}
 
-	return mapResolvedIDs(rows, len(ids), func(row sqlc.ResolveFrustrationIDsRow) (uuid.UUID, int64, string) {
-		return row.Uuid, row.ID, row.Slug
-	})
+	return mapResolvedRows(rows, len(ids))
+}
+
+func (r *Repository) resolveIDs(ctx context.Context, table string, ids []uuid.UUID) ([]resolvedIDRow, error) {
+	sql, args, err := r.qb.Select("id", "uuid", "slug").
+		From(table).
+		WhereRaw("uuid = ANY(?::uuid[])", ids).
+		Where("is_active", "=", true).
+		ToSQL()
+	if err != nil {
+		return nil, err
+	}
+
+	pgRows, err := r.pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer pgRows.Close()
+
+	rows := make([]resolvedIDRow, 0, len(ids))
+	for pgRows.Next() {
+		var row resolvedIDRow
+		if scanErr := pgRows.Scan(&row.id, &row.uuid, &row.slug); scanErr != nil {
+			return nil, scanErr
+		}
+		rows = append(rows, row)
+	}
+
+	return rows, pgRows.Err()
 }
 
 // ResolveRoleID maps a public UUID to an internal role ID.
 func (r *Repository) ResolveRoleID(ctx context.Context, id uuid.UUID) (int64, error) {
-	internalID, err := r.queries.ResolveRoleID(ctx, id)
+	sql, args, err := r.qb.Select("id").
+		From("roles").
+		Where("uuid", "=", id).
+		Where("is_active", "=", true).
+		ToSQL()
 	if err != nil {
 		return 0, fmt.Errorf("resolve roles id: %w", err)
+	}
+
+	var internalID int64
+	if queryErr := r.pool.QueryRow(ctx, sql, args...).Scan(&internalID); queryErr != nil {
+		return 0, fmt.Errorf("resolve roles id: %w", queryErr)
 	}
 
 	return internalID, nil
@@ -284,9 +400,17 @@ func (r *Repository) ResolveRoleID(ctx context.Context, id uuid.UUID) (int64, er
 
 // ResolveTeamSizeID maps a public UUID to an internal team size ID.
 func (r *Repository) ResolveTeamSizeID(ctx context.Context, id uuid.UUID) (int64, error) {
-	internalID, err := r.queries.ResolveTeamSizeID(ctx, id)
+	sql, args, err := r.qb.Select("id").
+		From("team_sizes").
+		Where("uuid", "=", id).
+		ToSQL()
 	if err != nil {
 		return 0, fmt.Errorf("resolve team_sizes id: %w", err)
+	}
+
+	var internalID int64
+	if queryErr := r.pool.QueryRow(ctx, sql, args...).Scan(&internalID); queryErr != nil {
+		return 0, fmt.Errorf("resolve team_sizes id: %w", queryErr)
 	}
 
 	return internalID, nil
@@ -294,83 +418,96 @@ func (r *Repository) ResolveTeamSizeID(ctx context.Context, id uuid.UUID) (int64
 
 // UUIDsForIndustryIDs maps internal industry IDs to public UUIDs.
 func (r *Repository) UUIDsForIndustryIDs(ctx context.Context, ids []int64) (map[int64]uuid.UUID, error) {
-	if len(ids) == 0 {
-		return map[int64]uuid.UUID{}, nil
-	}
-
-	rows, err := r.queries.UUIDsForIndustryIDs(ctx, ids)
-	if err != nil {
-		return nil, fmt.Errorf("load industries uuids: %w", err)
-	}
-
-	return mapUUIDsForIDs(rows, func(row sqlc.UUIDsForIndustryIDsRow) (int64, uuid.UUID) {
-		return row.ID, row.Uuid
-	}), nil
+	return r.uuidsForIDs(ctx, "industries", ids, "load industries uuids")
 }
 
 // UUIDsForHiringToolIDs maps internal hiring tool IDs to public UUIDs.
 func (r *Repository) UUIDsForHiringToolIDs(ctx context.Context, ids []int64) (map[int64]uuid.UUID, error) {
-	if len(ids) == 0 {
-		return map[int64]uuid.UUID{}, nil
-	}
-
-	rows, err := r.queries.UUIDsForHiringToolIDs(ctx, ids)
-	if err != nil {
-		return nil, fmt.Errorf("load hiring_tools uuids: %w", err)
-	}
-
-	return mapUUIDsForIDs(rows, func(row sqlc.UUIDsForHiringToolIDsRow) (int64, uuid.UUID) {
-		return row.ID, row.Uuid
-	}), nil
+	return r.uuidsForIDs(ctx, "hiring_tools", ids, "load hiring_tools uuids")
 }
 
 // UUIDsForFrustrationIDs maps internal frustration IDs to public UUIDs.
 func (r *Repository) UUIDsForFrustrationIDs(ctx context.Context, ids []int64) (map[int64]uuid.UUID, error) {
+	return r.uuidsForIDs(ctx, "hiring_frustrations", ids, "load hiring_frustrations uuids")
+}
+
+func (r *Repository) uuidsForIDs(
+	ctx context.Context,
+	table string,
+	ids []int64,
+	errLabel string,
+) (map[int64]uuid.UUID, error) {
 	if len(ids) == 0 {
 		return map[int64]uuid.UUID{}, nil
 	}
 
-	rows, err := r.queries.UUIDsForFrustrationIDs(ctx, ids)
+	sql, args, err := r.qb.Select("id", "uuid").
+		From(table).
+		WhereRaw("id = ANY(?::bigint[])", ids).
+		ToSQL()
 	if err != nil {
-		return nil, fmt.Errorf("load hiring_frustrations uuids: %w", err)
+		return nil, fmt.Errorf("%s: %w", errLabel, err)
 	}
 
-	return mapUUIDsForIDs(rows, func(row sqlc.UUIDsForFrustrationIDsRow) (int64, uuid.UUID) {
-		return row.ID, row.Uuid
-	}), nil
+	rows, err := r.pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", errLabel, err)
+	}
+	defer rows.Close()
+
+	result := make(map[int64]uuid.UUID, len(ids))
+	for rows.Next() {
+		var internalID int64
+		var publicID uuid.UUID
+		if scanErr := rows.Scan(&internalID, &publicID); scanErr != nil {
+			return nil, fmt.Errorf("%s: %w", errLabel, scanErr)
+		}
+		result[internalID] = publicID
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("%s: %w", errLabel, err)
+	}
+
+	return result, nil
 }
 
 // UUIDForRoleID maps an internal role ID to a public UUID.
 func (r *Repository) UUIDForRoleID(ctx context.Context, id int64) (uuid.UUID, error) {
-	publicID, err := r.queries.UUIDForRoleID(ctx, id)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("load roles uuid: %w", err)
-	}
-
-	return publicID, nil
+	return r.uuidForID(ctx, "roles", id, "load roles uuid")
 }
 
 // UUIDForTeamSizeID maps an internal team size ID to a public UUID.
 func (r *Repository) UUIDForTeamSizeID(ctx context.Context, id int64) (uuid.UUID, error) {
-	publicID, err := r.queries.UUIDForTeamSizeID(ctx, id)
+	return r.uuidForID(ctx, "team_sizes", id, "load team_sizes uuid")
+}
+
+func (r *Repository) uuidForID(ctx context.Context, table string, id int64, errLabel string) (uuid.UUID, error) {
+	sql, args, err := r.qb.Select("uuid").
+		From(table).
+		Where("id", "=", id).
+		ToSQL()
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("load team_sizes uuid: %w", err)
+		return uuid.Nil, fmt.Errorf("%s: %w", errLabel, err)
+	}
+
+	var publicID uuid.UUID
+	if queryErr := r.pool.QueryRow(ctx, sql, args...).Scan(&publicID); queryErr != nil {
+		return uuid.Nil, fmt.Errorf("%s: %w", errLabel, queryErr)
 	}
 
 	return publicID, nil
 }
 
-func mapResolvedIDs[T any](
-	rows []T,
+func mapResolvedRows(
+	rows []resolvedIDRow,
 	expected int,
-	accessor func(T) (uuid.UUID, int64, string),
 ) (resolved map[uuid.UUID]int64, otherID int64, err error) {
 	resolved = make(map[uuid.UUID]int64, expected)
 	for _, row := range rows {
-		publicID, internalID, slug := accessor(row)
-		resolved[publicID] = internalID
-		if slug == "other" {
-			otherID = internalID
+		resolved[row.uuid] = row.id
+		if row.slug == "other" {
+			otherID = row.id
 		}
 	}
 
@@ -379,16 +516,6 @@ func mapResolvedIDs[T any](
 	}
 
 	return resolved, otherID, nil
-}
-
-func mapUUIDsForIDs[T any](rows []T, accessor func(T) (int64, uuid.UUID)) map[int64]uuid.UUID {
-	result := make(map[int64]uuid.UUID, len(rows))
-	for _, row := range rows {
-		internalID, publicID := accessor(row)
-		result[internalID] = publicID
-	}
-
-	return result
 }
 
 // NowUTC is a test seam for time.

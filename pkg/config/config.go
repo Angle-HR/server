@@ -12,10 +12,14 @@ import (
 
 // Config holds runtime configuration values.
 type Config struct {
-	ServerPort string
-	DBUrl      string
-	RedisURL   string
-	AppEnv     string
+	ServerPort       string
+	DBUrl            string
+	DBUrlGlobal      string
+	RedisURL         string
+	AppEnv           string
+	JWTSecret        string
+	GeoLite2Path     string
+	RegionBaseDomain string
 }
 
 // Load reads configuration from the environment.
@@ -25,10 +29,14 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		ServerPort: os.Getenv("SERVER_PORT"),
-		DBUrl:      os.Getenv("DB_URL"),
-		RedisURL:   os.Getenv("REDIS_URL"),
-		AppEnv:     os.Getenv("APP_ENV"),
+		ServerPort:       os.Getenv("SERVER_PORT"),
+		DBUrl:            os.Getenv("DB_URL"),
+		DBUrlGlobal:      os.Getenv("DB_URL_GLOBAL"),
+		RedisURL:         os.Getenv("REDIS_URL"),
+		AppEnv:           os.Getenv("APP_ENV"),
+		JWTSecret:        os.Getenv("JWT_SECRET"),
+		GeoLite2Path:     os.Getenv("GEOLITE2_COUNTRY_PATH"),
+		RegionBaseDomain: os.Getenv("REGION_BASE_DOMAIN"),
 	}
 
 	if cfg.ServerPort == "" {
@@ -39,8 +47,16 @@ func Load() (Config, error) {
 		cfg.AppEnv = "development"
 	}
 
-	if cfg.DBUrl == "" {
-		return Config{}, errors.New("DB_URL is required")
+	if cfg.DBUrlGlobal == "" {
+		return Config{}, errors.New("DB_URL_GLOBAL is required")
+	}
+
+	if cfg.JWTSecret == "" {
+		return Config{}, errors.New("JWT_SECRET is required")
+	}
+
+	if cfg.RegionBaseDomain == "" {
+		cfg.RegionBaseDomain = "anglehr.com"
 	}
 
 	if cfg.RedisURL == "" {

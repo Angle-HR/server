@@ -13,11 +13,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/oschwald/geoip2-golang"
 
+	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/docs"
 	"github.com/Angle-HR/server/internal/jobs"
-	appmiddleware "github.com/Angle-HR/server/internal/middleware"
-	waitlistadmin "github.com/Angle-HR/server/internal/waitlist/admin"
+	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/internal/waitlist/catalog"
 	"github.com/Angle-HR/server/internal/waitlist/session"
 	"github.com/Angle-HR/server/pkg/config"
@@ -38,11 +39,34 @@ func Run() error {
 	log := logger.New(cfg.AppEnv)
 	ctx := context.Background()
 
-	store, err := db.NewStore(ctx, cfg.DBUrl)
+	regionConfigs, err := dbrouter.LoadConfigsFromEnv()
 	if err != nil {
-		return fmt.Errorf("connect database: %w", err)
+		return fmt.Errorf("load regional database config: %w", err)
 	}
-	defer store.Pool.Close()
+
+	dbRouter, err := dbrouter.New(ctx, regionConfigs)
+	if err != nil {
+		return fmt.Errorf("connect regional databases: %w", err)
+	}
+	defer dbRouter.Close()
+
+	globalPool, err := db.NewGlobalPool(ctx, cfg.DBUrlGlobal)
+	if err != nil {
+		return fmt.Errorf("connect global database: %w", err)
+	}
+	defer globalPool.Close()
+
+	var geoDB *geoip2.Reader
+	if cfg.GeoLite2Path != "" {
+		geoDB, err = geoip2.Open(cfg.GeoLite2Path)
+		if err != nil {
+			return fmt.Errorf("open geolite2 database: %w", err)
+		}
+		defer geoDB.Close()
+	}
+
+	regionResolver := region.NewRegionResolver(globalPool, geoDB, []byte(cfg.JWTSecret))
+	regionResolver.BaseDomain = cfg.RegionBaseDomain
 
 	redisClient, err := db.NewRedis(ctx, cfg.RedisURL)
 	if err != nil {
@@ -66,13 +90,11 @@ func Run() error {
 
 	_ = jobs.NewPublisher(taskClient)
 
-	catalogRepo := catalog.NewRepository(store.Pool)
-	sessionRepo := session.NewRepository(store.Pool)
-	adminRepo := waitlistadmin.NewRepository(store.Pool)
+	catalogRepo := catalog.NewRepository(dbRouter)
+	sessionRepo := session.NewRepository(dbRouter)
 
 	catalogHandler := catalog.NewHandler(catalogRepo)
 	sessionHandler := session.NewHandler(session.NewService(sessionRepo, catalogRepo))
-	adminHandler := waitlistadmin.NewHandler(adminRepo)
 
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
@@ -84,13 +106,9 @@ func Run() error {
 	}
 
 	router.Route("/api/v1", func(r chi.Router) {
+		r.Use(regionResolver.Middleware())
 		catalogHandler.RegisterRoutes(r)
 		sessionHandler.RegisterRoutes(r)
-
-		r.Route("/admin", func(r chi.Router) {
-			r.Use(appmiddleware.RequireAdmin)
-			adminHandler.RegisterRoutes(r)
-		})
 	})
 
 	server := &http.Server{

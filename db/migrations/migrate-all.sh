@@ -18,3 +18,13 @@ for region in "${regions[@]}"; do
 done
 
 echo "All regional migrations complete."
+
+if [[ -z "${DB_URL_GLOBAL:-}" ]]; then
+	echo "DB_URL_GLOBAL is required" >&2
+	exit 1
+fi
+
+echo "=== Migrating GLOBAL ==="
+DB_URL="$DB_URL_GLOBAL" "$migrations_dir/global_registry/migrate.sh" "$direction"
+
+echo "All migrations complete."

@@ -43,7 +43,7 @@ func serveScalar(w http.ResponseWriter, r *http.Request) {
 		scalargo.WithSpecURL(specURL(r)),
 		scalargo.WithMetaDataOpts(
 			scalargo.WithTitle("Angle HR Waitlist API"),
-			scalargo.WithKeyValue("description", "Onboarding waitlist and admin API"),
+			scalargo.WithKeyValue("description", "Onboarding waitlist API"),
 		),
 	)
 	if err != nil {

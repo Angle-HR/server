@@ -34,8 +34,17 @@ func NewStore(ctx context.Context, dbURL string) (*Store, error) {
 	return &Store{Pool: pool}, nil
 }
 
-// NewPool creates and verifies a PostgreSQL connection pool.
+// NewPool creates and verifies a PostgreSQL connection pool for regional waitlist databases.
 func NewPool(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
+	return newPool(ctx, dbURL, "waitlist,public")
+}
+
+// NewGlobalPool creates a pool for the global registry database (public schema only).
+func NewGlobalPool(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
+	return newPool(ctx, dbURL, "public")
+}
+
+func newPool(ctx context.Context, dbURL, searchPath string) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(dbURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse postgres config: %w", err)
@@ -49,7 +58,7 @@ func NewPool(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	if cfg.ConnConfig.RuntimeParams == nil {
 		cfg.ConnConfig.RuntimeParams = map[string]string{}
 	}
-	cfg.ConnConfig.RuntimeParams["search_path"] = "waitlist,public"
+	cfg.ConnConfig.RuntimeParams["search_path"] = searchPath
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

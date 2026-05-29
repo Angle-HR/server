@@ -19,6 +19,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/Angle-HR/server/internal/dbrouter"
+	"github.com/Angle-HR/server/internal/waitlist"
 	"github.com/Angle-HR/server/internal/waitlist/catalog"
 	"github.com/Angle-HR/server/pkg/apperror"
 )
@@ -75,13 +77,17 @@ type Record struct {
 
 // Repository persists onboarding sessions and submissions.
 type Repository struct {
-	pool *pgxpool.Pool
-	qb   *qb.QB
+	router *dbrouter.DBRouter
+	qb     *qb.QB
 }
 
 // NewRepository returns a PostgreSQL-backed session repository.
-func NewRepository(pool *pgxpool.Pool) *Repository {
-	return &Repository{pool: pool, qb: qb.NewPostgres()}
+func NewRepository(router *dbrouter.DBRouter) *Repository {
+	return &Repository{router: router, qb: qb.NewPostgres()}
+}
+
+func (r *Repository) pool(ctx context.Context) (*pgxpool.Pool, error) {
+	return waitlist.PoolFor(ctx, r.router)
 }
 
 // Create inserts a new session and returns the raw token.
@@ -101,6 +107,11 @@ func (r *Repository) Create(ctx context.Context) (string, *Record, error) {
 		return "", nil, fmt.Errorf("insert session: %w", err)
 	}
 
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+
 	var (
 		id           int64
 		currentStep  int16
@@ -109,7 +120,7 @@ func (r *Repository) Create(ctx context.Context) (string, *Record, error) {
 		completedAt  *time.Time
 		completedRaw *time.Time
 	)
-	scanErr := r.pool.QueryRow(ctx, sql, args...).Scan(
+	scanErr := pool.QueryRow(ctx, sql, args...).Scan(
 		&id,
 		&currentStep,
 		&expires,
@@ -141,6 +152,11 @@ func (r *Repository) FindByToken(ctx context.Context, token string) (*Record, er
 		return nil, fmt.Errorf("find session: %w", err)
 	}
 
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var (
 		id           int64
 		currentStep  int16
@@ -148,7 +164,7 @@ func (r *Repository) FindByToken(ctx context.Context, token string) (*Record, er
 		rawState     []byte
 		completedRaw *time.Time
 	)
-	scanErr := r.pool.QueryRow(ctx, sql, args...).Scan(
+	scanErr := pool.QueryRow(ctx, sql, args...).Scan(
 		&id,
 		&currentStep,
 		&expires,
@@ -217,7 +233,12 @@ func (r *Repository) SaveStep(ctx context.Context, sessionID int64, step int, st
 		return fmt.Errorf("save session step: %w", err)
 	}
 
-	result, err := r.pool.Exec(ctx, sql, args...)
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return err
+	}
+
+	result, err := pool.Exec(ctx, sql, args...)
 	if err != nil {
 		return fmt.Errorf("save session step: %w", err)
 	}
@@ -253,7 +274,12 @@ func (r *Repository) Submit(
 		)
 	}
 
-	tx, err := r.pool.Begin(ctx)
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin submit transaction: %w", err)
 	}

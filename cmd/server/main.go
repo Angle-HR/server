@@ -2,13 +2,9 @@
 //
 //	@title						Angle HR Waitlist API
 //	@version					1.0
-//	@description				Onboarding waitlist and admin API for Angle HR.
+//	@description				Onboarding waitlist API for Angle HR.
 //	@host						localhost:8080
 //	@BasePath					/api/v1
-//	@securityDefinitions.apikey	BearerAuth
-//	@in							header
-//	@name						Authorization
-//	@description				Bearer token containing the admin scope
 package main
 
 import (

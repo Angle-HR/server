@@ -25,14 +25,12 @@ migrate-down:
 	@echo "✅ Migration rolled back."
 
 migrate-all:
-	@echo "→ Running migrations on all regional databases..."
+	@echo "→ Running migrations on all databases (regional + global)..."
 	@docker compose run --rm migrate
-	@echo "✅ All regional migrations applied."
+	@echo "✅ All migrations applied."
 
-migrate-global:
-	@echo "→ Running global registry migrations..."
-	@docker compose run --rm migrate_global
-	@echo "✅ Global registry migrations applied."
+migrate-global: migrate-all
+	@echo "(migrate-global runs the same compose migrate service as migrate-all)"
 
 migrate-global-up:
 	@echo "→ Running global registry migrations..."

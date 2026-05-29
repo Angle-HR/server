@@ -9,6 +9,9 @@ import (
 	"github.com/Software78/sql-go-query-builder/builder"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/Angle-HR/server/internal/dbrouter"
+	"github.com/Angle-HR/server/internal/waitlist"
 )
 
 // Industry is an active industry option.
@@ -57,13 +60,17 @@ type TeamSize struct {
 
 // Repository loads onboarding reference data.
 type Repository struct {
-	pool *pgxpool.Pool
-	qb   *qb.QB
+	router *dbrouter.DBRouter
+	qb     *qb.QB
 }
 
 // NewRepository returns a catalog repository backed by PostgreSQL.
-func NewRepository(pool *pgxpool.Pool) *Repository {
-	return &Repository{pool: pool, qb: qb.NewPostgres()}
+func NewRepository(router *dbrouter.DBRouter) *Repository {
+	return &Repository{router: router, qb: qb.NewPostgres()}
+}
+
+func (r *Repository) pool(ctx context.Context) (*pgxpool.Pool, error) {
+	return waitlist.PoolFor(ctx, r.router)
 }
 
 // ListIndustries returns active industries ordered for display.
@@ -84,7 +91,12 @@ func (r *Repository) ListIndustries(ctx context.Context) ([]Industry, error) {
 		return nil, fmt.Errorf("build list industries: %w", err)
 	}
 
-	rows, err := r.pool.Query(ctx, sql, args...)
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list industries: %w", err)
 	}
@@ -127,7 +139,12 @@ func (r *Repository) ListHiringTools(ctx context.Context) ([]HiringTool, error) 
 		return nil, fmt.Errorf("build list hiring tools: %w", err)
 	}
 
-	rows, err := r.pool.Query(ctx, sql, args...)
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list hiring tools: %w", err)
 	}
@@ -165,7 +182,12 @@ func (r *Repository) ListHiringFrustrations(ctx context.Context) ([]HiringFrustr
 		return nil, fmt.Errorf("build list hiring frustrations: %w", err)
 	}
 
-	rows, err := r.pool.Query(ctx, sql, args...)
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list hiring frustrations: %w", err)
 	}
@@ -203,7 +225,12 @@ func (r *Repository) ListRoles(ctx context.Context) ([]Role, error) {
 		return nil, fmt.Errorf("build list roles: %w", err)
 	}
 
-	rows, err := r.pool.Query(ctx, sql, args...)
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list roles: %w", err)
 	}
@@ -238,7 +265,12 @@ func (r *Repository) ListTeamSizes(ctx context.Context) ([]TeamSize, error) {
 		return nil, fmt.Errorf("build list team sizes: %w", err)
 	}
 
-	rows, err := r.pool.Query(ctx, sql, args...)
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list team sizes: %w", err)
 	}
@@ -286,8 +318,13 @@ func (r *Repository) ReferenceVersion(ctx context.Context, table string) (string
 		return "", fmt.Errorf("reference version for %s: %w", table, err)
 	}
 
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	var version string
-	if queryErr := r.pool.QueryRow(ctx, sql, args...).Scan(&version); queryErr != nil {
+	if queryErr := pool.QueryRow(ctx, sql, args...).Scan(&version); queryErr != nil {
 		return "", fmt.Errorf("reference version for %s: %w", table, queryErr)
 	}
 
@@ -361,7 +398,12 @@ func (r *Repository) resolveIDs(ctx context.Context, table string, ids []uuid.UU
 		return nil, err
 	}
 
-	pgRows, err := r.pool.Query(ctx, sql, args...)
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	pgRows, err := pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -390,8 +432,13 @@ func (r *Repository) ResolveRoleID(ctx context.Context, id uuid.UUID) (int64, er
 		return 0, fmt.Errorf("resolve roles id: %w", err)
 	}
 
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return 0, err
+	}
+
 	var internalID int64
-	if queryErr := r.pool.QueryRow(ctx, sql, args...).Scan(&internalID); queryErr != nil {
+	if queryErr := pool.QueryRow(ctx, sql, args...).Scan(&internalID); queryErr != nil {
 		return 0, fmt.Errorf("resolve roles id: %w", queryErr)
 	}
 
@@ -408,8 +455,13 @@ func (r *Repository) ResolveTeamSizeID(ctx context.Context, id uuid.UUID) (int64
 		return 0, fmt.Errorf("resolve team_sizes id: %w", err)
 	}
 
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return 0, err
+	}
+
 	var internalID int64
-	if queryErr := r.pool.QueryRow(ctx, sql, args...).Scan(&internalID); queryErr != nil {
+	if queryErr := pool.QueryRow(ctx, sql, args...).Scan(&internalID); queryErr != nil {
 		return 0, fmt.Errorf("resolve team_sizes id: %w", queryErr)
 	}
 
@@ -449,7 +501,12 @@ func (r *Repository) uuidsForIDs(
 		return nil, fmt.Errorf("%s: %w", errLabel, err)
 	}
 
-	rows, err := r.pool.Query(ctx, sql, args...)
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", errLabel, err)
 	}
@@ -491,8 +548,13 @@ func (r *Repository) uuidForID(ctx context.Context, table string, id int64, errL
 		return uuid.Nil, fmt.Errorf("%s: %w", errLabel, err)
 	}
 
+	pool, err := r.pool(ctx)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
 	var publicID uuid.UUID
-	if queryErr := r.pool.QueryRow(ctx, sql, args...).Scan(&publicID); queryErr != nil {
+	if queryErr := pool.QueryRow(ctx, sql, args...).Scan(&publicID); queryErr != nil {
 		return uuid.Nil, fmt.Errorf("%s: %w", errLabel, queryErr)
 	}
 

@@ -201,20 +201,6 @@ CREATE TABLE waitlist.submission_sessions (
 CREATE INDEX submission_sessions_uuid_idx ON waitlist.submission_sessions (uuid);
 CREATE INDEX submission_sessions_expires_at_idx ON waitlist.submission_sessions (expires_at);
 
-CREATE TABLE waitlist.admin_notes (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    uuid UUID NOT NULL DEFAULT gen_random_uuid(),
-    submission_id BIGINT NOT NULL REFERENCES waitlist.waitlist_submissions (id) ON DELETE CASCADE,
-    note TEXT NOT NULL,
-    created_by TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT admin_notes_uuid_key UNIQUE (uuid)
-);
-
-CREATE INDEX admin_notes_uuid_idx ON waitlist.admin_notes (uuid);
-CREATE INDEX admin_notes_submission_id_idx ON waitlist.admin_notes (submission_id);
-
 CREATE TRIGGER industries_set_updated_at
     BEFORE UPDATE ON waitlist.industries
     FOR EACH ROW
@@ -252,10 +238,5 @@ CREATE TRIGGER waitlist_submissions_soft_delete
 
 CREATE TRIGGER submission_sessions_set_updated_at
     BEFORE UPDATE ON waitlist.submission_sessions
-    FOR EACH ROW
-    EXECUTE FUNCTION set_updated_at();
-
-CREATE TRIGGER admin_notes_set_updated_at
-    BEFORE UPDATE ON waitlist.admin_notes
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();

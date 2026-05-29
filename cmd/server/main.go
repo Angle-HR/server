@@ -2,9 +2,11 @@
 //
 //	@title						Angle HR Waitlist API
 //	@version					1.0
-//	@description				Onboarding waitlist API for Angle HR.
+//	@description				Waitlist signup API for Open HR.
 //	@host						localhost:8080
 //	@BasePath					/api/v1
+//
+// Runtime serving overrides host and schemes from PUBLIC_API_URL (see internal/docs).
 package main
 
 import (

@@ -13,19 +13,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/oschwald/geoip2-golang"
 
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/docs"
 	"github.com/Angle-HR/server/internal/handler"
-	"github.com/Angle-HR/server/internal/jobs"
-	"github.com/Angle-HR/server/internal/region"
-	"github.com/Angle-HR/server/internal/waitlist/catalog"
-	"github.com/Angle-HR/server/internal/waitlist/session"
 	"github.com/Angle-HR/server/pkg/config"
 	"github.com/Angle-HR/server/pkg/db"
 	"github.com/Angle-HR/server/pkg/logger"
-	"github.com/Angle-HR/server/pkg/queue"
 )
 
 const readHeaderTimeout = 5 * time.Second
@@ -57,46 +51,8 @@ func Run() error {
 	}
 	defer globalPool.Close()
 
-	var geoDB *geoip2.Reader
-	if cfg.GeoLite2Path != "" {
-		geoDB, err = geoip2.Open(cfg.GeoLite2Path)
-		if err != nil {
-			return fmt.Errorf("open geolite2 database: %w", err)
-		}
-		defer geoDB.Close()
-	}
-
-	regionResolver := region.NewRegionResolver(globalPool, geoDB, []byte(cfg.JWTSecret))
-	regionResolver.BaseDomain = cfg.RegionBaseDomain
-
-	redisClient, err := db.NewRedis(ctx, cfg.RedisURL)
-	if err != nil {
-		return fmt.Errorf("connect redis: %w", err)
-	}
-	defer func() {
-		if closeErr := redisClient.Close(); closeErr != nil {
-			log.Warn("close redis client", "error", closeErr)
-		}
-	}()
-
-	taskClient, err := queue.NewClient(cfg.RedisURL)
-	if err != nil {
-		return fmt.Errorf("create task client: %w", err)
-	}
-	defer func() {
-		if closeErr := taskClient.Close(); closeErr != nil {
-			log.Warn("close task client", "error", closeErr)
-		}
-	}()
-
-	_ = jobs.NewPublisher(taskClient)
-
-	catalogRepo := catalog.NewRepository(dbRouter)
-	sessionRepo := session.NewRepository(dbRouter)
-
-	catalogHandler := catalog.NewHandler(catalogRepo)
-	sessionHandler := session.NewHandler(session.NewService(sessionRepo, catalogRepo))
-	waitlistHandler := handler.NewWaitlistHandler(regionResolver, dbRouter, globalPool)
+	countriesHandler := handler.NewCountriesHandler(globalPool)
+	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool)
 
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
@@ -104,13 +60,11 @@ func Run() error {
 	router.Use(chimiddleware.Recoverer)
 
 	if docs.IsEnabled(cfg.AppEnv) {
-		docs.RegisterRoutes(router)
+		docs.RegisterRoutes(router, docs.Config{PublicAPIURL: cfg.PublicAPIURL})
 	}
 
 	router.Route("/api/v1", func(r chi.Router) {
-		r.Use(regionResolver.Middleware())
-		catalogHandler.RegisterRoutes(r)
-		sessionHandler.RegisterRoutes(r)
+		countriesHandler.RegisterRoutes(r)
 		waitlistHandler.RegisterRoutes(r)
 	})
 

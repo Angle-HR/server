@@ -38,6 +38,7 @@ const (
 	MsgOtherTextOnlyAllowedWhenOthersSelected = "other text is only allowed when Others is selected"
 	MsgRegionRequired                         = "region could not be resolved"
 	MsgInvalidRegion                          = "invalid region"
+	MsgInvalidCountryID                       = "invalid country_id"
 )
 
 var (

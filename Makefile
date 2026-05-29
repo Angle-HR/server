@@ -1,9 +1,8 @@
-.PHONY: fmt lint test cover security check tidy pr-description build build-worker run run-worker migrate migrate-up migrate-down migrate-all migrate-global migrate-global-up migrate-global-down swagger swagger-check
+.PHONY: fmt lint test cover security check tidy pr-description build run migrate migrate-up migrate-down migrate-all migrate-global migrate-global-up migrate-global-down swagger swagger-check
 
 PR_TEMPLATE := .github/pull_request_template.md
 PR_OUT_DIR := pr_template
 BIN := bin/server
-BIN_WORKER := bin/worker
 SWAG_VERSION := v1.16.4
 
 # ─────────────────────────────────────────────

@@ -13,49 +13,27 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/Angle-HR/server/internal/dbrouter"
-	"github.com/Angle-HR/server/internal/region"
+	"github.com/Angle-HR/server/internal/query"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
 )
 
-const (
-	regionalWaitlistInsertSQL = `
-INSERT INTO waitlist (email, company_name, role, region, region_source, metadata)
-VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (email) DO NOTHING
-RETURNING id`
-
-	globalRegistryInsertSQL = `
-INSERT INTO users_registry (email, region, region_source)
-VALUES ($1, $2, $3)
-ON CONFLICT (email) DO NOTHING`
-)
-
-// globalRegistryDB executes writes against the global users_registry database.
-type globalRegistryDB interface {
-	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
-}
+const regionSourceExplicit = "explicit"
 
 // WaitlistHandler handles waitlist signup requests.
 type WaitlistHandler struct {
-	Resolver *region.RegionResolver
 	Router   *dbrouter.DBRouter
-	GlobalDB globalRegistryDB
+	GlobalDB globalDB
 	validate *validator.Validate
 }
 
 // NewWaitlistHandler returns a waitlist signup handler.
-func NewWaitlistHandler(
-	resolver *region.RegionResolver,
-	router *dbrouter.DBRouter,
-	globalDB globalRegistryDB,
-) *WaitlistHandler {
+func NewWaitlistHandler(router *dbrouter.DBRouter, globalDB globalDB) *WaitlistHandler {
 	return &WaitlistHandler{
-		Resolver: resolver,
 		Router:   router,
 		GlobalDB: globalDB,
 		validate: validator.New(),
@@ -68,29 +46,25 @@ func (h *WaitlistHandler) RegisterRoutes(r chi.Router) {
 }
 
 type signupRequest struct {
-	Email       string         `json:"email" validate:"required,email,max=254"`
-	CompanyName string         `json:"company_name" validate:"required,max=120"`
-	Role        string         `json:"role" validate:"omitempty,max=80"`
-	Region      string         `json:"region" validate:"omitempty,oneof=uk us africa eu"`
-	Metadata    map[string]any `json:"metadata"`
+	FullName  string `json:"full_name" validate:"required,max=120"`
+	Email     string `json:"email" validate:"required,email,max=254"`
+	CountryID string `json:"country_id" validate:"required,uuid"`
 }
 
+// handle godoc
+//
+//	@Summary		Join waitlist
+//	@Description	Registers a user for the regional waitlist and global users registry.
+//	@Tags			waitlist
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		handler.SignupRequest	true	"Signup payload"
+//	@Success		201		{object}	handler.SignupEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		409		{object}	apidoc.ErrorEnvelope
+//	@Failure		500		{object}	apidoc.ErrorEnvelope
+//	@Router			/waitlist [post]
 func (h *WaitlistHandler) handle(w http.ResponseWriter, r *http.Request) {
-	reg, source, err := h.Resolver.Resolve(r)
-	if err != nil {
-		if errors.Is(err, region.ErrInvalidRegion) {
-			response.Error(w, r, apperror.NewWithDetails(
-				apperror.CodeValidationError,
-				apperror.MsgInvalidRegion,
-				map[string]any{"field": "region"},
-			))
-			return
-		}
-
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgRegionRequired))
-		return
-	}
-
 	var req signupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
@@ -104,14 +78,29 @@ func (h *WaitlistHandler) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	role := nullableString(req.Role)
-	metadata, err := metadataBytes(req.Metadata)
+	countryID, err := uuid.Parse(req.CountryID)
 	if err != nil {
-		response.Error(w, r, fmt.Errorf("encode waitlist metadata: %w", err))
+		response.Error(w, r, apperror.NewWithDetails(
+			apperror.CodeValidationError,
+			apperror.MsgInvalidCountryID,
+			map[string]any{"field": "country_id"},
+		))
 		return
 	}
 
-	if err := h.signup(r.Context(), reg, source, req.Email, req.CompanyName, role, metadata); err != nil {
+	country, err := lookupCountry(r.Context(), h.GlobalDB, countryID)
+	if err != nil {
+		var appErr *apperror.AppError
+		if errors.As(err, &appErr) {
+			response.Error(w, r, err)
+			return
+		}
+
+		response.Error(w, r, fmt.Errorf("lookup country: %w", err))
+		return
+	}
+
+	if err := h.signup(r.Context(), country, req.FullName, req.Email); err != nil {
 		if errors.Is(err, apperror.ErrConflict) {
 			response.Error(w, r, err)
 			return
@@ -129,32 +118,28 @@ func (h *WaitlistHandler) handle(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("waitlist signup",
 		"email", maskEmail(req.Email),
-		"region", reg,
-		"region_source", source,
+		"region", country.Region,
+		"country_id", country.ID,
 	)
 
 	response.Success(w, r, http.StatusCreated, map[string]string{
 		"message": "You're on the list!",
-		"region":  string(reg),
+		"region":  string(country.Region),
 	})
 }
 
 func (r *signupRequest) trim() {
+	r.FullName = strings.TrimSpace(r.FullName)
 	r.Email = strings.TrimSpace(r.Email)
-	r.CompanyName = strings.TrimSpace(r.CompanyName)
-	r.Role = strings.TrimSpace(r.Role)
-	r.Region = strings.TrimSpace(r.Region)
+	r.CountryID = strings.TrimSpace(r.CountryID)
 }
 
 func (h *WaitlistHandler) signup(
 	ctx context.Context,
-	reg region.Region,
-	source string,
-	email, companyName string,
-	role *string,
-	metadata []byte,
+	country Country,
+	fullName, email string,
 ) error {
-	pool, err := h.Router.DB(reg)
+	pool, err := h.Router.DB(country.Region)
 	if err != nil {
 		return fmt.Errorf("regional pool: %w", err)
 	}
@@ -166,16 +151,19 @@ func (h *WaitlistHandler) signup(
 	defer rollbackWaitlistTx(ctx, tx)
 
 	var id int64
-	scanErr := tx.QueryRow(
-		ctx,
-		regionalWaitlistInsertSQL,
+	insertSQL, insertArgs, err := query.InsertWaitlistSignup(
+		fullName,
 		email,
-		companyName,
-		role,
-		string(reg),
-		source,
-		metadata,
-	).Scan(&id)
+		country.ID,
+		string(country.Region),
+		regionSourceExplicit,
+		[]byte("{}"),
+	)
+	if err != nil {
+		return fmt.Errorf("build waitlist insert: %w", err)
+	}
+
+	scanErr := tx.QueryRow(ctx, insertSQL, insertArgs...).Scan(&id)
 	if scanErr != nil {
 		if isDuplicateWaitlistSignup(scanErr) {
 			return apperror.ErrConflict
@@ -184,14 +172,16 @@ func (h *WaitlistHandler) signup(
 		return fmt.Errorf("insert regional waitlist: %w", scanErr)
 	}
 
-	registrySource := registryRegionSource(source)
-	if _, err := h.GlobalDB.Exec(
-		ctx,
-		globalRegistryInsertSQL,
+	registrySQL, registryArgs, err := query.InsertUsersRegistry(
 		email,
-		string(reg),
-		registrySource,
-	); err != nil {
+		string(country.Region),
+		regionSourceExplicit,
+	)
+	if err != nil {
+		return fmt.Errorf("build users registry insert: %w", err)
+	}
+
+	if _, err := h.GlobalDB.Exec(ctx, registrySQL, registryArgs...); err != nil {
 		return fmt.Errorf("insert users registry: %w", err)
 	}
 
@@ -222,39 +212,6 @@ func rollbackWaitlistTx(ctx context.Context, tx pgx.Tx) {
 	if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
 		slog.Warn("rollback waitlist transaction", "error", err)
 	}
-}
-
-func registryRegionSource(resolverSource string) string {
-	switch resolverSource {
-	case "jwt":
-		return "jwt"
-	case "subdomain":
-		return "subdomain"
-	case "db":
-		return "db"
-	case "param":
-		return "explicit"
-	case "geo":
-		return "ip"
-	default:
-		return "inferred"
-	}
-}
-
-func metadataBytes(metadata map[string]any) ([]byte, error) {
-	if metadata == nil {
-		return []byte("{}"), nil
-	}
-
-	return json.Marshal(metadata)
-}
-
-func nullableString(s string) *string {
-	if s == "" {
-		return nil
-	}
-
-	return &s
 }
 
 func maskEmail(email string) string {
@@ -294,14 +251,12 @@ func validationError(err error) error {
 
 func jsonFieldName(structField string) string {
 	switch structField {
+	case "FullName":
+		return "full_name"
 	case "Email":
 		return "email"
-	case "CompanyName":
-		return "company_name"
-	case "Role":
-		return "role"
-	case "Region":
-		return "region"
+	case "CountryID":
+		return "country_id"
 	default:
 		return strings.ToLower(structField)
 	}
@@ -315,8 +270,8 @@ func validationMessage(fe validator.FieldError) string {
 		return "invalid email format"
 	case "max":
 		return fmt.Sprintf("%s exceeds maximum length", jsonFieldName(fe.Field()))
-	case "oneof":
-		return apperror.MsgInvalidRegion
+	case "uuid":
+		return apperror.MsgInvalidCountryID
 	default:
 		return apperror.MsgInvalidRequest
 	}

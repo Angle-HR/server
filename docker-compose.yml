@@ -214,19 +214,6 @@ services:
       - anglehr_net
     restart: "no"
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    networks:
-      - anglehr_net
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   minio_setup:
     image: minio/mc:latest
     depends_on:
@@ -273,11 +260,8 @@ services:
     environment:
       SERVER_PORT: "8080"
       APP_ENV: ${APP_ENV:-development}
-      REDIS_URL: redis://redis:6379/0
       DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
-      REGION_BASE_DOMAIN: ${REGION_BASE_DOMAIN:-anglehr.com}
-      GEOLITE2_COUNTRY_PATH: ${GEOLITE2_COUNTRY_PATH:-}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
       ANGLEHR_UK_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres_uk:5432/anglehr_uk?sslmode=disable
       ANGLEHR_UK_MINIO_ENDPOINT: minio-uk:9000
       ANGLEHR_UK_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER_UK}
@@ -317,29 +301,10 @@ services:
         condition: service_healthy
       minio_eu:
         condition: service_healthy
-      redis:
-        condition: service_healthy
       migrate:
         condition: service_completed_successfully
       minio_setup:
         condition: service_completed_successfully
-    networks:
-      - anglehr_net
-    restart: unless-stopped
-
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: worker
-    environment:
-      APP_ENV: ${APP_ENV:-development}
-      REDIS_URL: redis://redis:6379/0
-      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
-      JWT_SECRET: ${JWT_SECRET}
-    depends_on:
-      redis:
-        condition: service_healthy
     networks:
       - anglehr_net
     restart: unless-stopped

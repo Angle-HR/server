@@ -29,613 +29,122 @@ definitions:
         example: abc123
         type: string
     type: object
-  catalog.HiringFrustration:
-    properties:
-      description:
-        type: string
-      id:
-        type: string
-      slug:
-        type: string
-      sort_order:
-        type: integer
-    type: object
-  catalog.HiringFrustrationListEnvelope:
+  handler.CountriesEnvelope:
     properties:
       data:
         items:
-          $ref: '#/definitions/catalog.HiringFrustration'
+          $ref: '#/definitions/handler.CountryResponse'
         type: array
       meta:
         $ref: '#/definitions/apidoc.Meta'
     type: object
-  catalog.HiringTool:
-    properties:
-      category:
-        type: string
-      icon_key:
-        type: string
-      id:
-        type: string
-      name:
-        type: string
-      slug:
-        type: string
-      sort_order:
-        type: integer
-    type: object
-  catalog.HiringToolListEnvelope:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/catalog.HiringTool'
-        type: array
-      meta:
-        $ref: '#/definitions/apidoc.Meta'
-    type: object
-  catalog.Industry:
+  handler.CountryResponse:
     properties:
       icon_key:
+        example: flag-uk
         type: string
       id:
+        example: a1b2c3d4-e5f6-4789-a012-3456789abcde
         type: string
       name:
+        example: United Kingdom
+        type: string
+      region:
+        enum:
+        - uk
+        - us
+        - africa
+        - eu
+        example: uk
         type: string
       slug:
+        example: united-kingdom
         type: string
-      sort_order:
-        type: integer
     type: object
-  catalog.IndustryListEnvelope:
+  handler.SignupData:
+    properties:
+      message:
+        example: You're on the list!
+        type: string
+      region:
+        example: uk
+        type: string
+    type: object
+  handler.SignupEnvelope:
     properties:
       data:
-        items:
-          $ref: '#/definitions/catalog.Industry'
-        type: array
+        $ref: '#/definitions/handler.SignupData'
       meta:
         $ref: '#/definitions/apidoc.Meta'
     type: object
-  catalog.Role:
+  handler.SignupRequest:
     properties:
-      id:
+      country_id:
+        example: a1b2c3d4-e5f6-4789-a012-3456789abcde
         type: string
-      name:
+      email:
+        example: jerry@example.com
         type: string
-      slug:
-        type: string
-      sort_order:
-        type: integer
-    type: object
-  catalog.RoleListEnvelope:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/catalog.Role'
-        type: array
-      meta:
-        $ref: '#/definitions/apidoc.Meta'
-    type: object
-  catalog.TeamSize:
-    properties:
-      id:
-        type: string
-      label:
-        type: string
-      max_size:
-        type: integer
-      min_size:
-        type: integer
-      sort_order:
-        type: integer
-    type: object
-  catalog.TeamSizeListEnvelope:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/catalog.TeamSize'
-        type: array
-      meta:
-        $ref: '#/definitions/apidoc.Meta'
-    type: object
-  session.CreateSessionData:
-    properties:
-      current_step:
-        example: 1
-        type: integer
-      expires_at:
-        type: string
-      session_token:
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-    type: object
-  session.CreateSessionEnvelope:
-    properties:
-      data:
-        $ref: '#/definitions/session.CreateSessionData'
-      meta:
-        $ref: '#/definitions/apidoc.Meta'
-    type: object
-  session.GetSessionData:
-    properties:
-      current_step:
-        example: 2
-        type: integer
-      partial:
-        $ref: '#/definitions/session.PartialResponse'
-    type: object
-  session.GetSessionEnvelope:
-    properties:
-      data:
-        $ref: '#/definitions/session.GetSessionData'
-      meta:
-        $ref: '#/definitions/apidoc.Meta'
-    type: object
-  session.PartialResponse:
-    properties:
-      frustration_ids:
-        items:
-          type: string
-        type: array
-      industry_ids:
-        items:
-          type: string
-        type: array
-      other_frustration:
-        type: string
-      other_industry:
-        type: string
-      other_tool:
-        type: string
-      role_id:
-        type: string
-      team_size_id:
-        type: string
-      tool_ids:
-        items:
-          type: string
-        type: array
-    type: object
-  session.Step1Request:
-    properties:
-      industry_ids:
-        items:
-          type: string
-        type: array
-      other_industry:
-        type: string
-    type: object
-  session.Step2Request:
-    properties:
-      other_tool:
-        type: string
-      tool_ids:
-        items:
-          type: string
-        type: array
-    type: object
-  session.Step3Request:
-    properties:
-      frustration_ids:
-        items:
-          type: string
-        type: array
-      other_frustration:
-        type: string
-    type: object
-  session.Step4Request:
-    properties:
-      role_id:
-        type: string
-      team_size_id:
-        type: string
-    type: object
-  session.StepProgressData:
-    properties:
-      current_step:
-        example: 3
-        type: integer
-    type: object
-  session.StepProgressEnvelope:
-    properties:
-      data:
-        $ref: '#/definitions/session.StepProgressData'
-      meta:
-        $ref: '#/definitions/apidoc.Meta'
-    type: object
-  session.SubmitEnvelope:
-    properties:
-      data:
-        $ref: '#/definitions/session.SubmitResponse'
-      meta:
-        $ref: '#/definitions/apidoc.Meta'
-    type: object
-  session.SubmitRequest:
-    properties:
-      name:
-        type: string
-      wants_early_access:
-        type: boolean
-      wants_user_testing:
-        type: boolean
-    type: object
-  session.SubmitResponse:
-    properties:
-      id:
-        type: string
-      name:
-        type: string
-      submitted_at:
+      full_name:
+        example: Jerry
         type: string
     type: object
 host: localhost:8080
 info:
   contact: {}
-  description: Onboarding waitlist API for Angle HR.
+  description: Waitlist signup API for Open HR.
   title: Angle HR Waitlist API
   version: "1.0"
 paths:
-  /hiring-frustrations:
+  /countries:
     get:
-      description: Returns active hiring frustration options for onboarding step 3.
+      description: Returns active countries for the waitlist region dropdown.
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/catalog.HiringFrustrationListEnvelope'
-        "304":
-          description: Not Modified
+            $ref: '#/definitions/handler.CountriesEnvelope'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/apidoc.ErrorEnvelope'
-      summary: List hiring frustrations
+      summary: List countries
       tags:
-      - catalog
-  /hiring-tools:
-    get:
-      description: Returns active hiring tool options for onboarding step 2.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/catalog.HiringToolListEnvelope'
-        "304":
-          description: Not Modified
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-      summary: List hiring tools
-      tags:
-      - catalog
-  /industries:
-    get:
-      description: Returns active industry options for onboarding step 1.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/catalog.IndustryListEnvelope'
-        "304":
-          description: Not Modified
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-      summary: List industries
-      tags:
-      - catalog
-  /roles:
-    get:
-      description: Returns active role options for onboarding step 4.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/catalog.RoleListEnvelope'
-        "304":
-          description: Not Modified
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-      summary: List roles
-      tags:
-      - catalog
-  /team-sizes:
-    get:
-      description: Returns active team size options for onboarding step 4.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/catalog.TeamSizeListEnvelope'
-        "304":
-          description: Not Modified
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-      summary: List team sizes
-      tags:
-      - catalog
-  /waitlist/session:
+      - countries
+  /waitlist:
     post:
-      description: Starts a new waitlist onboarding session and returns a session
-        token.
+      consumes:
+      - application/json
+      description: Registers a user for the regional waitlist and global users registry.
+      parameters:
+      - description: Signup payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.SignupRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/session.CreateSessionEnvelope'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-      summary: Create onboarding session
-      tags:
-      - session
-  /waitlist/session/{token}:
-    get:
-      description: Returns the current step and saved partial progress for a session
-        token.
-      parameters:
-      - description: Session token
-        in: path
-        name: token
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/session.GetSessionEnvelope'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "410":
-          description: Gone
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-      summary: Get onboarding session
-      tags:
-      - session
-  /waitlist/session/{token}/step/1:
-    patch:
-      consumes:
-      - application/json
-      description: Saves industry selections for the onboarding session.
-      parameters:
-      - description: Session token
-        in: path
-        name: token
-        required: true
-        type: string
-      - description: Step 1 payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/session.Step1Request'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/session.StepProgressEnvelope'
+            $ref: '#/definitions/handler.SignupEnvelope'
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "410":
-          description: Gone
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-      summary: Save step 1
-      tags:
-      - session
-  /waitlist/session/{token}/step/2:
-    patch:
-      consumes:
-      - application/json
-      description: Saves hiring tool selections for the onboarding session.
-      parameters:
-      - description: Session token
-        in: path
-        name: token
-        required: true
-        type: string
-      - description: Step 2 payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/session.Step2Request'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/session.StepProgressEnvelope'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "410":
-          description: Gone
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-      summary: Save step 2
-      tags:
-      - session
-  /waitlist/session/{token}/step/3:
-    patch:
-      consumes:
-      - application/json
-      description: Saves hiring frustration selections for the onboarding session.
-      parameters:
-      - description: Session token
-        in: path
-        name: token
-        required: true
-        type: string
-      - description: Step 3 payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/session.Step3Request'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/session.StepProgressEnvelope'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "410":
-          description: Gone
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-      summary: Save step 3
-      tags:
-      - session
-  /waitlist/session/{token}/step/4:
-    patch:
-      consumes:
-      - application/json
-      description: Saves role and team size selections for the onboarding session.
-      parameters:
-      - description: Session token
-        in: path
-        name: token
-        required: true
-        type: string
-      - description: Step 4 payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/session.Step4Request'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/session.StepProgressEnvelope'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "410":
-          description: Gone
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-      summary: Save step 4
-      tags:
-      - session
-  /waitlist/session/{token}/submit:
-    post:
-      consumes:
-      - application/json
-      description: Finalizes the onboarding flow and creates a waitlist submission.
-      parameters:
-      - description: Session token
-        in: path
-        name: token
-        required: true
-        type: string
-      - description: Submit payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/session.SubmitRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/session.SubmitEnvelope'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "404":
-          description: Not Found
           schema:
             $ref: '#/definitions/apidoc.ErrorEnvelope'
         "409":
           description: Conflict
           schema:
             $ref: '#/definitions/apidoc.ErrorEnvelope'
-        "410":
-          description: Gone
-          schema:
-            $ref: '#/definitions/apidoc.ErrorEnvelope'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/apidoc.ErrorEnvelope'
-      summary: Submit onboarding session
+      summary: Join waitlist
       tags:
-      - session
+      - waitlist
 swagger: "2.0"

@@ -15,25 +15,22 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/hiring-frustrations": {
+        "/countries": {
             "get": {
-                "description": "Returns active hiring frustration options for onboarding step 3.",
+                "description": "Returns active countries for the waitlist region dropdown.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "catalog"
+                    "countries"
                 ],
-                "summary": "List hiring frustrations",
+                "summary": "List countries",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/catalog.HiringFrustrationListEnvelope"
+                            "$ref": "#/definitions/handler.CountriesEnvelope"
                         }
-                    },
-                    "304": {
-                        "description": "Not Modified"
                     },
                     "500": {
                         "description": "Internal Server Error",
@@ -44,198 +41,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/hiring-tools": {
-            "get": {
-                "description": "Returns active hiring tool options for onboarding step 2.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "catalog"
-                ],
-                "summary": "List hiring tools",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/catalog.HiringToolListEnvelope"
-                        }
-                    },
-                    "304": {
-                        "description": "Not Modified"
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/industries": {
-            "get": {
-                "description": "Returns active industry options for onboarding step 1.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "catalog"
-                ],
-                "summary": "List industries",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/catalog.IndustryListEnvelope"
-                        }
-                    },
-                    "304": {
-                        "description": "Not Modified"
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/roles": {
-            "get": {
-                "description": "Returns active role options for onboarding step 4.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "catalog"
-                ],
-                "summary": "List roles",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/catalog.RoleListEnvelope"
-                        }
-                    },
-                    "304": {
-                        "description": "Not Modified"
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/team-sizes": {
-            "get": {
-                "description": "Returns active team size options for onboarding step 4.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "catalog"
-                ],
-                "summary": "List team sizes",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/catalog.TeamSizeListEnvelope"
-                        }
-                    },
-                    "304": {
-                        "description": "Not Modified"
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/waitlist/session": {
+        "/waitlist": {
             "post": {
-                "description": "Starts a new waitlist onboarding session and returns a session token.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "session"
-                ],
-                "summary": "Create onboarding session",
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/session.CreateSessionEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/waitlist/session/{token}": {
-            "get": {
-                "description": "Returns the current step and saved partial progress for a session token.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "session"
-                ],
-                "summary": "Get onboarding session",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Session token",
-                        "name": "token",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/session.GetSessionEnvelope"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "410": {
-                        "description": "Gone",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/waitlist/session/{token}/step/1": {
-            "patch": {
-                "description": "Saves industry selections for the onboarding session.",
+                "description": "Registers a user for the regional waitlist and global users registry.",
                 "consumes": [
                     "application/json"
                 ],
@@ -243,284 +51,17 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "session"
+                    "waitlist"
                 ],
-                "summary": "Save step 1",
+                "summary": "Join waitlist",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Session token",
-                        "name": "token",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Step 1 payload",
+                        "description": "Signup payload",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/session.Step1Request"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/session.StepProgressEnvelope"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "410": {
-                        "description": "Gone",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/waitlist/session/{token}/step/2": {
-            "patch": {
-                "description": "Saves hiring tool selections for the onboarding session.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "session"
-                ],
-                "summary": "Save step 2",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Session token",
-                        "name": "token",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Step 2 payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/session.Step2Request"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/session.StepProgressEnvelope"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "410": {
-                        "description": "Gone",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/waitlist/session/{token}/step/3": {
-            "patch": {
-                "description": "Saves hiring frustration selections for the onboarding session.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "session"
-                ],
-                "summary": "Save step 3",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Session token",
-                        "name": "token",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Step 3 payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/session.Step3Request"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/session.StepProgressEnvelope"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "410": {
-                        "description": "Gone",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/waitlist/session/{token}/step/4": {
-            "patch": {
-                "description": "Saves role and team size selections for the onboarding session.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "session"
-                ],
-                "summary": "Save step 4",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Session token",
-                        "name": "token",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Step 4 payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/session.Step4Request"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/session.StepProgressEnvelope"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "410": {
-                        "description": "Gone",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/waitlist/session/{token}/submit": {
-            "post": {
-                "description": "Finalizes the onboarding flow and creates a waitlist submission.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "session"
-                ],
-                "summary": "Submit onboarding session",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Session token",
-                        "name": "token",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Submit payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/session.SubmitRequest"
+                            "$ref": "#/definitions/handler.SignupRequest"
                         }
                     }
                 ],
@@ -528,29 +69,17 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/session.SubmitEnvelope"
+                            "$ref": "#/definitions/handler.SignupEnvelope"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/apidoc.ErrorEnvelope"
                         }
                     },
                     "409": {
                         "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "410": {
-                        "description": "Gone",
                         "schema": {
                             "$ref": "#/definitions/apidoc.ErrorEnvelope"
                         }
@@ -609,30 +138,13 @@ const docTemplate = `{
                 }
             }
         },
-        "catalog.HiringFrustration": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                }
-            }
-        },
-        "catalog.HiringFrustrationListEnvelope": {
+        "handler.CountriesEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/catalog.HiringFrustration"
+                        "$ref": "#/definitions/handler.CountryResponse"
                     }
                 },
                 "meta": {
@@ -640,339 +152,75 @@ const docTemplate = `{
                 }
             }
         },
-        "catalog.HiringTool": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "icon_key": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                }
-            }
-        },
-        "catalog.HiringToolListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/catalog.HiringTool"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/apidoc.Meta"
-                }
-            }
-        },
-        "catalog.Industry": {
+        "handler.CountryResponse": {
             "type": "object",
             "properties": {
                 "icon_key": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                }
-            }
-        },
-        "catalog.IndustryListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/catalog.Industry"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/apidoc.Meta"
-                }
-            }
-        },
-        "catalog.Role": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                }
-            }
-        },
-        "catalog.RoleListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/catalog.Role"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/apidoc.Meta"
-                }
-            }
-        },
-        "catalog.TeamSize": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "label": {
-                    "type": "string"
-                },
-                "max_size": {
-                    "type": "integer"
-                },
-                "min_size": {
-                    "type": "integer"
-                },
-                "sort_order": {
-                    "type": "integer"
-                }
-            }
-        },
-        "catalog.TeamSizeListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/catalog.TeamSize"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/apidoc.Meta"
-                }
-            }
-        },
-        "session.CreateSessionData": {
-            "type": "object",
-            "properties": {
-                "current_step": {
-                    "type": "integer",
-                    "example": 1
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "session_token": {
                     "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                }
-            }
-        },
-        "session.CreateSessionEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/session.CreateSessionData"
+                    "example": "flag-uk"
                 },
-                "meta": {
-                    "$ref": "#/definitions/apidoc.Meta"
-                }
-            }
-        },
-        "session.GetSessionData": {
-            "type": "object",
-            "properties": {
-                "current_step": {
-                    "type": "integer",
-                    "example": 2
-                },
-                "partial": {
-                    "$ref": "#/definitions/session.PartialResponse"
-                }
-            }
-        },
-        "session.GetSessionEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/session.GetSessionData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/apidoc.Meta"
-                }
-            }
-        },
-        "session.PartialResponse": {
-            "type": "object",
-            "properties": {
-                "frustration_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "industry_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "other_frustration": {
-                    "type": "string"
-                },
-                "other_industry": {
-                    "type": "string"
-                },
-                "other_tool": {
-                    "type": "string"
-                },
-                "role_id": {
-                    "type": "string"
-                },
-                "team_size_id": {
-                    "type": "string"
-                },
-                "tool_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "session.Step1Request": {
-            "type": "object",
-            "properties": {
-                "industry_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "other_industry": {
-                    "type": "string"
-                }
-            }
-        },
-        "session.Step2Request": {
-            "type": "object",
-            "properties": {
-                "other_tool": {
-                    "type": "string"
-                },
-                "tool_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "session.Step3Request": {
-            "type": "object",
-            "properties": {
-                "frustration_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "other_frustration": {
-                    "type": "string"
-                }
-            }
-        },
-        "session.Step4Request": {
-            "type": "object",
-            "properties": {
-                "role_id": {
-                    "type": "string"
-                },
-                "team_size_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "session.StepProgressData": {
-            "type": "object",
-            "properties": {
-                "current_step": {
-                    "type": "integer",
-                    "example": 3
-                }
-            }
-        },
-        "session.StepProgressEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/session.StepProgressData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/apidoc.Meta"
-                }
-            }
-        },
-        "session.SubmitEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/session.SubmitResponse"
-                },
-                "meta": {
-                    "$ref": "#/definitions/apidoc.Meta"
-                }
-            }
-        },
-        "session.SubmitRequest": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "wants_early_access": {
-                    "type": "boolean"
-                },
-                "wants_user_testing": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "session.SubmitResponse": {
-            "type": "object",
-            "properties": {
                 "id": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "United Kingdom"
                 },
-                "submitted_at": {
-                    "type": "string"
+                "region": {
+                    "type": "string",
+                    "enum": [
+                        "uk",
+                        "us",
+                        "africa",
+                        "eu"
+                    ],
+                    "example": "uk"
+                },
+                "slug": {
+                    "type": "string",
+                    "example": "united-kingdom"
+                }
+            }
+        },
+        "handler.SignupData": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "example": "You're on the list!"
+                },
+                "region": {
+                    "type": "string",
+                    "example": "uk"
+                }
+            }
+        },
+        "handler.SignupEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/handler.SignupData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/apidoc.Meta"
+                }
+            }
+        },
+        "handler.SignupRequest": {
+            "type": "object",
+            "properties": {
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "jerry@example.com"
+                },
+                "full_name": {
+                    "type": "string",
+                    "example": "Jerry"
                 }
             }
         }
@@ -986,7 +234,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
 	Title:            "Angle HR Waitlist API",
-	Description:      "Onboarding waitlist API for Angle HR.",
+	Description:      "Waitlist signup API for Open HR.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

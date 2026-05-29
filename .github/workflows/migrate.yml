@@ -1,0 +1,44 @@
+# Runs database migrations on push to staging and main.
+#
+# GitHub Environment setup (Settings → Environments):
+#
+#   staging     — used when pushing to the staging branch
+#   production  — used when pushing to the main branch
+#
+# Each environment needs these secrets (same names, different DSNs per env):
+#   DB_URL_UK, DB_URL_US, DB_URL_AFRICA, DB_URL_EU, DB_URL_GLOBAL
+#
+# Optional: enable Required reviewers on production; restrict each environment
+# to its deployment branch (staging → staging, production → main).
+
+name: Database Migrations
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+
+concurrency:
+  group: migrate-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Migrate (${{ github.ref_name }})
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Run all migrations
+        env:
+          DB_URL_UK: ${{ secrets.DB_URL_UK }}
+          DB_URL_US: ${{ secrets.DB_URL_US }}
+          DB_URL_AFRICA: ${{ secrets.DB_URL_AFRICA }}
+          DB_URL_EU: ${{ secrets.DB_URL_EU }}
+          DB_URL_GLOBAL: ${{ secrets.DB_URL_GLOBAL }}
+        run: bash db/migrations/migrate-all.sh up

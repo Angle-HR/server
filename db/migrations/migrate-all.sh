@@ -14,7 +14,7 @@ for region in "${regions[@]}"; do
 	fi
 
 	echo "=== Migrating ${region} ==="
-	DB_URL="$url" "$migrations_dir/migrate.sh" "$direction"
+	DB_URL="$url" bash "$migrations_dir/migrate.sh" "$direction"
 done
 
 echo "All regional migrations complete."

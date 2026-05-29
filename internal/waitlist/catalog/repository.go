@@ -8,7 +8,6 @@ import (
 	qb "github.com/Software78/sql-go-query-builder"
 	"github.com/Software78/sql-go-query-builder/builder"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/waitlist"
@@ -69,7 +68,7 @@ func NewRepository(router *dbrouter.DBRouter) *Repository {
 	return &Repository{router: router, qb: qb.NewPostgres()}
 }
 
-func (r *Repository) pool(ctx context.Context) (*pgxpool.Pool, error) {
+func (r *Repository) pool(ctx context.Context) (dbrouter.PgxPool, error) {
 	return waitlist.PoolFor(ctx, r.router)
 }
 
@@ -79,7 +78,7 @@ func (r *Repository) ListIndustries(ctx context.Context) ([]Industry, error) {
 		"uuid",
 		"name",
 		"slug",
-		"COALESCE(icon_key, '') AS icon_key",
+		"icon_key",
 		"sort_order",
 	).
 		From("industries").
@@ -106,9 +105,11 @@ func (r *Repository) ListIndustries(ctx context.Context) ([]Industry, error) {
 	for rows.Next() {
 		var item Industry
 		var sortOrder int32
-		if scanErr := rows.Scan(&item.ID, &item.Name, &item.Slug, &item.IconKey, &sortOrder); scanErr != nil {
+		var iconKey *string
+		if scanErr := rows.Scan(&item.ID, &item.Name, &item.Slug, &iconKey, &sortOrder); scanErr != nil {
 			return nil, fmt.Errorf("scan industry: %w", scanErr)
 		}
+		item.IconKey = derefString(iconKey)
 		item.SortOrder = int(sortOrder)
 		items = append(items, item)
 	}
@@ -126,8 +127,8 @@ func (r *Repository) ListHiringTools(ctx context.Context) ([]HiringTool, error) 
 		"uuid",
 		"name",
 		"slug",
-		"COALESCE(icon_key, '') AS icon_key",
-		"COALESCE(category, '') AS category",
+		"icon_key",
+		"category",
 		"sort_order",
 	).
 		From("hiring_tools").
@@ -154,9 +155,12 @@ func (r *Repository) ListHiringTools(ctx context.Context) ([]HiringTool, error) 
 	for rows.Next() {
 		var item HiringTool
 		var sortOrder int32
-		if scanErr := rows.Scan(&item.ID, &item.Name, &item.Slug, &item.IconKey, &item.Category, &sortOrder); scanErr != nil {
+		var iconKey, category *string
+		if scanErr := rows.Scan(&item.ID, &item.Name, &item.Slug, &iconKey, &category, &sortOrder); scanErr != nil {
 			return nil, fmt.Errorf("scan hiring tool: %w", scanErr)
 		}
+		item.IconKey = derefString(iconKey)
+		item.Category = derefString(category)
 		item.SortOrder = int(sortOrder)
 		items = append(items, item)
 	}
@@ -311,12 +315,11 @@ func (r *Repository) ReferenceVersion(ctx context.Context, table string) (string
 		return "", fmt.Errorf("reference version for %s: unknown table", table)
 	}
 
-	sql, args, err := r.qb.Select(
-		`COALESCE(MAX(updated_at), to_timestamp(0))::text || ':' || COUNT(*)::text AS version`,
-	).From(table).ToSQL()
-	if err != nil {
-		return "", fmt.Errorf("reference version for %s: %w", table, err)
-	}
+	// table is validated above; use quoted identifier for safe interpolation.
+	sql := fmt.Sprintf(
+		`SELECT COALESCE(MAX(updated_at), to_timestamp(0))::text || ':' || COUNT(*)::text AS version FROM %s`,
+		quoteTable(table),
+	)
 
 	pool, err := r.pool(ctx)
 	if err != nil {
@@ -324,11 +327,23 @@ func (r *Repository) ReferenceVersion(ctx context.Context, table string) (string
 	}
 
 	var version string
-	if queryErr := pool.QueryRow(ctx, sql, args...).Scan(&version); queryErr != nil {
+	if queryErr := pool.QueryRow(ctx, sql).Scan(&version); queryErr != nil {
 		return "", fmt.Errorf("reference version for %s: %w", table, queryErr)
 	}
 
 	return version, nil
+}
+
+func quoteTable(table string) string {
+	return `"` + table + `"`
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+
+	return *s
 }
 
 type resolvedIDRow struct {

@@ -17,7 +17,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/waitlist"
@@ -86,7 +85,7 @@ func NewRepository(router *dbrouter.DBRouter) *Repository {
 	return &Repository{router: router, qb: qb.NewPostgres()}
 }
 
-func (r *Repository) pool(ctx context.Context) (*pgxpool.Pool, error) {
+func (r *Repository) pool(ctx context.Context) (dbrouter.PgxPool, error) {
 	return waitlist.PoolFor(ctx, r.router)
 }
 

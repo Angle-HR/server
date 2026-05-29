@@ -4,7 +4,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
 
 	"github.com/Angle-HR/server/internal/region"
@@ -71,7 +70,7 @@ func TestLoadConfigsFromEnv_httpsSSL(t *testing.T) {
 }
 
 func newDBRouterForTest(
-	pools map[region.Region]*pgxpool.Pool,
+	pools map[region.Region]PgxPool,
 	minioClients map[region.Region]*minio.Client,
 	buckets map[region.Region]string,
 ) *DBRouter {
@@ -83,7 +82,7 @@ func newDBRouterForTest(
 }
 
 func TestDB_unknownRegion(t *testing.T) {
-	router := newDBRouterForTest(map[region.Region]*pgxpool.Pool{}, nil, nil)
+	router := newDBRouterForTest(map[region.Region]PgxPool{}, nil, nil)
 
 	_, err := router.DB(region.Region("invalid"))
 	if !errors.Is(err, ErrUnknownRegion) {
@@ -92,7 +91,7 @@ func TestDB_unknownRegion(t *testing.T) {
 }
 
 func TestDB_nilPool(t *testing.T) {
-	router := newDBRouterForTest(map[region.Region]*pgxpool.Pool{
+	router := newDBRouterForTest(map[region.Region]PgxPool{
 		region.RegionUK: nil,
 	}, nil, nil)
 
@@ -103,7 +102,7 @@ func TestDB_nilPool(t *testing.T) {
 }
 
 func TestMustDB_panics(t *testing.T) {
-	router := newDBRouterForTest(map[region.Region]*pgxpool.Pool{}, nil, nil)
+	router := newDBRouterForTest(map[region.Region]PgxPool{}, nil, nil)
 
 	defer func() {
 		if recover() == nil {
@@ -144,7 +143,7 @@ func TestBucket(t *testing.T) {
 }
 
 func TestClose_empty(t *testing.T) {
-	router := newDBRouterForTest(map[region.Region]*pgxpool.Pool{}, nil, nil)
+	router := newDBRouterForTest(map[region.Region]PgxPool{}, nil, nil)
 	router.Close()
 }
 

@@ -29,12 +29,17 @@ CREATE TABLE waitlist.waitlist (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     uuid UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
     email TEXT NOT NULL UNIQUE,
-    company_name VARCHAR,
+    company_name VARCHAR NOT NULL,
     company_size VARCHAR,
     role VARCHAR,
+    region TEXT NOT NULL,
+    region_source TEXT NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    deleted_at TIMESTAMPTZ
+    deleted_at TIMESTAMPTZ,
+    CONSTRAINT waitlist_region_check
+        CHECK (region IN ('uk', 'us', 'africa', 'eu'))
 );
 
 CREATE TRIGGER waitlist_set_updated_at

@@ -25,9 +25,22 @@ const regionalSearchPath = "waitlist,public"
 
 // DBRouter holds one PostgreSQL pool and one MinIO client per region.
 type DBRouter struct {
-	pools   map[region.Region]*pgxpool.Pool
+	pools   map[region.Region]PgxPool
 	minio   map[region.Region]*minio.Client
 	buckets map[region.Region]string
+}
+
+// NewWithPools returns a DBRouter backed by the given pools. It is intended for tests.
+func NewWithPools(pools map[region.Region]PgxPool) *DBRouter {
+	if pools == nil {
+		pools = map[region.Region]PgxPool{}
+	}
+
+	return &DBRouter{
+		pools:   pools,
+		minio:   map[region.Region]*minio.Client{},
+		buckets: map[region.Region]string{},
+	}
 }
 
 // New initializes all regional pools and MinIO clients. Startup fails if any
@@ -54,7 +67,7 @@ func New(ctx context.Context, configs []RegionConfig) (*DBRouter, error) {
 	}
 
 	router := &DBRouter{
-		pools:   make(map[region.Region]*pgxpool.Pool, len(allRegions())),
+		pools:   make(map[region.Region]PgxPool, len(allRegions())),
 		minio:   make(map[region.Region]*minio.Client, len(allRegions())),
 		buckets: make(map[region.Region]string, len(allRegions())),
 	}
@@ -153,7 +166,7 @@ func newMinIOClient(cfg RegionConfig) (*minio.Client, error) {
 }
 
 // DB returns the PostgreSQL pool for reg.
-func (r *DBRouter) DB(reg region.Region) (*pgxpool.Pool, error) {
+func (r *DBRouter) DB(reg region.Region) (PgxPool, error) {
 	if r == nil {
 		return nil, ErrUnknownRegion
 	}
@@ -170,7 +183,7 @@ func (r *DBRouter) DB(reg region.Region) (*pgxpool.Pool, error) {
 }
 
 // MustDB returns the pool for reg or panics if the region is unknown.
-func (r *DBRouter) MustDB(reg region.Region) *pgxpool.Pool {
+func (r *DBRouter) MustDB(reg region.Region) PgxPool {
 	pool, err := r.DB(reg)
 	if err != nil {
 		panic(fmt.Sprintf("dbrouter: MustDB(%q): %v", reg, err))

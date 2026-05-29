@@ -17,6 +17,7 @@ import (
 
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/docs"
+	"github.com/Angle-HR/server/internal/handler"
 	"github.com/Angle-HR/server/internal/jobs"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/internal/waitlist/catalog"
@@ -95,6 +96,7 @@ func Run() error {
 
 	catalogHandler := catalog.NewHandler(catalogRepo)
 	sessionHandler := session.NewHandler(session.NewService(sessionRepo, catalogRepo))
+	waitlistHandler := handler.NewWaitlistHandler(regionResolver, dbRouter, globalPool)
 
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
@@ -109,6 +111,7 @@ func Run() error {
 		r.Use(regionResolver.Middleware())
 		catalogHandler.RegisterRoutes(r)
 		sessionHandler.RegisterRoutes(r)
+		waitlistHandler.RegisterRoutes(r)
 	})
 
 	server := &http.Server{

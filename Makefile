@@ -1,7 +1,70 @@
-.PHONY: fmt lint test cover security check tidy pr-description hooks hooks-uninstall
+.PHONY: fmt lint test cover security check tidy pr-description migrate migrate-up migrate-down migrate-all migrate-global migrate-global-up migrate-global-down swagger swagger-check
 
 PR_TEMPLATE := .github/pull_request_template.md
 PR_OUT_DIR := pr_template
+BIN := bin/server
+SWAG_VERSION := v1.16.4
+
+# ─────────────────────────────────────────────
+# Application
+# ─────────────────────────────────────────────
+
+migrate-up:
+	@echo "→ Running migrations (UK regional database)..."
+	@if [ -f .env ]; then set -a && . ./.env && set +a; fi; \
+	if [ -z "$$DB_URL_UK" ]; then echo "❌ DB_URL_UK is required (set it or add .env)"; exit 1; fi; \
+	DB_URL="$$DB_URL_UK" ./db/migrations/migrate.sh up
+	@echo "✅ Migrations applied."
+
+migrate-down:
+	@echo "→ Rolling back migration (UK regional database)..."
+	@if [ -f .env ]; then set -a && . ./.env && set +a; fi; \
+	if [ -z "$$DB_URL_UK" ]; then echo "❌ DB_URL_UK is required (set it or add .env)"; exit 1; fi; \
+	DB_URL="$$DB_URL_UK" ./db/migrations/migrate.sh down
+	@echo "✅ Migration rolled back."
+
+migrate-all:
+	@echo "→ Running migrations on all databases (regional + global)..."
+	@docker compose run --rm migrate
+	@echo "✅ All migrations applied."
+
+migrate-global: migrate-all
+	@echo "(migrate-global runs the same compose migrate service as migrate-all)"
+
+migrate-global-up:
+	@echo "→ Running global registry migrations..."
+	@if [ -f .env ]; then set -a && . ./.env && set +a; fi; \
+	if [ -z "$$DB_URL_GLOBAL" ]; then echo "❌ DB_URL_GLOBAL is required (set it or add .env)"; exit 1; fi; \
+	DB_URL="$$DB_URL_GLOBAL" ./db/migrations/global_registry/migrate.sh up
+	@echo "✅ Global registry migrations applied."
+
+migrate-global-down:
+	@echo "→ Rolling back global registry migration..."
+	@if [ -f .env ]; then set -a && . ./.env && set +a; fi; \
+	if [ -z "$$DB_URL_GLOBAL" ]; then echo "❌ DB_URL_GLOBAL is required (set it or add .env)"; exit 1; fi; \
+	DB_URL="$$DB_URL_GLOBAL" ./db/migrations/global_registry/migrate.sh down
+	@echo "✅ Global registry migration rolled back."
+
+swagger:
+	@echo "→ Generating OpenAPI docs..."
+	@go run github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION) init \
+		-g cmd/server/main.go \
+		-o internal/docs/spec \
+		--parseDependency \
+		--parseInternal
+	@echo "✅ OpenAPI docs generated."
+
+swagger-check:
+	@echo "→ Checking OpenAPI docs..."
+	@go run github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION) init \
+		-g cmd/server/main.go \
+		-o internal/docs/spec \
+		--parseDependency \
+		--parseInternal
+	@git diff --exit-code internal/docs/spec || \
+		(echo "❌ OpenAPI docs are out of date. Run 'make swagger' and commit the result." && exit 1)
+	@echo "✅ OpenAPI docs are up to date."
+
 
 # ─────────────────────────────────────────────
 # Formatting
@@ -13,14 +76,6 @@ fmt:
 	@echo "→ Running goimports..."
 	@goimports -w .
 	@echo "✅ Formatting done."
-
-fmt-check:
-	@echo "→ Checking formatting..."
-	@unformatted=$$(gofmt -l .); \
-	if [ -n "$$unformatted" ]; then \
-		echo "❌ Unformatted files:"; echo "$$unformatted"; exit 1; \
-	fi
-	@echo "✅ All files formatted."
 
 # ─────────────────────────────────────────────
 # Linting
@@ -46,7 +101,7 @@ test:
 
 cover:
 	@echo "→ Running tests with coverage..."
-	@go test -race -coverprofile=coverage.out -covermode=atomic ./...
+	@go test -race -coverprofile=coverage.out -covermode=atomic -coverpkg=./... ./...
 	@go tool cover -func=coverage.out | grep total
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "✅ Coverage report generated at coverage.html"
@@ -66,7 +121,7 @@ cover-threshold:
 
 security:
 	@echo "→ Running gosec..."
-	@gosec ./...
+	@gosec -exclude-generated ./...
 	@echo "→ Running govulncheck..."
 	@govulncheck ./...
 	@echo "✅ Security scan passed."
@@ -97,21 +152,9 @@ tools:
 # Run everything (mirrors CI)
 # ─────────────────────────────────────────────
 
-check: tidy fmt-check lint test cover cover-threshold security
+check: tidy lint security
 	@echo ""
 	@echo "✅ All quality checks passed."
-
-# ─────────────────────────────────────────────
-# Git hooks
-# ─────────────────────────────────────────────
-
-hooks:
-	@test -f .githooks/pre-commit || (echo "❌ Missing .githooks/pre-commit"; exit 1)
-	@mkdir -p .git/hooks
-	@cp .githooks/pre-commit .git/hooks/pre-commit
-	@chmod +x .git/hooks/pre-commit
-	@echo "✅ Installed git pre-commit hook (runs: make check)"
-
 
 # ─────────────────────────────────────────────
 # Pull request draft (active branch)

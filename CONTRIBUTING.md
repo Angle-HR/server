@@ -88,9 +88,6 @@ go mod download
 
 # 3. (Optional) Install dev tools used by Makefile
 make tools
-
-# 4. Install the git pre-commit hook (runs `make check` before commit)
-make hooks
 ```
 
 > **Note:** See `README.md` for full environment setup details.
@@ -162,7 +159,6 @@ Breaking changes must include `BREAKING CHANGE:` in the commit footer or a `!` a
 make check
 ```
 
-- If you installed hooks via `make hooks`, commits will automatically run `make check`.
 - Do not commit commented-out code or debug statements (`console.log`, `fmt.Println`, `print`, etc.).
 - Keep functions small and well-named. Prefer clarity over cleverness.
 

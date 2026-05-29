@@ -1,0 +1,113 @@
+package query
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/google/uuid"
+)
+
+func TestListActiveCountriesSQL(t *testing.T) {
+	t.Parallel()
+
+	sql, args, err := ListActiveCountries()
+	if err != nil {
+		t.Fatalf("ListActiveCountries: %v", err)
+	}
+
+	if len(args) != 1 || args[0] != true {
+		t.Fatalf("args: got %v", args)
+	}
+
+	normalised := strings.Join(strings.Fields(sql), " ")
+	if !strings.Contains(normalised, `SELECT "id", "name", "slug", "region", "icon_key" FROM "countries"`) {
+		t.Fatalf("sql: %q", sql)
+	}
+	if !strings.Contains(normalised, `"is_active" = $1`) {
+		t.Fatalf("sql: %q", sql)
+	}
+}
+
+func TestLookupCountryByIDSQL(t *testing.T) {
+	t.Parallel()
+
+	id := uuid.MustParse("a1b2c3d4-e5f6-4789-a012-3456789abcde")
+	sql, args, err := LookupCountryByID(id)
+	if err != nil {
+		t.Fatalf("LookupCountryByID: %v", err)
+	}
+
+	if len(args) != 2 || args[0] != id || args[1] != true {
+		t.Fatalf("args: got %v", args)
+	}
+
+	normalised := strings.Join(strings.Fields(sql), " ")
+	if !strings.Contains(normalised, `"id" = $1 AND "is_active" = $2`) {
+		t.Fatalf("sql: %q", sql)
+	}
+}
+
+func TestInsertWaitlistSignupSQL(t *testing.T) {
+	t.Parallel()
+
+	id := uuid.MustParse("a1b2c3d4-e5f6-4789-a012-3456789abcde")
+	sql, args, err := InsertWaitlistSignup("Jerry", "jane@acme.com", id, "uk", "explicit", []byte("{}"))
+	if err != nil {
+		t.Fatalf("InsertWaitlistSignup: %v", err)
+	}
+
+	if len(args) != 6 {
+		t.Fatalf("args: got %v", args)
+	}
+
+	normalised := strings.Join(strings.Fields(sql), " ")
+	if !strings.Contains(normalised, `INSERT INTO "waitlist"`) {
+		t.Fatalf("sql: %q", sql)
+	}
+	if !strings.Contains(normalised, `ON CONFLICT ("email") DO NOTHING RETURNING "uuid"`) {
+		t.Fatalf("sql: %q", sql)
+	}
+}
+
+func TestInsertUsersRegistrySQL(t *testing.T) {
+	t.Parallel()
+
+	token := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	sql, args, err := InsertUsersRegistry("jane@acme.com", "uk", "explicit", token)
+	if err != nil {
+		t.Fatalf("InsertUsersRegistry: %v", err)
+	}
+
+	if len(args) != 4 {
+		t.Fatalf("args: got %v", args)
+	}
+
+	normalised := strings.Join(strings.Fields(sql), " ")
+	if !strings.Contains(normalised, `INSERT INTO "users_registry"`) {
+		t.Fatalf("sql: %q", sql)
+	}
+	if !strings.Contains(normalised, `ON CONFLICT ("email") DO NOTHING`) {
+		t.Fatalf("sql: %q", sql)
+	}
+	if !strings.Contains(normalised, `"waitlist_token"`) {
+		t.Fatalf("sql: %q", sql)
+	}
+}
+
+func TestListActiveIndustriesSQL(t *testing.T) {
+	t.Parallel()
+
+	sql, args, err := ListActiveIndustries()
+	if err != nil {
+		t.Fatalf("ListActiveIndustries: %v", err)
+	}
+
+	if len(args) != 1 || args[0] != true {
+		t.Fatalf("args: got %v", args)
+	}
+
+	normalised := strings.Join(strings.Fields(sql), " ")
+	if !strings.Contains(normalised, `FROM "industries"`) {
+		t.Fatalf("sql: %q", sql)
+	}
+}

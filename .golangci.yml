@@ -142,6 +142,13 @@ linters:
       - path: "migration"
         linters:
           - mnd
+      - path: "internal/docs/spec"
+        linters:
+          - godot
+          - goimports
+          - gci
+          - errcheck
+          - staticcheck
 
 issues:
   max-issues-per-linter: 50

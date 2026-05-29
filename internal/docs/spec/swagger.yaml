@@ -1,0 +1,421 @@
+basePath: /api/v1
+definitions:
+  github_com_Angle-HR_server_internal_apidoc.ErrorBody:
+    properties:
+      code:
+        example: VALIDATION_ERROR
+        type: string
+      details:
+        additionalProperties: {}
+        type: object
+      message:
+        example: invalid request body
+        type: string
+    type: object
+  github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope:
+    properties:
+      error:
+        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorBody'
+      meta:
+        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+    type: object
+  github_com_Angle-HR_server_internal_apidoc.Meta:
+    properties:
+      has_more:
+        type: boolean
+      next_cursor:
+        type: string
+      request_id:
+        example: abc123
+        type: string
+    type: object
+  internal_handler.CountriesEnvelope:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/internal_handler.CountryResponse'
+        type: array
+      meta:
+        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+    type: object
+  internal_handler.CountryResponse:
+    properties:
+      icon_key:
+        example: flag-uk
+        type: string
+      id:
+        example: a1b2c3d4-e5f6-4789-a012-3456789abcde
+        type: string
+      name:
+        example: United Kingdom
+        type: string
+      region:
+        enum:
+        - uk
+        - us
+        - africa
+        - eu
+        example: uk
+        type: string
+      slug:
+        example: united-kingdom
+        type: string
+    type: object
+  internal_handler.HiringFrustration:
+    properties:
+      description:
+        type: string
+      emoji:
+        type: string
+      id:
+        type: string
+      slug:
+        type: string
+    type: object
+  internal_handler.HiringFrustrationListEnvelope:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/internal_handler.HiringFrustration'
+        type: array
+      meta:
+        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+    type: object
+  internal_handler.HiringTool:
+    properties:
+      icon_url:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      slug:
+        type: string
+    type: object
+  internal_handler.HiringToolListEnvelope:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/internal_handler.HiringTool'
+        type: array
+      meta:
+        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+    type: object
+  internal_handler.Industry:
+    properties:
+      emoji:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      slug:
+        type: string
+    type: object
+  internal_handler.IndustryListEnvelope:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/internal_handler.Industry'
+        type: array
+      meta:
+        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+    type: object
+  internal_handler.OnboardingData:
+    properties:
+      message:
+        example: Thanks for telling us more!
+        type: string
+    type: object
+  internal_handler.OnboardingEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/internal_handler.OnboardingData'
+      meta:
+        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+    type: object
+  internal_handler.OnboardingRequest:
+    properties:
+      frustration_ids:
+        items:
+          type: string
+        type: array
+      industry_ids:
+        items:
+          type: string
+        type: array
+      other_frustration:
+        type: string
+      other_industry:
+        type: string
+      other_tool:
+        type: string
+      role_id:
+        type: string
+      team_size_id:
+        type: string
+      token:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      tool_ids:
+        items:
+          type: string
+        type: array
+      wants_early_access:
+        type: boolean
+      wants_user_testing:
+        type: boolean
+    type: object
+  internal_handler.Role:
+    properties:
+      emoji:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      slug:
+        type: string
+    type: object
+  internal_handler.RoleListEnvelope:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/internal_handler.Role'
+        type: array
+      meta:
+        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+    type: object
+  internal_handler.SignupData:
+    properties:
+      message:
+        example: You're on the list!
+        type: string
+      region:
+        example: uk
+        type: string
+      token:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    type: object
+  internal_handler.SignupEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/internal_handler.SignupData'
+      meta:
+        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+    type: object
+  internal_handler.SignupRequest:
+    properties:
+      country_id:
+        example: a1b2c3d4-e5f6-4789-a012-3456789abcde
+        type: string
+      email:
+        example: jerry@example.com
+        type: string
+      full_name:
+        example: Jerry
+        type: string
+    type: object
+  internal_handler.TeamSize:
+    properties:
+      id:
+        type: string
+      label:
+        type: string
+      max_size:
+        type: integer
+      min_size:
+        type: integer
+    type: object
+  internal_handler.TeamSizeListEnvelope:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/internal_handler.TeamSize'
+        type: array
+      meta:
+        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Waitlist signup API for Open HR.
+  title: Angle HR Waitlist API
+  version: "1.0"
+paths:
+  /countries:
+    get:
+      description: Returns active countries for the waitlist region dropdown.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.CountriesEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+      summary: List countries
+      tags:
+      - countries
+  /hiring-frustrations:
+    get:
+      description: Returns active hiring frustration options for onboarding.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.HiringFrustrationListEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+      summary: List hiring frustrations
+      tags:
+      - catalog
+  /hiring-tools:
+    get:
+      description: Returns active hiring tool options for onboarding.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.HiringToolListEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+      summary: List hiring tools
+      tags:
+      - catalog
+  /industries:
+    get:
+      description: Returns active industry options for onboarding.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.IndustryListEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+      summary: List industries
+      tags:
+      - catalog
+  /roles:
+    get:
+      description: Returns active role options for onboarding.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.RoleListEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+      summary: List roles
+      tags:
+      - catalog
+  /team-sizes:
+    get:
+      description: Returns team size band options for onboarding.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handler.TeamSizeListEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+      summary: List team sizes
+      tags:
+      - catalog
+  /waitlist:
+    post:
+      consumes:
+      - application/json
+      description: Registers a user for the regional waitlist and global users registry.
+      parameters:
+      - description: Signup payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.SignupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_handler.SignupEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+      summary: Join waitlist
+      tags:
+      - waitlist
+  /waitlist/onboarding:
+    post:
+      consumes:
+      - application/json
+      description: Saves the full onboarding form for a waitlist signup token.
+      parameters:
+      - description: Onboarding payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.OnboardingRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_handler.OnboardingEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+      summary: Submit waitlist onboarding
+      tags:
+      - waitlist
+swagger: "2.0"

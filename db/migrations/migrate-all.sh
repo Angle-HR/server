@@ -25,6 +25,6 @@ if [[ -z "${DB_URL_GLOBAL:-}" ]]; then
 fi
 
 echo "=== Migrating GLOBAL ==="
-DB_URL="$DB_URL_GLOBAL" "$migrations_dir/global_registry/migrate.sh" "$direction"
+DB_URL="$DB_URL_GLOBAL" bash "$migrations_dir/global_registry/migrate.sh" "$direction"
 
 echo "All migrations complete."

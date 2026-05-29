@@ -16,11 +16,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/query"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
 )
+
+var _ = apidoc.ErrorEnvelope{}
 
 const regionSourceExplicit = "explicit"
 
@@ -100,7 +103,8 @@ func (h *WaitlistHandler) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.signup(r.Context(), country, req.FullName, req.Email); err != nil {
+	waitlistToken, err := h.signup(r.Context(), country, req.FullName, req.Email)
+	if err != nil {
 		if errors.Is(err, apperror.ErrConflict) {
 			response.Error(w, r, err)
 			return
@@ -125,6 +129,7 @@ func (h *WaitlistHandler) handle(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, r, http.StatusCreated, map[string]string{
 		"message": "You're on the list!",
 		"region":  string(country.Region),
+		"token":   waitlistToken.String(),
 	})
 }
 
@@ -138,19 +143,19 @@ func (h *WaitlistHandler) signup(
 	ctx context.Context,
 	country Country,
 	fullName, email string,
-) error {
+) (uuid.UUID, error) {
 	pool, err := h.Router.DB(country.Region)
 	if err != nil {
-		return fmt.Errorf("regional pool: %w", err)
+		return uuid.Nil, fmt.Errorf("regional pool: %w", err)
 	}
 
 	tx, err := pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("begin waitlist transaction: %w", err)
+		return uuid.Nil, fmt.Errorf("begin waitlist transaction: %w", err)
 	}
 	defer rollbackWaitlistTx(ctx, tx)
 
-	var id int64
+	var waitlistToken uuid.UUID
 	insertSQL, insertArgs, err := query.InsertWaitlistSignup(
 		fullName,
 		email,
@@ -160,36 +165,37 @@ func (h *WaitlistHandler) signup(
 		[]byte("{}"),
 	)
 	if err != nil {
-		return fmt.Errorf("build waitlist insert: %w", err)
+		return uuid.Nil, fmt.Errorf("build waitlist insert: %w", err)
 	}
 
-	scanErr := tx.QueryRow(ctx, insertSQL, insertArgs...).Scan(&id)
+	scanErr := tx.QueryRow(ctx, insertSQL, insertArgs...).Scan(&waitlistToken)
 	if scanErr != nil {
 		if isDuplicateWaitlistSignup(scanErr) {
-			return apperror.ErrConflict
+			return uuid.Nil, apperror.ErrConflict
 		}
 
-		return fmt.Errorf("insert regional waitlist: %w", scanErr)
+		return uuid.Nil, fmt.Errorf("insert regional waitlist: %w", scanErr)
 	}
 
 	registrySQL, registryArgs, err := query.InsertUsersRegistry(
 		email,
 		string(country.Region),
 		regionSourceExplicit,
+		waitlistToken,
 	)
 	if err != nil {
-		return fmt.Errorf("build users registry insert: %w", err)
+		return uuid.Nil, fmt.Errorf("build users registry insert: %w", err)
 	}
 
 	if _, err := h.GlobalDB.Exec(ctx, registrySQL, registryArgs...); err != nil {
-		return fmt.Errorf("insert users registry: %w", err)
+		return uuid.Nil, fmt.Errorf("insert users registry: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit waitlist transaction: %w", err)
+		return uuid.Nil, fmt.Errorf("commit waitlist transaction: %w", err)
 	}
 
-	return nil
+	return waitlistToken, nil
 }
 
 func isDuplicateWaitlistSignup(err error) bool {

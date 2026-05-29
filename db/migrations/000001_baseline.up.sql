@@ -34,6 +34,11 @@ CREATE TABLE waitlist.waitlist (
     region TEXT NOT NULL,
     region_source TEXT NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    onboarding_submitted_at TIMESTAMPTZ,
+    wants_early_access BOOLEAN,
+    wants_user_testing BOOLEAN,
+    role_id UUID,
+    team_size_id UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at TIMESTAMPTZ,
@@ -53,3 +58,30 @@ CREATE TRIGGER waitlist_soft_delete
     BEFORE DELETE ON waitlist.waitlist
     FOR EACH ROW
     EXECUTE FUNCTION soft_delete_row();
+
+CREATE TABLE waitlist.waitlist_industries (
+    waitlist_id BIGINT NOT NULL REFERENCES waitlist.waitlist (id) ON DELETE CASCADE,
+    industry_id UUID NOT NULL,
+    other_text TEXT,
+    PRIMARY KEY (waitlist_id, industry_id)
+);
+
+CREATE INDEX waitlist_industries_waitlist_id_idx ON waitlist.waitlist_industries (waitlist_id);
+
+CREATE TABLE waitlist.waitlist_hiring_tools (
+    waitlist_id BIGINT NOT NULL REFERENCES waitlist.waitlist (id) ON DELETE CASCADE,
+    hiring_tool_id UUID NOT NULL,
+    other_text TEXT,
+    PRIMARY KEY (waitlist_id, hiring_tool_id)
+);
+
+CREATE INDEX waitlist_hiring_tools_waitlist_id_idx ON waitlist.waitlist_hiring_tools (waitlist_id);
+
+CREATE TABLE waitlist.waitlist_frustrations (
+    waitlist_id BIGINT NOT NULL REFERENCES waitlist.waitlist (id) ON DELETE CASCADE,
+    frustration_id UUID NOT NULL,
+    other_text TEXT,
+    PRIMARY KEY (waitlist_id, frustration_id)
+);
+
+CREATE INDEX waitlist_frustrations_waitlist_id_idx ON waitlist.waitlist_frustrations (waitlist_id);

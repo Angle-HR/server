@@ -64,7 +64,7 @@ func TestInsertWaitlistSignupSQL(t *testing.T) {
 	if !strings.Contains(normalised, `INSERT INTO "waitlist"`) {
 		t.Fatalf("sql: %q", sql)
 	}
-	if !strings.Contains(normalised, `ON CONFLICT ("email") DO NOTHING RETURNING "id"`) {
+	if !strings.Contains(normalised, `ON CONFLICT ("email") DO NOTHING RETURNING "uuid"`) {
 		t.Fatalf("sql: %q", sql)
 	}
 }
@@ -72,12 +72,13 @@ func TestInsertWaitlistSignupSQL(t *testing.T) {
 func TestInsertUsersRegistrySQL(t *testing.T) {
 	t.Parallel()
 
-	sql, args, err := InsertUsersRegistry("jane@acme.com", "uk", "explicit")
+	token := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	sql, args, err := InsertUsersRegistry("jane@acme.com", "uk", "explicit", token)
 	if err != nil {
 		t.Fatalf("InsertUsersRegistry: %v", err)
 	}
 
-	if len(args) != 3 {
+	if len(args) != 4 {
 		t.Fatalf("args: got %v", args)
 	}
 
@@ -86,6 +87,27 @@ func TestInsertUsersRegistrySQL(t *testing.T) {
 		t.Fatalf("sql: %q", sql)
 	}
 	if !strings.Contains(normalised, `ON CONFLICT ("email") DO NOTHING`) {
+		t.Fatalf("sql: %q", sql)
+	}
+	if !strings.Contains(normalised, `"waitlist_token"`) {
+		t.Fatalf("sql: %q", sql)
+	}
+}
+
+func TestListActiveIndustriesSQL(t *testing.T) {
+	t.Parallel()
+
+	sql, args, err := ListActiveIndustries()
+	if err != nil {
+		t.Fatalf("ListActiveIndustries: %v", err)
+	}
+
+	if len(args) != 1 || args[0] != true {
+		t.Fatalf("args: got %v", args)
+	}
+
+	normalised := strings.Join(strings.Fields(sql), " ")
+	if !strings.Contains(normalised, `FROM "industries"`) {
 		t.Fatalf("sql: %q", sql)
 	}
 }

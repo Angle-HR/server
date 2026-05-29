@@ -12,11 +12,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/query"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
 )
+
+var _ = apidoc.ErrorEnvelope{}
 
 // Country is a waitlist country option.
 type Country struct {

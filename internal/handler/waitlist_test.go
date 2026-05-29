@@ -43,6 +43,12 @@ func TestWaitlistSignup_valid(t *testing.T) {
 	if data["region"] != "uk" {
 		t.Fatalf("region: got %q, want uk", data["region"])
 	}
+	if data["token"] == "" {
+		t.Fatal("token: expected non-empty")
+	}
+	if _, err := uuid.Parse(data["token"]); err != nil {
+		t.Fatalf("token: invalid uuid %q", data["token"])
+	}
 
 	assertMocksMet(t, regionalMock, globalMock)
 }
@@ -208,7 +214,7 @@ func TestSignup_duplicateDirect(t *testing.T) {
 		Region: region.RegionUK,
 	}
 
-	err = h.signup(context.Background(), country, "Jerry", "dup@acme.com")
+	_, err = h.signup(context.Background(), country, "Jerry", "dup@acme.com")
 	if !errors.Is(err, apperror.ErrConflict) {
 		t.Fatalf("signup: %v", err)
 	}
@@ -311,8 +317,9 @@ func expectSuccessfulSignup(t *testing.T) (pgxmock.PgxPoolIface, pgxmock.PgxPool
 	if err != nil {
 		t.Fatalf("InsertWaitlistSignup: %v", err)
 	}
+	testToken := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	regionalMock.ExpectQuery(waitlistSQL).WithArgs(waitlistArgs...).
-		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int64(1)))
+		WillReturnRows(pgxmock.NewRows([]string{"uuid"}).AddRow(testToken))
 	regionalMock.ExpectCommit()
 
 	globalMock, err := pgxmock.NewPool(pgxmock.QueryMatcherOption(pgxmock.QueryMatcherEqual))
@@ -322,7 +329,7 @@ func expectSuccessfulSignup(t *testing.T) (pgxmock.PgxPoolIface, pgxmock.PgxPool
 	t.Cleanup(func() { globalMock.Close() })
 
 	expectCountryLookup(t, globalMock, testCountryID)
-	registrySQL, registryArgs, err := query.InsertUsersRegistry("jane@acme.com", "uk", "explicit")
+	registrySQL, registryArgs, err := query.InsertUsersRegistry("jane@acme.com", "uk", "explicit", testToken)
 	if err != nil {
 		t.Fatalf("InsertUsersRegistry: %v", err)
 	}

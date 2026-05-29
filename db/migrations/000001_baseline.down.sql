@@ -1,5 +1,8 @@
 DROP TRIGGER IF EXISTS waitlist_soft_delete ON waitlist.waitlist;
 DROP TRIGGER IF EXISTS waitlist_set_updated_at ON waitlist.waitlist;
+DROP TABLE IF EXISTS waitlist.waitlist_frustrations;
+DROP TABLE IF EXISTS waitlist.waitlist_hiring_tools;
+DROP TABLE IF EXISTS waitlist.waitlist_industries;
 DROP TABLE IF EXISTS waitlist.waitlist;
 
 DROP SCHEMA IF EXISTS waitlist;

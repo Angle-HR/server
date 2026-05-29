@@ -52,7 +52,9 @@ func Run() error {
 	defer globalPool.Close()
 
 	countriesHandler := handler.NewCountriesHandler(globalPool)
+	catalogHandler := handler.NewCatalogHandler(globalPool)
 	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool)
+	onboardingHandler := handler.NewOnboardingHandler(dbRouter, globalPool)
 
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
@@ -65,7 +67,9 @@ func Run() error {
 
 	router.Route("/api/v1", func(r chi.Router) {
 		countriesHandler.RegisterRoutes(r)
+		catalogHandler.RegisterRoutes(r)
 		waitlistHandler.RegisterRoutes(r)
+		onboardingHandler.RegisterRoutes(r)
 	})
 
 	server := &http.Server{

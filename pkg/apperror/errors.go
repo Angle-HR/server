@@ -18,6 +18,15 @@ const (
 	MsgRegionRequired          = "region could not be resolved"
 	MsgInvalidRegion           = "invalid region"
 	MsgInvalidCountryID        = "invalid country_id"
+	MsgInvalidWaitlistToken    = "invalid waitlist token"
+	MsgOnboardingAlreadySubmitted = "onboarding already submitted"
+	MsgUnknownIndustryReference   = "unknown industry reference"
+	MsgUnknownHiringToolReference = "unknown hiring tool reference"
+	MsgUnknownFrustrationReference = "unknown hiring frustration reference"
+	MsgUnknownRoleReference       = "unknown role reference"
+	MsgUnknownTeamSizeReference   = "unknown team size reference"
+	MsgOtherTextRequiredWhenOthersSelected = "other text is required when Others is selected"
+	MsgOtherTextOnlyAllowedWhenOthersSelected = "other text is only allowed when Others is selected"
 )
 
 var (
@@ -42,7 +51,8 @@ const (
 	CodeValidationError = "VALIDATION_ERROR"
 	CodeUnauthorized    = "UNAUTHORIZED"
 	CodeForbidden       = "FORBIDDEN"
-	CodeInternalError   = "INTERNAL_ERROR"
+	CodeInternalError     = "INTERNAL_ERROR"
+	CodeInvalidReference  = "INVALID_REFERENCE"
 )
 
 var httpStatusByCode = map[string]int{
@@ -50,7 +60,8 @@ var httpStatusByCode = map[string]int{
 	CodeConflict:        http.StatusConflict,
 	CodeValidationError: http.StatusBadRequest,
 	CodeUnauthorized:    http.StatusUnauthorized,
-	CodeForbidden:       http.StatusForbidden,
+	CodeForbidden:        http.StatusForbidden,
+	CodeInvalidReference: http.StatusBadRequest,
 }
 
 // AppError is a structured application error.

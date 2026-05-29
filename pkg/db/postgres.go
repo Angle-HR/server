@@ -19,26 +19,6 @@ const (
 	defaultConnectTimeout  = 5 * time.Second
 )
 
-// Store exposes the shared connection pool.
-type Store struct {
-	Pool *pgxpool.Pool
-}
-
-// NewStore creates and verifies a PostgreSQL pool.
-func NewStore(ctx context.Context, dbURL string) (*Store, error) {
-	pool, err := NewPool(ctx, dbURL)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Store{Pool: pool}, nil
-}
-
-// NewPool creates and verifies a PostgreSQL connection pool for regional waitlist databases.
-func NewPool(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
-	return newPool(ctx, dbURL, "waitlist,public")
-}
-
 // NewGlobalPool creates a pool for the global registry database (public schema only).
 func NewGlobalPool(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	return newPool(ctx, dbURL, "public")
@@ -71,11 +51,6 @@ func newPool(ctx context.Context, dbURL, searchPath string) (*pgxpool.Pool, erro
 	}
 
 	return pool, nil
-}
-
-// New is a compatibility alias for NewPool.
-func New(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
-	return NewPool(ctx, dbURL)
 }
 
 func envInt32(key string, fallback int32) int32 {

@@ -1,4 +1,4 @@
-.PHONY: fmt lint test cover security check tidy pr-description build run migrate migrate-up migrate-down migrate-all migrate-global migrate-global-up migrate-global-down swagger swagger-check
+.PHONY: fmt lint test cover security check tidy pr-description migrate migrate-up migrate-down migrate-all migrate-global migrate-global-up migrate-global-down swagger swagger-check
 
 PR_TEMPLATE := .github/pull_request_template.md
 PR_OUT_DIR := pr_template
@@ -10,17 +10,17 @@ SWAG_VERSION := v1.16.4
 # ─────────────────────────────────────────────
 
 migrate-up:
-	@echo "→ Running migrations..."
+	@echo "→ Running migrations (UK regional database)..."
 	@if [ -f .env ]; then set -a && . ./.env && set +a; fi; \
-	if [ -z "$$DB_URL" ]; then echo "❌ DB_URL is required (set it or add .env)"; exit 1; fi; \
-	./db/migrations/migrate.sh up
+	if [ -z "$$DB_URL_UK" ]; then echo "❌ DB_URL_UK is required (set it or add .env)"; exit 1; fi; \
+	DB_URL="$$DB_URL_UK" ./db/migrations/migrate.sh up
 	@echo "✅ Migrations applied."
 
 migrate-down:
-	@echo "→ Rolling back migration..."
+	@echo "→ Rolling back migration (UK regional database)..."
 	@if [ -f .env ]; then set -a && . ./.env && set +a; fi; \
-	if [ -z "$$DB_URL" ]; then echo "❌ DB_URL is required (set it or add .env)"; exit 1; fi; \
-	./db/migrations/migrate.sh down
+	if [ -z "$$DB_URL_UK" ]; then echo "❌ DB_URL_UK is required (set it or add .env)"; exit 1; fi; \
+	DB_URL="$$DB_URL_UK" ./db/migrations/migrate.sh down
 	@echo "✅ Migration rolled back."
 
 migrate-all:

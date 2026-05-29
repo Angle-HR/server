@@ -15,7 +15,6 @@ import (
 // Config holds runtime configuration values.
 type Config struct {
 	ServerPort   string
-	DBUrl        string
 	DBUrlGlobal  string
 	AppEnv       string
 	PublicAPIURL string
@@ -29,7 +28,6 @@ func Load() (Config, error) {
 
 	cfg := Config{
 		ServerPort:   os.Getenv("SERVER_PORT"),
-		DBUrl:        os.Getenv("DB_URL"),
 		DBUrlGlobal:  os.Getenv("DB_URL_GLOBAL"),
 		AppEnv:       os.Getenv("APP_ENV"),
 		PublicAPIURL: os.Getenv("PUBLIC_API_URL"),

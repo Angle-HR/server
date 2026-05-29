@@ -8,37 +8,16 @@ import (
 
 // Client-visible message strings used in API responses.
 const (
-	MsgNotFound                               = "not found"
-	MsgSessionNotFound                        = "session not found"
-	MsgSessionExpired                         = "session expired"
-	MsgEmailAlreadyRegistered                 = "email already registered"
-	MsgInvalidRequest                         = "invalid request"
-	MsgUnauthorized                           = "unauthorized"
-	MsgForbidden                              = "forbidden"
-	MsgInternalServerError                    = "internal server error"
-	MsgInvalidRequestBody                     = "invalid request body"
-	MsgInvalidIndustryID                      = "invalid industry_id"
-	MsgInvalidRoleID                          = "invalid role_id"
-	MsgInvalidTeamSizeID                      = "invalid team_size_id"
-	MsgInvalidWantsEarlyAccess                = "invalid wants_early_access"
-	MsgInvalidWantsUserTesting                = "invalid wants_user_testing"
-	MsgOnboardingStepsIncomplete              = "onboarding steps are incomplete"
-	MsgSessionAlreadySubmitted                = "session already submitted"
-	MsgAtLeastOneOptionRequired               = "at least one option is required"
-	MsgInvalidUUID                            = "invalid uuid"
-	MsgUnknownIndustryReference               = "unknown industry reference"
-	MsgUnknownHiringToolReference             = "unknown hiring tool reference"
-	MsgUnknownFrustrationReference            = "unknown frustration reference"
-	MsgUnknownRoleReference                   = "unknown role reference"
-	MsgUnknownTeamSizeReference               = "unknown team size reference"
-	MsgOnboardingIncomplete                   = "onboarding is incomplete"
-	MsgNameRequired                           = "name is required"
-	MsgUnexpectedOnboardingStep               = "unexpected onboarding step"
-	MsgOtherTextRequiredWhenOthersSelected    = "other text is required when Others is selected"
-	MsgOtherTextOnlyAllowedWhenOthersSelected = "other text is only allowed when Others is selected"
-	MsgRegionRequired                         = "region could not be resolved"
-	MsgInvalidRegion                          = "invalid region"
-	MsgInvalidCountryID                       = "invalid country_id"
+	MsgNotFound                = "not found"
+	MsgEmailAlreadyRegistered  = "email already registered"
+	MsgInvalidRequest          = "invalid request"
+	MsgUnauthorized            = "unauthorized"
+	MsgForbidden               = "forbidden"
+	MsgInternalServerError     = "internal server error"
+	MsgInvalidRequestBody      = "invalid request body"
+	MsgRegionRequired          = "region could not be resolved"
+	MsgInvalidRegion           = "invalid region"
+	MsgInvalidCountryID        = "invalid country_id"
 )
 
 var (
@@ -54,34 +33,24 @@ var (
 	ErrUnauthorized = errors.New(MsgUnauthorized)
 	// ErrForbidden indicates insufficient permissions.
 	ErrForbidden = errors.New(MsgForbidden)
-	// ErrSessionNotFound indicates an unknown session token.
-	ErrSessionNotFound = errors.New(MsgSessionNotFound)
-	// ErrSessionExpired indicates an expired session token.
-	ErrSessionExpired = errors.New(MsgSessionExpired)
 )
 
 // Stable application error codes.
 const (
-	CodeNotFound         = "NOT_FOUND"
-	CodeSessionNotFound  = "SESSION_NOT_FOUND"
-	CodeSessionExpired   = "SESSION_EXPIRED"
-	CodeConflict         = "CONFLICT"
-	CodeValidationError  = "VALIDATION_ERROR"
-	CodeInvalidReference = "INVALID_REFERENCE"
-	CodeUnauthorized     = "UNAUTHORIZED"
-	CodeForbidden        = "FORBIDDEN"
-	CodeInternalError    = "INTERNAL_ERROR"
+	CodeNotFound        = "NOT_FOUND"
+	CodeConflict        = "CONFLICT"
+	CodeValidationError = "VALIDATION_ERROR"
+	CodeUnauthorized    = "UNAUTHORIZED"
+	CodeForbidden       = "FORBIDDEN"
+	CodeInternalError   = "INTERNAL_ERROR"
 )
 
 var httpStatusByCode = map[string]int{
-	CodeNotFound:         http.StatusNotFound,
-	CodeSessionNotFound:  http.StatusNotFound,
-	CodeSessionExpired:   http.StatusGone,
-	CodeConflict:         http.StatusConflict,
-	CodeValidationError:  http.StatusBadRequest,
-	CodeInvalidReference: http.StatusBadRequest,
-	CodeUnauthorized:     http.StatusUnauthorized,
-	CodeForbidden:        http.StatusForbidden,
+	CodeNotFound:        http.StatusNotFound,
+	CodeConflict:        http.StatusConflict,
+	CodeValidationError: http.StatusBadRequest,
+	CodeUnauthorized:    http.StatusUnauthorized,
+	CodeForbidden:       http.StatusForbidden,
 }
 
 // AppError is a structured application error.
@@ -132,14 +101,12 @@ func HTTPStatus(err error) int {
 
 func httpStatusForError(err error) int {
 	switch {
-	case errors.Is(err, ErrSessionExpired):
-		return http.StatusGone
-	case errors.Is(err, ErrSessionNotFound), errors.Is(err, ErrNotFound):
-		return http.StatusNotFound
 	case errors.Is(err, ErrConflict):
 		return http.StatusConflict
 	case errors.Is(err, ErrBadRequest):
 		return http.StatusBadRequest
+	case errors.Is(err, ErrNotFound):
+		return http.StatusNotFound
 	case errors.Is(err, ErrUnauthorized):
 		return http.StatusUnauthorized
 	case errors.Is(err, ErrForbidden):
@@ -155,16 +122,12 @@ func mapAppErrorCode(code string) error {
 		return ErrNotFound
 	case CodeConflict:
 		return ErrConflict
-	case CodeValidationError, CodeInvalidReference:
+	case CodeValidationError:
 		return ErrBadRequest
 	case CodeUnauthorized:
 		return ErrUnauthorized
 	case CodeForbidden:
 		return ErrForbidden
-	case CodeSessionNotFound:
-		return ErrSessionNotFound
-	case CodeSessionExpired:
-		return ErrSessionExpired
 	default:
 		return ErrInternal
 	}
@@ -187,10 +150,6 @@ func Public(err error) (code, message string) {
 	}
 
 	switch {
-	case errors.Is(err, ErrSessionExpired):
-		return CodeSessionExpired, MsgSessionExpired
-	case errors.Is(err, ErrSessionNotFound):
-		return CodeSessionNotFound, MsgSessionNotFound
 	case errors.Is(err, ErrConflict):
 		return CodeConflict, MsgEmailAlreadyRegistered
 	case errors.Is(err, ErrBadRequest):
@@ -220,13 +179,9 @@ func publicMessageForCode(code string) string {
 	switch code {
 	case CodeNotFound:
 		return MsgNotFound
-	case CodeSessionNotFound:
-		return MsgSessionNotFound
-	case CodeSessionExpired:
-		return MsgSessionExpired
 	case CodeConflict:
 		return MsgEmailAlreadyRegistered
-	case CodeValidationError, CodeInvalidReference:
+	case CodeValidationError:
 		return MsgInvalidRequest
 	case CodeUnauthorized:
 		return MsgUnauthorized

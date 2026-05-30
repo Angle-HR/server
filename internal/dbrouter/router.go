@@ -43,8 +43,9 @@ func NewWithPools(pools map[region.Region]PgxPool) *DBRouter {
 	}
 }
 
-// New initializes all regional pools and MinIO clients. Startup fails if any
-// region is missing, duplicated, or unreachable.
+// New initializes all regional pools and MinIO clients. Missing MinIO buckets
+// are created automatically. Startup fails if any region is missing, duplicated,
+// or unreachable.
 func New(ctx context.Context, configs []RegionConfig) (*DBRouter, error) {
 	byRegion := make(map[region.Region]RegionConfig, len(configs))
 	for _, cfg := range configs {
@@ -90,14 +91,9 @@ func New(ctx context.Context, configs []RegionConfig) (*DBRouter, error) {
 			return nil, fmt.Errorf("dbrouter: minio %s: %w", reg, err)
 		}
 
-		exists, err := client.BucketExists(ctx, cfg.MinIOBucket)
-		if err != nil {
+		if err := ensureMinIOBucket(ctx, client, reg, cfg.MinIOBucket); err != nil {
 			router.Close()
-			return nil, fmt.Errorf("dbrouter: minio bucket check %s: %w", reg, err)
-		}
-		if !exists {
-			router.Close()
-			return nil, fmt.Errorf("dbrouter: minio bucket %q does not exist for region %s", cfg.MinIOBucket, reg)
+			return nil, err
 		}
 
 		router.minio[reg] = client
@@ -152,6 +148,22 @@ func newPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	}
 
 	return pool, nil
+}
+
+func ensureMinIOBucket(ctx context.Context, client *minio.Client, reg region.Region, bucket string) error {
+	exists, err := client.BucketExists(ctx, bucket)
+	if err != nil {
+		return fmt.Errorf("dbrouter: minio bucket check %s: %w", reg, err)
+	}
+	if exists {
+		return nil
+	}
+
+	slog.Info("dbrouter creating minio bucket", "region", reg, "bucket", bucket)
+	if err := client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}); err != nil {
+		return fmt.Errorf("dbrouter: minio bucket create %s: %w", reg, err)
+	}
+	return nil
 }
 
 func newMinIOClient(cfg RegionConfig) (*minio.Client, error) {

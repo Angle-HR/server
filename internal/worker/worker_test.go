@@ -34,8 +34,8 @@ func TestEmailWorker_Work_Success(t *testing.T) {
 	})
 
 	w := &EmailWorker{Mailer: m}
-	job := &river.Job[EmailArgs]{
-		Args: EmailArgs{
+	job := &river.Job[mailer.EmailArgs]{
+		Args: mailer.EmailArgs{
 			Type:      "waitlist_confirmation",
 			Recipient: "recipient@acme.com",
 			FullName:  "Jerry",
@@ -72,8 +72,8 @@ func TestEmailWorker_Work_SMTPError(t *testing.T) {
 	})
 
 	w := &EmailWorker{Mailer: m}
-	job := &river.Job[EmailArgs]{
-		Args: EmailArgs{
+	job := &river.Job[mailer.EmailArgs]{
+		Args: mailer.EmailArgs{
 			Type:      "more_info_ack",
 			Recipient: "recipient@acme.com",
 			FullName:  "Jane",

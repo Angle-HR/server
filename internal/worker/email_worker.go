@@ -8,32 +8,11 @@ import (
 	"github.com/Angle-HR/server/internal/mailer"
 )
 
-const (
-	EmailTypeWaitlistConfirmation = "waitlist_confirmation"
-	EmailTypeMoreInfoAck          = "more_info_ack"
-)
-
-type EmailArgs struct {
-	Type      string `json:"type"`
-	Recipient string `json:"recipient"`
-	FullName  string `json:"full_name"`
-	Token     string `json:"token,omitempty"`
-}
-
-func (EmailArgs) Kind() string {
-	return "email"
-}
-
 type EmailWorker struct {
-	river.WorkerDefaults[EmailArgs]
+	river.WorkerDefaults[mailer.EmailArgs]
 	Mailer *mailer.Mailer
 }
 
-func (w *EmailWorker) Work(ctx context.Context, job *river.Job[EmailArgs]) error {
-	return w.Mailer.Send(ctx, mailer.EmailArgs{
-		Type:      job.Args.Type,
-		Recipient: job.Args.Recipient,
-		FullName:  job.Args.FullName,
-		Token:     job.Args.Token,
-	})
+func (w *EmailWorker) Work(ctx context.Context, job *river.Job[mailer.EmailArgs]) error {
+	return w.Mailer.Send(ctx, job.Args)
 }

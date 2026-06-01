@@ -13,6 +13,7 @@ import (
 
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/dbrouter"
+	"github.com/Angle-HR/server/internal/mailer"
 	"github.com/Angle-HR/server/internal/query"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
@@ -22,7 +23,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
-	"github.com/Angle-HR/server/internal/mailer"
 )
 
 var _ = apidoc.ErrorEnvelope{}
@@ -212,6 +212,7 @@ func (h *WaitlistHandler) signup(
 			Type:      "waitlist_confirmation",
 			Recipient: email,
 			FullName:  fullName,
+			Token:     waitlistToken.String(),
 		}, nil)
 		if err != nil {
 			return uuid.Nil, fmt.Errorf("enqueue waitlist confirmation email: %w", err)

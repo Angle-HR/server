@@ -17,6 +17,7 @@ type EmailArgs struct {
 	Type      string `json:"type"`
 	Recipient string `json:"recipient"`
 	FullName  string `json:"full_name"`
+	Token     string `json:"token,omitempty"`
 }
 
 func (EmailArgs) Kind() string {
@@ -33,5 +34,6 @@ func (w *EmailWorker) Work(ctx context.Context, job *river.Job[EmailArgs]) error
 		Type:      job.Args.Type,
 		Recipient: job.Args.Recipient,
 		FullName:  job.Args.FullName,
+		Token:     job.Args.Token,
 	})
 }

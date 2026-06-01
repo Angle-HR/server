@@ -17,6 +17,7 @@ type EmailArgs struct {
 	Type      string `json:"type"` // "waitlist_confirmation" | "more_info_ack"
 	Recipient string `json:"recipient"`
 	FullName  string `json:"full_name"`
+	Token     string `json:"token,omitempty"`
 }
 
 // Kind returns the job kind name for River.

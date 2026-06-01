@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/smtp"
 	"testing"
-
 	"github.com/Angle-HR/server/internal/mailer"
 	"github.com/riverqueue/river"
 )

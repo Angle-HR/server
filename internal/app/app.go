@@ -20,6 +20,9 @@ import (
 	"github.com/Angle-HR/server/pkg/config"
 	"github.com/Angle-HR/server/pkg/db"
 	"github.com/Angle-HR/server/pkg/logger"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivermigrate"
 )
 
 const readHeaderTimeout = 5 * time.Second
@@ -51,10 +54,23 @@ func Run() error {
 	}
 	defer globalPool.Close()
 
+	riverMigrator, err := rivermigrate.New(riverpgxv5.New(globalPool), nil)
+	if err != nil {
+		return fmt.Errorf("create River migrator: %w", err)
+	}
+	if _, err = riverMigrator.Migrate(ctx, rivermigrate.DirectionUp, nil); err != nil {
+		return fmt.Errorf("apply River migrations: %w", err)
+	}
+
+	riverClient, err := river.NewClient(riverpgxv5.New(globalPool), &river.Config{})
+	if err != nil {
+		return fmt.Errorf("create River client: %w", err)
+	}
+
 	countriesHandler := handler.NewCountriesHandler(globalPool)
 	catalogHandler := handler.NewCatalogHandler(globalPool)
-	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool)
-	onboardingHandler := handler.NewOnboardingHandler(dbRouter, globalPool)
+	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, riverClient)
+	onboardingHandler := handler.NewOnboardingHandler(dbRouter, globalPool, riverClient)
 
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)

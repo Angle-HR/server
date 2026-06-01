@@ -3,7 +3,7 @@ services:
   postgres_uk:
     image: postgres:16-alpine
     ports:
-      - "5432:5432"
+      - "15432:5432"
     environment:
       POSTGRES_USER: anglehr
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_UK}
@@ -304,6 +304,28 @@ services:
       migrate:
         condition: service_completed_successfully
       minio_setup:
+        condition: service_completed_successfully
+    networks:
+      - anglehr_net
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM}
+    depends_on:
+      postgres_global:
+        condition: service_healthy
+      migrate:
         condition: service_completed_successfully
     networks:
       - anglehr_net

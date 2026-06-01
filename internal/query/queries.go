@@ -111,7 +111,7 @@ func LookupUsersRegistryByWaitlistToken(token uuid.UUID) (string, []any, error) 
 
 // LookupWaitlistByUUID returns SQL for a waitlist row by public token.
 func LookupWaitlistByUUID(token uuid.UUID) (string, []any, error) {
-	return mustSQL(postgres.Select("id", "email", "onboarding_submitted_at").
+	return mustSQL(postgres.Select("id", "full_name", "email", "onboarding_submitted_at").
 		From("waitlist").
 		Where("uuid", "=", token).
 		WhereNull("deleted_at").

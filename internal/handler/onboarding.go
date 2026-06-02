@@ -412,12 +412,12 @@ func (h *OnboardingHandler) persistOnboarding(
 		}
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit onboarding transaction: %w", err)
-	}
-
 	if err := gtx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit global transaction: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit onboarding transaction: %w", err)
 	}
 
 	return nil

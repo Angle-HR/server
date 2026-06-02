@@ -219,12 +219,12 @@ func (h *WaitlistHandler) signup(
 		}
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return uuid.Nil, fmt.Errorf("commit waitlist transaction: %w", err)
-	}
-
 	if err := gtx.Commit(ctx); err != nil {
 		return uuid.Nil, fmt.Errorf("commit global transaction: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return uuid.Nil, fmt.Errorf("commit waitlist transaction: %w", err)
 	}
 
 	return waitlistToken, nil

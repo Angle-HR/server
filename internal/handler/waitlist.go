@@ -11,34 +11,43 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/Angle-HR/server/internal/apidoc"
+	"github.com/Angle-HR/server/internal/dbrouter"
+	"github.com/Angle-HR/server/internal/mailer"
+	"github.com/Angle-HR/server/internal/query"
+	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/response"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-
-	"github.com/Angle-HR/server/internal/apidoc"
-	"github.com/Angle-HR/server/internal/dbrouter"
-	"github.com/Angle-HR/server/internal/query"
-	"github.com/Angle-HR/server/pkg/apperror"
-	"github.com/Angle-HR/server/pkg/response"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
 )
 
 var _ = apidoc.ErrorEnvelope{}
 
 const regionSourceExplicit = "explicit"
 
+type riverClient interface {
+	InsertTx(ctx context.Context, tx pgx.Tx, args river.JobArgs, opts *river.InsertOpts) (*rivertype.JobInsertResult, error)
+}
+
 // WaitlistHandler handles waitlist signup requests.
 type WaitlistHandler struct {
 	Router   *dbrouter.DBRouter
 	GlobalDB globalDB
+	River    riverClient
+
 	validate *validator.Validate
 }
 
 // NewWaitlistHandler returns a waitlist signup handler.
-func NewWaitlistHandler(router *dbrouter.DBRouter, globalDB globalDB) *WaitlistHandler {
+func NewWaitlistHandler(router *dbrouter.DBRouter, globalDB globalDB, river riverClient) *WaitlistHandler {
 	return &WaitlistHandler{
 		Router:   router,
 		GlobalDB: globalDB,
+		River:    river,
 		validate: validator.New(),
 	}
 }
@@ -142,8 +151,7 @@ func (r *signupRequest) trim() {
 func (h *WaitlistHandler) signup(
 	ctx context.Context,
 	country Country,
-	fullName, email string,
-) (uuid.UUID, error) {
+	fullName, email string) (uuid.UUID, error) {
 	pool, err := h.Router.DB(country.Region)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("regional pool: %w", err)
@@ -154,6 +162,14 @@ func (h *WaitlistHandler) signup(
 		return uuid.Nil, fmt.Errorf("begin waitlist transaction: %w", err)
 	}
 	defer rollbackWaitlistTx(ctx, tx)
+
+	gtx, err := h.GlobalDB.Begin(ctx)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("begin global transaction: %w", err)
+	}
+	defer func() {
+		_ = gtx.Rollback(ctx)
+	}()
 
 	var waitlistToken uuid.UUID
 	insertSQL, insertArgs, err := query.InsertWaitlistSignup(
@@ -187,8 +203,24 @@ func (h *WaitlistHandler) signup(
 		return uuid.Nil, fmt.Errorf("build users registry insert: %w", err)
 	}
 
-	if _, err := h.GlobalDB.Exec(ctx, registrySQL, registryArgs...); err != nil {
+	if _, err := gtx.Exec(ctx, registrySQL, registryArgs...); err != nil {
 		return uuid.Nil, fmt.Errorf("insert users registry: %w", err)
+	}
+
+	if h.River != nil {
+		_, err = h.River.InsertTx(ctx, gtx, mailer.EmailArgs{
+			Type:      "waitlist_confirmation",
+			Recipient: email,
+			FullName:  fullName,
+			Token:     waitlistToken.String(),
+		}, nil)
+		if err != nil {
+			return uuid.Nil, fmt.Errorf("enqueue waitlist confirmation email: %w", err)
+		}
+	}
+
+	if err := gtx.Commit(ctx); err != nil {
+		return uuid.Nil, fmt.Errorf("commit global transaction: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {

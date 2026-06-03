@@ -61,8 +61,8 @@ func TestOnboardingSubmit_alreadySubmitted(t *testing.T) {
 	}
 	submitted := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	regionalMock.ExpectQuery(lookupSQL).WithArgs(lookupArgs...).WillReturnRows(
-		pgxmock.NewRows([]string{"id", "email", "onboarding_submitted_at"}).
-			AddRow(int64(1), "jane@acme.com", &submitted),
+		pgxmock.NewRows([]string{"id", "full_name", "email", "onboarding_submitted_at"}).
+			AddRow(int64(1), "Jane", "jane@acme.com", &submitted),
 	)
 
 	router := testOnboardingRouter(t, regionalMock, globalMock)
@@ -116,7 +116,7 @@ func testOnboardingRouter(
 
 	h := NewOnboardingHandler(dbrouter.NewWithPools(map[region.Region]dbrouter.PgxPool{
 		region.RegionUK: regionalMock,
-	}), globalMock)
+	}), globalMock, nil)
 
 	router := chi.NewRouter()
 	router.Route("/api/v1", func(r chi.Router) {

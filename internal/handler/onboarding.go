@@ -16,6 +16,7 @@ import (
 
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/dbrouter"
+	"github.com/Angle-HR/server/internal/mailer"
 	"github.com/Angle-HR/server/internal/query"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
@@ -30,14 +31,16 @@ const othersSlug = "others"
 type OnboardingHandler struct {
 	Router   *dbrouter.DBRouter
 	GlobalDB globalDB
+	River    riverClient
 	validate *validator.Validate
 }
 
 // NewOnboardingHandler returns an onboarding handler.
-func NewOnboardingHandler(router *dbrouter.DBRouter, globalDB globalDB) *OnboardingHandler {
+func NewOnboardingHandler(router *dbrouter.DBRouter, globalDB globalDB, river riverClient) *OnboardingHandler {
 	return &OnboardingHandler{
 		Router:   router,
 		GlobalDB: globalDB,
+		River:    river,
 		validate: validator.New(),
 	}
 }
@@ -135,7 +138,7 @@ func (h *OnboardingHandler) processSubmit(ctx context.Context, req onboardingReq
 		return fmt.Errorf("regional pool: %w", err)
 	}
 
-	waitlistID, waitlistEmail, submitted, err := h.lookupWaitlist(ctx, pool, token)
+	waitlistID, fullName, waitlistEmail, submitted, err := h.lookupWaitlist(ctx, pool, token)
 	if err != nil {
 		return err
 	}
@@ -187,7 +190,7 @@ func (h *OnboardingHandler) processSubmit(ctx context.Context, req onboardingReq
 		return err
 	}
 
-	return h.persistOnboarding(ctx, pool, waitlistID, industryIDs, toolIDs, frustrationIDs, roleID, teamSizeID,
+	return h.persistOnboarding(ctx, pool, waitlistID, fullName, waitlistEmail, industryIDs, toolIDs, frustrationIDs, roleID, teamSizeID,
 		req.OtherIndustry, req.OtherTool, req.OtherFrustration, req.WantsEarlyAccess, req.WantsUserTesting)
 }
 
@@ -216,26 +219,27 @@ func (h *OnboardingHandler) lookupRegistry(ctx context.Context, token uuid.UUID)
 	return email, region.Region(reg), nil
 }
 
-func (h *OnboardingHandler) lookupWaitlist(ctx context.Context, pool dbrouter.PgxPool, token uuid.UUID) (int64, string, bool, error) {
+func (h *OnboardingHandler) lookupWaitlist(ctx context.Context, pool dbrouter.PgxPool, token uuid.UUID) (int64, string, string, bool, error) {
 	sql, args, err := query.LookupWaitlistByUUID(token)
 	if err != nil {
-		return 0, "", false, fmt.Errorf("build waitlist lookup: %w", err)
+		return 0, "", "", false, fmt.Errorf("build waitlist lookup: %w", err)
 	}
 
 	var id int64
+	var fullName string
 	var email string
 	var submittedAt *time.Time
 
-	scanErr := pool.QueryRow(ctx, sql, args...).Scan(&id, &email, &submittedAt)
+	scanErr := pool.QueryRow(ctx, sql, args...).Scan(&id, &fullName, &email, &submittedAt)
 	if scanErr != nil {
 		if isNotFound(scanErr) {
-			return 0, "", false, apperror.New(apperror.CodeNotFound, apperror.MsgInvalidWaitlistToken)
+			return 0, "", "", false, apperror.New(apperror.CodeNotFound, apperror.MsgInvalidWaitlistToken)
 		}
 
-		return 0, "", false, scanErr
+		return 0, "", "", false, scanErr
 	}
 
-	return id, email, submittedAt != nil, nil
+	return id, fullName, email, submittedAt != nil, nil
 }
 
 func (h *OnboardingHandler) validateCatalogSelections(
@@ -348,6 +352,7 @@ func (h *OnboardingHandler) persistOnboarding(
 	ctx context.Context,
 	pool dbrouter.PgxPool,
 	waitlistID int64,
+	fullName, email string,
 	industryIDs, toolIDs, frustrationIDs []uuid.UUID,
 	roleID, teamSizeID uuid.UUID,
 	otherIndustry, otherTool, otherFrustration *string,
@@ -358,6 +363,14 @@ func (h *OnboardingHandler) persistOnboarding(
 		return fmt.Errorf("begin onboarding transaction: %w", err)
 	}
 	defer rollbackWaitlistTx(ctx, tx)
+
+	gtx, err := h.GlobalDB.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin global transaction: %w", err)
+	}
+	defer func() {
+		_ = gtx.Rollback(ctx)
+	}()
 
 	updateSQL, updateArgs, err := query.SubmitWaitlistOnboarding(
 		waitlistID, wantsEarlyAccess, wantsUserTesting, roleID, teamSizeID,
@@ -386,6 +399,21 @@ func (h *OnboardingHandler) persistOnboarding(
 
 	if err := h.insertFrustrations(ctx, tx, waitlistID, frustrationIDs, otherFrustration); err != nil {
 		return err
+	}
+
+	if h.River != nil {
+		_, err = h.River.InsertTx(ctx, gtx, mailer.EmailArgs{
+			Type:      "more_info_ack",
+			Recipient: email,
+			FullName:  fullName,
+		}, nil)
+		if err != nil {
+			return fmt.Errorf("enqueue onboarding acknowledgement email: %w", err)
+		}
+	}
+
+	if err := gtx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit global transaction: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {

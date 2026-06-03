@@ -79,6 +79,8 @@ func TestWaitlistSignup_duplicateEmail(t *testing.T) {
 	t.Cleanup(func() { globalMock.Close() })
 
 	expectCountryLookup(t, globalMock, testCountryID)
+	globalMock.ExpectBegin()
+	globalMock.ExpectRollback()
 
 	router := testWaitlistRouter(t, regionalMock, globalMock)
 	rec := postWaitlist(t, router, `{
@@ -203,9 +205,12 @@ func TestSignup_duplicateDirect(t *testing.T) {
 	}
 	t.Cleanup(func() { globalMock.Close() })
 
+	globalMock.ExpectBegin()
+	globalMock.ExpectRollback()
+
 	h := NewWaitlistHandler(dbrouter.NewWithPools(map[region.Region]dbrouter.PgxPool{
 		region.RegionUK: regionalMock,
-	}), globalMock)
+	}), globalMock, nil)
 
 	country := Country{
 		ID:     uuid.MustParse(testCountryID),
@@ -329,12 +334,15 @@ func expectSuccessfulSignup(t *testing.T) (pgxmock.PgxPoolIface, pgxmock.PgxPool
 	t.Cleanup(func() { globalMock.Close() })
 
 	expectCountryLookup(t, globalMock, testCountryID)
+
+	globalMock.ExpectBegin()
 	registrySQL, registryArgs, err := query.InsertUsersRegistry("jane@acme.com", "uk", "explicit", testToken)
 	if err != nil {
 		t.Fatalf("InsertUsersRegistry: %v", err)
 	}
 	globalMock.ExpectExec(registrySQL).WithArgs(registryArgs...).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+	globalMock.ExpectCommit()
 
 	return regionalMock, globalMock
 }
@@ -380,7 +388,7 @@ func testWaitlistRouter(
 
 	h := NewWaitlistHandler(dbrouter.NewWithPools(map[region.Region]dbrouter.PgxPool{
 		region.RegionUK: regionalMock,
-	}), globalMock)
+	}), globalMock, nil)
 
 	router := chi.NewRouter()
 	router.Route("/api/v1", func(r chi.Router) {

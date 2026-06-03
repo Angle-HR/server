@@ -52,6 +52,7 @@ func run() error {
 	smtpUser := os.Getenv("SMTP_USER")
 	smtpPassword := os.Getenv("SMTP_PASSWORD")
 	smtpFrom := os.Getenv("SMTP_FROM")
+	appURL := os.Getenv("APP_URL")
 
 	if smtpHost == "" {
 		slogLogger.Warn("SMTP_HOST is not set; emails may fail to deliver")
@@ -63,6 +64,7 @@ func run() error {
 		User:     smtpUser,
 		Password: smtpPassword,
 		From:     smtpFrom,
+		AppURL:   appURL,
 	})
 	if err != nil {
 		return fmt.Errorf("initialize mailer: %w", err)

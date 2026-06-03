@@ -30,6 +30,7 @@ type Config struct {
 	User     string
 	Password string
 	From     string
+	AppURL   string
 }
 
 // Mailer exposes email template rendering and delivery via SMTP.
@@ -70,7 +71,11 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 	}
 
 	var body bytes.Buffer
-	if err := m.templates.ExecuteTemplate(&body, templateName, args); err != nil {
+	data := struct {
+		EmailArgs
+		AppURL string
+	}{args, m.cfg.AppURL}
+	if err := m.templates.ExecuteTemplate(&body, templateName, data); err != nil {
 		return fmt.Errorf("execute template %s: %w", templateName, err)
 	}
 

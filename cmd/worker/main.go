@@ -114,8 +114,11 @@ func run() error {
 	sig := <-stop
 	slogLogger.Info("shutdown signal received, stopping background worker...", "signal", sig.String())
 
-	// Stop workers gracefully
-	if err := riverClient.Stop(ctx); err != nil {
+	// Stop workers gracefully with a timeout
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := riverClient.Stop(shutdownCtx); err != nil {
 		return fmt.Errorf("stop River client: %w", err)
 	}
 

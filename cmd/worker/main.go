@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/Angle-HR/server/internal/mailer"
 	"github.com/Angle-HR/server/internal/worker"
@@ -56,6 +57,9 @@ func run() error {
 
 	if smtpHost == "" {
 		slogLogger.Warn("SMTP_HOST is not set; emails may fail to deliver")
+	}
+	if appURL == "" {
+		slogLogger.Warn("APP_URL is not set; waitlist email links will be invalid")
 	}
 
 	m, err := mailer.New(mailer.Config{

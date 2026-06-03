@@ -322,11 +322,29 @@ services:
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_FROM: ${SMTP_FROM}
+      APP_URL: ${APP_URL}
     depends_on:
       postgres_global:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    networks:
+      - anglehr_net
+    restart: unless-stopped
+
+  riverui:
+    image: ghcr.io/riverqueue/riverui:latest
+    ports:
+      - "${RIVER_UI_PORT:-8081}:8080"
+    environment:
+      DATABASE_URL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
+      RIVER_BASIC_AUTH_USER: ${RIVER_BASIC_AUTH_USER:-}
+      RIVER_BASIC_AUTH_PASS: ${RIVER_BASIC_AUTH_PASS:-}
+    depends_on:
+      postgres_global:
+        condition: service_healthy
+      worker:
+        condition: service_started
     networks:
       - anglehr_net
     restart: unless-stopped

@@ -13,9 +13,10 @@ func TestEmailWorker_Work_Success(t *testing.T) {
 	t.Parallel()
 
 	m, err := mailer.New(mailer.Config{
-		Host: "smtp.example.com",
-		Port: "587",
-		From: "no-reply@example.com",
+		Host:   "smtp.example.com",
+		Port:   "587",
+		From:   "no-reply@example.com",
+		AppURL: "https://app.anglehr.com",
 	})
 	if err != nil {
 		t.Fatalf("failed to create mailer: %v", err)

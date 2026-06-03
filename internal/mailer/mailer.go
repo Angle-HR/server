@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/smtp"
+	"strings"
 )
 
 //go:embed templates/*.html
@@ -47,6 +48,8 @@ func New(cfg Config) (*Mailer, error) {
 		return nil, fmt.Errorf("parse email templates: %w", err)
 	}
 
+	cfg.AppURL = strings.TrimRight(cfg.AppURL, "/")
+
 	return &Mailer{
 		cfg:       cfg,
 		templates: tmpl,
@@ -61,6 +64,9 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 
 	switch args.Type {
 	case "waitlist_confirmation":
+		if m.cfg.AppURL == "" {
+			return fmt.Errorf("APP_URL is required for waitlist_confirmation emails")
+		}
 		templateName = "waitlist_confirmation.html"
 		subject = "You're on the Angle HR waitlist"
 	case "more_info_ack":

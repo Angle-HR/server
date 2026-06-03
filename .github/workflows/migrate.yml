@@ -18,6 +18,8 @@ on:
     branches:
       - production
       - staging
+    paths:
+      - "db/migrations/**/*.sql"
 
 concurrency:
   group: migrate-${{ github.ref_name }}
@@ -41,4 +43,5 @@ jobs:
           DB_URL_AFRICA: ${{ secrets.DB_URL_AFRICA }}
           DB_URL_EU: ${{ secrets.DB_URL_EU }}
           DB_URL_GLOBAL: ${{ secrets.DB_URL_GLOBAL }}
+          MIGRATE_COMPARE_REF: ${{ github.event.before }}
         run: bash db/migrations/migrate-all.sh up

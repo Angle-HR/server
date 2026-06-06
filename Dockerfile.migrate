@@ -1,0 +1,9 @@
+FROM postgres:16-alpine
+
+RUN apk add --no-cache bash
+
+COPY db/migrations /migrations
+
+WORKDIR /migrations
+
+ENTRYPOINT ["/bin/bash", "/migrations/migrate-all.sh", "up"]

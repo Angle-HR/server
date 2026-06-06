@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - ingress.yaml
+
+patches:
+  - path: configmap.yaml
+  - path: worker-patch.yaml
+  - path: fluvio-ui-patch.yaml
+
+images:
+  - name: ghcr.io/angle-hr/server
+    newTag: dev
+  - name: ghcr.io/angle-hr/server-worker
+    newTag: dev
+  - name: ghcr.io/software78/fluvio_ui
+    newName: ghcr.io/angle-hr/fluvio-ui
+    newTag: dev

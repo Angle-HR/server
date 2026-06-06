@@ -11,13 +11,12 @@ import (
 	"time"
 
 	"github.com/Angle-HR/server/internal/mailer"
+	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/worker"
 	"github.com/Angle-HR/server/pkg/logger"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
-	"github.com/riverqueue/river"
-	"github.com/riverqueue/river/riverdriver/riverpgxv5"
-	"github.com/riverqueue/river/rivermigrate"
+	fluvio "github.com/software78/fluvio"
 )
 
 func main() {
@@ -29,7 +28,6 @@ func main() {
 }
 
 func run() error {
-	// Load env file if it exists (useful for local development).
 	_ = godotenv.Load()
 
 	appEnv := os.Getenv("APP_ENV")
@@ -80,36 +78,23 @@ func run() error {
 	}
 	defer dbPool.Close()
 
-	// Apply River schema migrations programmatically on startup.
-	slogLogger.Info("applying River schema migrations...")
-	migrator, err := rivermigrate.New(riverpgxv5.New(dbPool), nil)
+	slogLogger.Info("applying Fluvio schema migrations...")
+	if err := queue.Migrate(ctx, dbPool); err != nil {
+		return fmt.Errorf("apply Fluvio migrations: %w", err)
+	}
+	slogLogger.Info("Fluvio schema migrations applied successfully")
+
+	workers := fluvio.NewWorkers()
+	fluvio.AddWorker(workers, &worker.EmailWorker{Mailer: m})
+
+	fluvioClient, err := queue.NewWorkerClient(dbPool, workers, slogLogger)
 	if err != nil {
-		return fmt.Errorf("create River migrator: %w", err)
+		return fmt.Errorf("create Fluvio client: %w", err)
 	}
 
-	_, err = migrator.Migrate(ctx, rivermigrate.DirectionUp, nil)
-	if err != nil {
-		return fmt.Errorf("apply River migrations: %w", err)
-	}
-	slogLogger.Info("River schema migrations applied successfully")
-
-	workers := river.NewWorkers()
-	river.AddWorker(workers, &worker.EmailWorker{Mailer: m})
-
-	riverClient, err := river.NewClient(riverpgxv5.New(dbPool), &river.Config{
-		Queues: map[string]river.QueueConfig{
-			river.QueueDefault: {MaxWorkers: 10},
-		},
-		Workers: workers,
-		Logger:  slogLogger,
-	})
-	if err != nil {
-		return fmt.Errorf("create River client: %w", err)
-	}
-
-	slogLogger.Info("starting River background email worker...")
-	if err := riverClient.Start(ctx); err != nil {
-		return fmt.Errorf("start River client: %w", err)
+	slogLogger.Info("starting Fluvio background email worker...")
+	if err := fluvioClient.Start(ctx); err != nil {
+		return fmt.Errorf("start Fluvio client: %w", err)
 	}
 
 	stop := make(chan os.Signal, 1)
@@ -118,12 +103,11 @@ func run() error {
 	sig := <-stop
 	slogLogger.Info("shutdown signal received, stopping background worker...", "signal", sig.String())
 
-	// Stop workers gracefully with a timeout
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := riverClient.Stop(shutdownCtx); err != nil {
-		return fmt.Errorf("stop River client: %w", err)
+	if err := fluvioClient.StopContext(shutdownCtx); err != nil {
+		return fmt.Errorf("stop Fluvio client: %w", err)
 	}
 
 	slogLogger.Info("worker stopped successfully")

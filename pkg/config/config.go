@@ -14,10 +14,11 @@ import (
 
 // Config holds runtime configuration values.
 type Config struct {
-	ServerPort   string
-	DBUrlGlobal  string
-	AppEnv       string
-	PublicAPIURL string
+	ServerPort      string
+	DBUrlGlobal     string
+	AppEnv          string
+	PublicAPIURL    string
+	FluvioUIOrigin  string
 }
 
 // Load reads configuration from the environment.
@@ -27,10 +28,11 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		ServerPort:   os.Getenv("SERVER_PORT"),
-		DBUrlGlobal:  os.Getenv("DB_URL_GLOBAL"),
-		AppEnv:       os.Getenv("APP_ENV"),
-		PublicAPIURL: os.Getenv("PUBLIC_API_URL"),
+		ServerPort:     os.Getenv("SERVER_PORT"),
+		DBUrlGlobal:    os.Getenv("DB_URL_GLOBAL"),
+		AppEnv:         os.Getenv("APP_ENV"),
+		PublicAPIURL:   os.Getenv("PUBLIC_API_URL"),
+		FluvioUIOrigin: os.Getenv("FLUVIO_UI_ORIGIN"),
 	}
 
 	if cfg.ServerPort == "" {

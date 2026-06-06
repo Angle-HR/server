@@ -17,12 +17,11 @@ import (
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/docs"
 	"github.com/Angle-HR/server/internal/handler"
+	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/pkg/config"
 	"github.com/Angle-HR/server/pkg/db"
 	"github.com/Angle-HR/server/pkg/logger"
-	"github.com/riverqueue/river"
-	"github.com/riverqueue/river/riverdriver/riverpgxv5"
-	"github.com/riverqueue/river/rivermigrate"
+	"github.com/software78/fluvio/fluviui"
 )
 
 const readHeaderTimeout = 5 * time.Second
@@ -54,23 +53,19 @@ func Run() error {
 	}
 	defer globalPool.Close()
 
-	riverMigrator, err := rivermigrate.New(riverpgxv5.New(globalPool), nil)
-	if err != nil {
-		return fmt.Errorf("create River migrator: %w", err)
-	}
-	if _, err = riverMigrator.Migrate(ctx, rivermigrate.DirectionUp, nil); err != nil {
-		return fmt.Errorf("apply River migrations: %w", err)
+	if err := queue.Migrate(ctx, globalPool); err != nil {
+		return fmt.Errorf("apply Fluvio migrations: %w", err)
 	}
 
-	riverClient, err := river.NewClient(riverpgxv5.New(globalPool), &river.Config{})
+	fluvioClient, err := queue.NewInsertClient(globalPool)
 	if err != nil {
-		return fmt.Errorf("create River client: %w", err)
+		return fmt.Errorf("create Fluvio client: %w", err)
 	}
 
 	countriesHandler := handler.NewCountriesHandler(globalPool)
 	catalogHandler := handler.NewCatalogHandler(globalPool)
-	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, riverClient)
-	onboardingHandler := handler.NewOnboardingHandler(dbRouter, globalPool, riverClient)
+	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, fluvioClient)
+	onboardingHandler := handler.NewOnboardingHandler(dbRouter, globalPool, fluvioClient)
 
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
@@ -79,6 +74,12 @@ func Run() error {
 
 	if docs.IsEnabled(cfg.AppEnv) {
 		docs.RegisterRoutes(router, docs.Config{PublicAPIURL: cfg.PublicAPIURL})
+
+		fluvioUIOrigin := cfg.FluvioUIOrigin
+		if fluvioUIOrigin == "" {
+			fluvioUIOrigin = "http://localhost:5173"
+		}
+		router.Handle("/fluvio/*", fluviui.Handler(fluvioClient, fluviui.WithAllowedOrigin(fluvioUIOrigin)))
 	}
 
 	router.Route("/api/v1", func(r chi.Router) {

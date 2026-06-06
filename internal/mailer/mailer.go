@@ -13,7 +13,7 @@ import (
 //go:embed templates/*.html
 var templatesFS embed.FS
 
-// EmailArgs defines the River job arguments for email notifications.
+// EmailArgs defines job queue arguments for email notifications.
 type EmailArgs struct {
 	Type      string `json:"type"` // "waitlist_confirmation" | "more_info_ack"
 	Recipient string `json:"recipient"`
@@ -21,7 +21,7 @@ type EmailArgs struct {
 	Token     string `json:"token,omitempty"`
 }
 
-// Kind returns the job kind name for River.
+// Kind returns the job kind name.
 func (EmailArgs) Kind() string { return "email" }
 
 // Config holds the configuration details for SMTP delivery.

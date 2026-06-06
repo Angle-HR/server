@@ -262,6 +262,7 @@ services:
       APP_ENV: ${APP_ENV:-development}
       DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      FLUVIO_UI_ORIGIN: ${FLUVIO_UI_ORIGIN:-http://localhost:5173}
       ANGLEHR_UK_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres_uk:5432/anglehr_uk?sslmode=disable
       ANGLEHR_UK_MINIO_ENDPOINT: minio-uk:9000
       ANGLEHR_UK_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER_UK}
@@ -307,6 +308,12 @@ services:
         condition: service_completed_successfully
     networks:
       - anglehr_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/api/v1/countries || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
   worker:
@@ -332,22 +339,21 @@ services:
       - anglehr_net
     restart: unless-stopped
 
-  riverui:
-    image: ghcr.io/riverqueue/riverui:latest
-    ports:
-      - "${RIVER_UI_PORT:-8081}:8080"
-    environment:
-      DATABASE_URL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
-      RIVER_BASIC_AUTH_USER: ${RIVER_BASIC_AUTH_USER:-}
-      RIVER_BASIC_AUTH_PASS: ${RIVER_BASIC_AUTH_PASS:-}
+  fluvio-ui:
+    image: ghcr.io/software78/fluvio_ui:latest
+    build:
+      context: https://github.com/software78/fluvio_ui.git#main
+      args:
+        # Baked into the Vite bundle at build time (not read at container runtime).
+        VITE_API_BASE_URL: ${PUBLIC_API_URL:-http://localhost:8080}
     depends_on:
-      postgres_global:
+      server:
         condition: service_healthy
-      worker:
-        condition: service_started
+    restart: unless-stopped
+    ports:
+      - "5173:80"
     networks:
       - anglehr_net
-    restart: unless-stopped
 
 networks:
   anglehr_net:

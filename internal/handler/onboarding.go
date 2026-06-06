@@ -31,16 +31,16 @@ const othersSlug = "others"
 type OnboardingHandler struct {
 	Router   *dbrouter.DBRouter
 	GlobalDB globalDB
-	River    riverClient
+	Enqueuer jobEnqueuer
 	validate *validator.Validate
 }
 
 // NewOnboardingHandler returns an onboarding handler.
-func NewOnboardingHandler(router *dbrouter.DBRouter, globalDB globalDB, river riverClient) *OnboardingHandler {
+func NewOnboardingHandler(router *dbrouter.DBRouter, globalDB globalDB, enqueuer jobEnqueuer) *OnboardingHandler {
 	return &OnboardingHandler{
 		Router:   router,
 		GlobalDB: globalDB,
-		River:    river,
+		Enqueuer: enqueuer,
 		validate: validator.New(),
 	}
 }
@@ -401,12 +401,12 @@ func (h *OnboardingHandler) persistOnboarding(
 		return err
 	}
 
-	if h.River != nil {
-		_, err = h.River.InsertTx(ctx, gtx, mailer.EmailArgs{
+	if h.Enqueuer != nil {
+		_, err = h.Enqueuer.EnqueueTx(ctx, gtx, mailer.EmailArgs{
 			Type:      "more_info_ack",
 			Recipient: email,
 			FullName:  fullName,
-		}, nil)
+		})
 		if err != nil {
 			return fmt.Errorf("enqueue onboarding acknowledgement email: %w", err)
 		}

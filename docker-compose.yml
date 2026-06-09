@@ -103,7 +103,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     networks:
       - anglehr_net
     healthcheck:
@@ -149,7 +149,7 @@ services:
     environment:
       SERVER_PORT: "8080"
       APP_ENV: ${APP_ENV:-development}
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/${REDIS_DB:-0}
       DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
       FLUVIO_UI_ORIGIN: ${FLUVIO_UI_ORIGIN:-http://localhost:5173}
@@ -179,6 +179,8 @@ services:
         condition: service_healthy
       postgres_global:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     networks:
@@ -198,7 +200,7 @@ services:
       target: worker
     environment:
       APP_ENV: ${APP_ENV:-development}
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/${REDIS_DB:-0}
       DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT:-587}

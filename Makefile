@@ -12,15 +12,15 @@ SWAG_VERSION := v1.16.4
 migrate-up:
 	@echo "→ Running migrations (UK regional database)..."
 	@if [ -f .env ]; then set -a && . ./.env && set +a; fi; \
-	if [ -z "$$DB_URL_UK" ]; then echo "❌ DB_URL_UK is required (set it or add .env)"; exit 1; fi; \
-	DB_URL="$$DB_URL_UK" ./db/migrations/migrate.sh up
+	if [ -z "$$ANGLEHR_UK_POSTGRES_DSN" ]; then echo "❌ ANGLEHR_UK_POSTGRES_DSN is required (set it or add .env)"; exit 1; fi; \
+	DB_URL="$$ANGLEHR_UK_POSTGRES_DSN" ./db/migrations/migrate.sh up
 	@echo "✅ Migrations applied."
 
 migrate-down:
 	@echo "→ Rolling back migration (UK regional database)..."
 	@if [ -f .env ]; then set -a && . ./.env && set +a; fi; \
-	if [ -z "$$DB_URL_UK" ]; then echo "❌ DB_URL_UK is required (set it or add .env)"; exit 1; fi; \
-	DB_URL="$$DB_URL_UK" ./db/migrations/migrate.sh down
+	if [ -z "$$ANGLEHR_UK_POSTGRES_DSN" ]; then echo "❌ ANGLEHR_UK_POSTGRES_DSN is required (set it or add .env)"; exit 1; fi; \
+	DB_URL="$$ANGLEHR_UK_POSTGRES_DSN" ./db/migrations/migrate.sh down
 	@echo "✅ Migration rolled back."
 
 migrate-all:

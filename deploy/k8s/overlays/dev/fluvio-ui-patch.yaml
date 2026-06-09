@@ -1,0 +1,10 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fluvio-ui
+spec:
+  template:
+    spec:
+      containers:
+        - name: fluvio-ui
+          imagePullPolicy: IfNotPresent

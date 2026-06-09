@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: anglehr-config
+  labels:
+    app.kubernetes.io/part-of: anglehr
+data:
+  SERVER_PORT: "8080"
+  APP_ENV: development
+  PUBLIC_API_URL: http://api.anglehr.local
+  FLUVIO_UI_ORIGIN: http://fluvio.anglehr.local

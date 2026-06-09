@@ -18,7 +18,7 @@ import (
 //go:embed spec/swagger.json
 var openAPISpec embed.FS
 
-const developmentEnv = "development"
+const productionEnv = "production"
 
 // Config holds runtime settings for API documentation routes.
 type Config struct {
@@ -27,7 +27,7 @@ type Config struct {
 
 // IsEnabled reports whether interactive API docs should be served.
 func IsEnabled(appEnv string) bool {
-	return appEnv == developmentEnv
+	return appEnv != productionEnv
 }
 
 // RegisterRoutes mounts OpenAPI and Scalar documentation routes.

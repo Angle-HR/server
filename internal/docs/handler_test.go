@@ -40,6 +40,26 @@ func TestPatchOpenAPISpec(t *testing.T) {
 	}
 }
 
+func TestIsEnabled(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		appEnv string
+		want   bool
+	}{
+		{"development", true},
+		{"staging", true},
+		{"test", true},
+		{"production", false},
+	}
+
+	for _, tc := range tests {
+		if got := IsEnabled(tc.appEnv); got != tc.want {
+			t.Errorf("IsEnabled(%q) = %v, want %v", tc.appEnv, got, tc.want)
+		}
+	}
+}
+
 func TestSpecURL(t *testing.T) {
 	t.Parallel()
 

@@ -147,7 +147,6 @@ Use [`overlays/prod/secrets.example.yaml`](overlays/prod/secrets.example.yaml) a
 ```
 DB_URL_GLOBAL=postgres://user:pass@global-host:5432/anglehr_global?sslmode=require
 ANGLEHR_UK_POSTGRES_DSN=postgres://user:pass@uk-host:5432/anglehr_uk?sslmode=require
-# migrate-all uses ANGLEHR_*_POSTGRES_DSN for regional DBs and DB_URL_GLOBAL for the registry
 ```
 
 **Cloudflare R2** — set shared API token credentials and per-region bucket names:
@@ -183,7 +182,7 @@ Pin image tags in [`overlays/prod/kustomization.yaml`](overlays/prod/kustomizati
 
 ### 5. Database migrations
 
-Production SQL migrations run via the existing GitHub Actions workflow ([`.github/workflows/migrate.yml`](../../.github/workflows/migrate.yml)) using `ANGLEHR_*_POSTGRES_DSN` and `DB_URL_GLOBAL` secrets in the `staging` / `production` environments — not via an in-cluster Job.
+Production SQL migrations run via the existing GitHub Actions workflow ([`.github/workflows/migrate.yml`](../../.github/workflows/migrate.yml)) using `DB_URL_*` secrets in the `staging` / `production` environments — not via an in-cluster Job.
 
 ## Fluvio UI note
 

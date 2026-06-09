@@ -143,8 +143,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      additional_contexts:
-        fluvio: ../fluvio
       target: server
     ports:
       - "${SERVER_PORT:-8080}:8080"
@@ -195,8 +193,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      additional_contexts:
-        fluvio: ../fluvio
       target: worker
     environment:
       APP_ENV: ${APP_ENV:-development}

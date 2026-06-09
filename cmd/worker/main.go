@@ -60,6 +60,15 @@ func run() error {
 		slogLogger.Warn("APP_URL is not set; waitlist email links will be invalid")
 	}
 
+	slogLogger.Info("smtp configuration loaded",
+		"host", smtpHost,
+		"port", smtpPort,
+		"from", smtpFrom,
+		"user_set", smtpUser != "",
+		"password_set", smtpPassword != "",
+		"app_url", appURL,
+	)
+
 	m, err := mailer.New(mailer.Config{
 		Host:     smtpHost,
 		Port:     smtpPort,
@@ -67,6 +76,7 @@ func run() error {
 		Password: smtpPassword,
 		From:     smtpFrom,
 		AppURL:   appURL,
+		Logger:   slogLogger,
 	})
 	if err != nil {
 		return fmt.Errorf("initialize mailer: %w", err)
@@ -85,7 +95,7 @@ func run() error {
 	slogLogger.Info("Fluvio schema migrations applied successfully")
 
 	workers := fluvio.NewWorkers()
-	fluvio.AddWorker(workers, &worker.EmailWorker{Mailer: m})
+	fluvio.AddWorker(workers, &worker.EmailWorker{Mailer: m, Logger: slogLogger})
 
 	fluvioClient, err := queue.NewWorkerClient(dbPool, workers, slogLogger)
 	if err != nil {

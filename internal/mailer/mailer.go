@@ -6,6 +6,7 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"net/smtp"
 	"strings"
 )
@@ -32,6 +33,7 @@ type Config struct {
 	Password string
 	From     string
 	AppURL   string
+	Logger   *slog.Logger
 }
 
 // Mailer exposes email template rendering and delivery via SMTP.
@@ -39,6 +41,7 @@ type Mailer struct {
 	cfg       Config
 	templates *template.Template
 	sendMail  func(addr string, a smtp.Auth, from string, to []string, msg []byte) error
+	logger    *slog.Logger
 }
 
 // New returns a Mailer initialized with SMTP configuration.
@@ -50,22 +53,36 @@ func New(cfg Config) (*Mailer, error) {
 
 	cfg.AppURL = strings.TrimRight(cfg.AppURL, "/")
 
+	logger := cfg.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	return &Mailer{
 		cfg:       cfg,
 		templates: tmpl,
 		sendMail:  smtp.SendMail,
+		logger:    logger,
 	}, nil
 }
 
 // Send renders and delivers the email according to the job arguments.
 func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
+	m.logger.Info("email send started",
+		"type", args.Type,
+		"recipient", args.Recipient,
+		"full_name", args.FullName,
+	)
+
 	var templateName string
 	var subject string
 
 	switch args.Type {
 	case "waitlist_confirmation":
 		if m.cfg.AppURL == "" {
-			return fmt.Errorf("APP_URL is required for waitlist_confirmation emails")
+			err := fmt.Errorf("APP_URL is required for waitlist_confirmation emails")
+			m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
+			return err
 		}
 		templateName = "waitlist_confirmation.html"
 		subject = "You're on the Angle HR waitlist"
@@ -73,8 +90,17 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 		templateName = "more_info_ack.html"
 		subject = "Thanks for sharing more about yourself"
 	default:
-		return fmt.Errorf("unknown email type: %s", args.Type)
+		err := fmt.Errorf("unknown email type: %s", args.Type)
+		m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
+		return err
 	}
+
+	m.logger.Info("email template selected",
+		"type", args.Type,
+		"recipient", args.Recipient,
+		"template", templateName,
+		"subject", subject,
+	)
 
 	var body bytes.Buffer
 	data := struct {
@@ -82,8 +108,22 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 		AppURL string
 	}{args, m.cfg.AppURL}
 	if err := m.templates.ExecuteTemplate(&body, templateName, data); err != nil {
-		return fmt.Errorf("execute template %s: %w", templateName, err)
+		err = fmt.Errorf("execute template %s: %w", templateName, err)
+		m.logger.Error("email template render failed",
+			"type", args.Type,
+			"recipient", args.Recipient,
+			"template", templateName,
+			"error", err,
+		)
+		return err
 	}
+
+	m.logger.Info("email template rendered",
+		"type", args.Type,
+		"recipient", args.Recipient,
+		"template", templateName,
+		"body_bytes", body.Len(),
+	)
 
 	// Compose the RFC 822 email message.
 	message := []byte(fmt.Sprintf(
@@ -100,15 +140,41 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 		body.String(),
 	))
 
+	authEnabled := m.cfg.User != "" || m.cfg.Password != ""
 	var auth smtp.Auth
-	if m.cfg.User != "" || m.cfg.Password != "" {
+	if authEnabled {
 		auth = smtp.PlainAuth("", m.cfg.User, m.cfg.Password, m.cfg.Host)
 	}
 
 	addr := fmt.Sprintf("%s:%s", m.cfg.Host, m.cfg.Port)
+	m.logger.Info("smtp send starting",
+		"type", args.Type,
+		"recipient", args.Recipient,
+		"smtp_addr", addr,
+		"from", m.cfg.From,
+		"auth_enabled", authEnabled,
+		"message_bytes", len(message),
+	)
+
 	if err := m.sendMail(addr, auth, m.cfg.From, []string{args.Recipient}, message); err != nil {
-		return fmt.Errorf("smtp send mail to %s: %w", args.Recipient, err)
+		err = fmt.Errorf("smtp send mail to %s: %w", args.Recipient, err)
+		m.logger.Error("smtp send failed",
+			"type", args.Type,
+			"recipient", args.Recipient,
+			"smtp_addr", addr,
+			"from", m.cfg.From,
+			"auth_enabled", authEnabled,
+			"error", err,
+		)
+		return err
 	}
+
+	m.logger.Info("email sent successfully",
+		"type", args.Type,
+		"recipient", args.Recipient,
+		"smtp_addr", addr,
+		"from", m.cfg.From,
+	)
 
 	return nil
 }

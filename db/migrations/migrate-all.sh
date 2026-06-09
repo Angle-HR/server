@@ -51,10 +51,10 @@ if [[ "$direction" == "up" ]] && ! sql_files_changed; then
 fi
 
 for region in "${regions[@]}"; do
-	var="DB_URL_${region}"
+	var="ANGLEHR_${region}_POSTGRES_DSN"
 	url="${!var:-}"
 	if [[ -z "$url" ]]; then
-		echo "DB_URL_${region} is required" >&2
+		echo "ANGLEHR_${region}_POSTGRES_DSN is required" >&2
 		exit 1
 	fi
 

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Creates or updates the anglehr-secrets Secret in the anglehr namespace from a .env file.
-# Builds Kubernetes-internal DSNs and MinIO endpoints from POSTGRES_PASSWORD_* and MINIO_* vars.
+# Builds Kubernetes-internal DSNs from POSTGRES_PASSWORD_* and passes through R2 credentials.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=lib/k8s-local.sh
@@ -29,10 +29,8 @@ set +a
 
 required=(
 	POSTGRES_PASSWORD_UK POSTGRES_PASSWORD_US POSTGRES_PASSWORD_AFRICA POSTGRES_PASSWORD_EU POSTGRES_PASSWORD_GLOBAL
-	MINIO_ROOT_USER_UK MINIO_ROOT_PASSWORD_UK
-	MINIO_ROOT_USER_US MINIO_ROOT_PASSWORD_US
-	MINIO_ROOT_USER_AFRICA MINIO_ROOT_PASSWORD_AFRICA
-	MINIO_ROOT_USER_EU MINIO_ROOT_PASSWORD_EU
+	R2_ACCESS_KEY R2_SECRET_KEY
+	ANGLEHR_UK_R2_BUCKET ANGLEHR_US_R2_BUCKET ANGLEHR_AFRICA_R2_BUCKET ANGLEHR_EU_R2_BUCKET
 )
 for key in "${required[@]}"; do
 	if [[ -z "${!key:-}" ]]; then
@@ -41,12 +39,23 @@ for key in "${required[@]}"; do
 	fi
 done
 
+if [[ -z "${R2_ENDPOINT:-}" && -z "${ANGLEHR_UK_R2_ENDPOINT:-}" && -z "${ANGLEHR_US_R2_ENDPOINT:-}" && -z "${ANGLEHR_AFRICA_R2_ENDPOINT:-}" && -z "${ANGLEHR_EU_R2_ENDPOINT:-}" ]]; then
+	echo "R2_ENDPOINT or at least one ANGLEHR_*_R2_ENDPOINT is required in $ENV_FILE" >&2
+	exit 1
+fi
+
 SMTP_PORT="${SMTP_PORT:-587}"
 SMTP_HOST="${SMTP_HOST:-}"
 SMTP_USER="${SMTP_USER:-}"
 SMTP_PASSWORD="${SMTP_PASSWORD:-}"
 SMTP_FROM="${SMTP_FROM:-}"
 APP_URL="${APP_URL:-http://app.anglehr.local}"
+
+R2_ENDPOINT="${R2_ENDPOINT:-}"
+ANGLEHR_UK_R2_ENDPOINT="${ANGLEHR_UK_R2_ENDPOINT:-}"
+ANGLEHR_US_R2_ENDPOINT="${ANGLEHR_US_R2_ENDPOINT:-}"
+ANGLEHR_AFRICA_R2_ENDPOINT="${ANGLEHR_AFRICA_R2_ENDPOINT:-}"
+ANGLEHR_EU_R2_ENDPOINT="${ANGLEHR_EU_R2_ENDPOINT:-}"
 
 kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
@@ -58,39 +67,26 @@ kubectl create secret generic anglehr-secrets \
 	--from-literal=POSTGRES_PASSWORD_AFRICA="$POSTGRES_PASSWORD_AFRICA" \
 	--from-literal=POSTGRES_PASSWORD_EU="$POSTGRES_PASSWORD_EU" \
 	--from-literal=POSTGRES_PASSWORD_GLOBAL="$POSTGRES_PASSWORD_GLOBAL" \
-	--from-literal=MINIO_ROOT_USER_UK="$MINIO_ROOT_USER_UK" \
-	--from-literal=MINIO_ROOT_PASSWORD_UK="$MINIO_ROOT_PASSWORD_UK" \
-	--from-literal=MINIO_ROOT_USER_US="$MINIO_ROOT_USER_US" \
-	--from-literal=MINIO_ROOT_PASSWORD_US="$MINIO_ROOT_PASSWORD_US" \
-	--from-literal=MINIO_ROOT_USER_AFRICA="$MINIO_ROOT_USER_AFRICA" \
-	--from-literal=MINIO_ROOT_PASSWORD_AFRICA="$MINIO_ROOT_PASSWORD_AFRICA" \
-	--from-literal=MINIO_ROOT_USER_EU="$MINIO_ROOT_USER_EU" \
-	--from-literal=MINIO_ROOT_PASSWORD_EU="$MINIO_ROOT_PASSWORD_EU" \
 	--from-literal=DB_URL_UK="postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres-uk:5432/anglehr_uk?sslmode=disable" \
 	--from-literal=DB_URL_US="postgres://anglehr:${POSTGRES_PASSWORD_US}@postgres-us:5432/anglehr_us?sslmode=disable" \
 	--from-literal=DB_URL_AFRICA="postgres://anglehr:${POSTGRES_PASSWORD_AFRICA}@postgres-africa:5432/anglehr_africa?sslmode=disable" \
 	--from-literal=DB_URL_EU="postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres-eu:5432/anglehr_eu?sslmode=disable" \
 	--from-literal=DB_URL_GLOBAL="postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres-global:5432/anglehr_global?sslmode=disable" \
+	--from-literal=R2_ACCESS_KEY="$R2_ACCESS_KEY" \
+	--from-literal=R2_SECRET_KEY="$R2_SECRET_KEY" \
+	--from-literal=R2_ENDPOINT="$R2_ENDPOINT" \
 	--from-literal=ANGLEHR_UK_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres-uk:5432/anglehr_uk?sslmode=disable" \
-	--from-literal=ANGLEHR_UK_MINIO_ENDPOINT="minio-uk:9000" \
-	--from-literal=ANGLEHR_UK_MINIO_ACCESS_KEY="$MINIO_ROOT_USER_UK" \
-	--from-literal=ANGLEHR_UK_MINIO_SECRET_KEY="$MINIO_ROOT_PASSWORD_UK" \
-	--from-literal=ANGLEHR_UK_MINIO_BUCKET="anglehr-uk" \
+	--from-literal=ANGLEHR_UK_R2_ENDPOINT="$ANGLEHR_UK_R2_ENDPOINT" \
+	--from-literal=ANGLEHR_UK_R2_BUCKET="$ANGLEHR_UK_R2_BUCKET" \
 	--from-literal=ANGLEHR_US_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_US}@postgres-us:5432/anglehr_us?sslmode=disable" \
-	--from-literal=ANGLEHR_US_MINIO_ENDPOINT="minio-us:9000" \
-	--from-literal=ANGLEHR_US_MINIO_ACCESS_KEY="$MINIO_ROOT_USER_US" \
-	--from-literal=ANGLEHR_US_MINIO_SECRET_KEY="$MINIO_ROOT_PASSWORD_US" \
-	--from-literal=ANGLEHR_US_MINIO_BUCKET="anglehr-us" \
+	--from-literal=ANGLEHR_US_R2_ENDPOINT="$ANGLEHR_US_R2_ENDPOINT" \
+	--from-literal=ANGLEHR_US_R2_BUCKET="$ANGLEHR_US_R2_BUCKET" \
 	--from-literal=ANGLEHR_AFRICA_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_AFRICA}@postgres-africa:5432/anglehr_africa?sslmode=disable" \
-	--from-literal=ANGLEHR_AFRICA_MINIO_ENDPOINT="minio-africa:9000" \
-	--from-literal=ANGLEHR_AFRICA_MINIO_ACCESS_KEY="$MINIO_ROOT_USER_AFRICA" \
-	--from-literal=ANGLEHR_AFRICA_MINIO_SECRET_KEY="$MINIO_ROOT_PASSWORD_AFRICA" \
-	--from-literal=ANGLEHR_AFRICA_MINIO_BUCKET="anglehr-africa" \
+	--from-literal=ANGLEHR_AFRICA_R2_ENDPOINT="$ANGLEHR_AFRICA_R2_ENDPOINT" \
+	--from-literal=ANGLEHR_AFRICA_R2_BUCKET="$ANGLEHR_AFRICA_R2_BUCKET" \
 	--from-literal=ANGLEHR_EU_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres-eu:5432/anglehr_eu?sslmode=disable" \
-	--from-literal=ANGLEHR_EU_MINIO_ENDPOINT="minio-eu:9000" \
-	--from-literal=ANGLEHR_EU_MINIO_ACCESS_KEY="$MINIO_ROOT_USER_EU" \
-	--from-literal=ANGLEHR_EU_MINIO_SECRET_KEY="$MINIO_ROOT_PASSWORD_EU" \
-	--from-literal=ANGLEHR_EU_MINIO_BUCKET="anglehr-eu" \
+	--from-literal=ANGLEHR_EU_R2_ENDPOINT="$ANGLEHR_EU_R2_ENDPOINT" \
+	--from-literal=ANGLEHR_EU_R2_BUCKET="$ANGLEHR_EU_R2_BUCKET" \
 	--from-literal=SMTP_HOST="$SMTP_HOST" \
 	--from-literal=SMTP_PORT="$SMTP_PORT" \
 	--from-literal=SMTP_USER="$SMTP_USER" \

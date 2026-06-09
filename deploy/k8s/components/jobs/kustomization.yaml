@@ -3,7 +3,6 @@ kind: Kustomization
 
 resources:
   - migrate.yaml
-  - minio-setup.yaml
 
 images:
   - name: ghcr.io/angle-hr/server-migrate

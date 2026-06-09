@@ -66,20 +66,13 @@ wait_for_statefulsets() {
 		--for=condition=ready pod \
 		--selector=app.kubernetes.io/component=database \
 		--timeout=600s
-
-	echo "Waiting for MinIO pods..."
-	kubectl wait --namespace="$NAMESPACE" \
-		--for=condition=ready pod \
-		--selector=app.kubernetes.io/component=object-storage \
-		--timeout=600s
 }
 
 run_init_jobs() {
 	echo "Running database migrations..."
-	kubectl delete job migrate minio-setup --namespace="$NAMESPACE" --ignore-not-found
+	kubectl delete job migrate --namespace="$NAMESPACE" --ignore-not-found
 	kubectl apply -k "$KUSTOMIZE_JOBS" --namespace="$NAMESPACE"
 	kubectl wait --namespace="$NAMESPACE" --for=condition=complete job/migrate --timeout=600s
-	kubectl wait --namespace="$NAMESPACE" --for=condition=complete job/minio-setup --timeout=300s
 }
 
 setup_local_cluster
@@ -87,9 +80,8 @@ build_and_load_images
 
 SKIP_K8S_CONTEXT_SELECT=1 bash "${ROOT_DIR}/deploy/scripts/create-dev-secret.sh"
 
-echo "Applying data layer (Postgres + MinIO)..."
+echo "Applying data layer (Postgres)..."
 kubectl apply -k "${ROOT_DIR}/deploy/k8s/components/postgres" --namespace="$NAMESPACE"
-kubectl apply -k "${ROOT_DIR}/deploy/k8s/components/minio" --namespace="$NAMESPACE"
 wait_for_statefulsets
 
 run_init_jobs

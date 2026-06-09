@@ -23,10 +23,10 @@ var (
 
 const regionalSearchPath = "waitlist,public"
 
-// DBRouter holds one PostgreSQL pool and one MinIO client per region.
+// DBRouter holds one PostgreSQL pool and one R2 (S3-compatible) client per region.
 type DBRouter struct {
 	pools   map[region.Region]PgxPool
-	minio   map[region.Region]*minio.Client
+	storage map[region.Region]*minio.Client
 	buckets map[region.Region]string
 }
 
@@ -38,14 +38,13 @@ func NewWithPools(pools map[region.Region]PgxPool) *DBRouter {
 
 	return &DBRouter{
 		pools:   pools,
-		minio:   map[region.Region]*minio.Client{},
+		storage: map[region.Region]*minio.Client{},
 		buckets: map[region.Region]string{},
 	}
 }
 
-// New initializes all regional pools and MinIO clients. Missing MinIO buckets
-// are created automatically. Startup fails if any region is missing, duplicated,
-// or unreachable.
+// New initializes all regional pools and R2 clients. Startup fails if any region
+// is missing, duplicated, or unreachable.
 func New(ctx context.Context, configs []RegionConfig) (*DBRouter, error) {
 	byRegion := make(map[region.Region]RegionConfig, len(configs))
 	for _, cfg := range configs {
@@ -69,7 +68,7 @@ func New(ctx context.Context, configs []RegionConfig) (*DBRouter, error) {
 
 	router := &DBRouter{
 		pools:   make(map[region.Region]PgxPool, len(allRegions())),
-		minio:   make(map[region.Region]*minio.Client, len(allRegions())),
+		storage: make(map[region.Region]*minio.Client, len(allRegions())),
 		buckets: make(map[region.Region]string, len(allRegions())),
 	}
 
@@ -84,20 +83,15 @@ func New(ctx context.Context, configs []RegionConfig) (*DBRouter, error) {
 		}
 		router.pools[reg] = pool
 
-		slog.Info("dbrouter connecting", "region", reg, "component", "minio")
-		client, err := newMinIOClient(cfg)
+		slog.Info("dbrouter connecting", "region", reg, "component", "r2")
+		client, err := newR2Client(cfg)
 		if err != nil {
 			router.Close()
-			return nil, fmt.Errorf("dbrouter: minio %s: %w", reg, err)
+			return nil, fmt.Errorf("dbrouter: r2 %s: %w", reg, err)
 		}
 
-		if err := ensureMinIOBucket(ctx, client, reg, cfg.MinIOBucket); err != nil {
-			router.Close()
-			return nil, err
-		}
-
-		router.minio[reg] = client
-		router.buckets[reg] = cfg.MinIOBucket
+		router.storage[reg] = client
+		router.buckets[reg] = cfg.R2Bucket
 	}
 
 	return router, nil
@@ -107,17 +101,17 @@ func validateRegionConfig(cfg RegionConfig) error {
 	if cfg.PostgresDSN == "" {
 		return fmt.Errorf("dbrouter: postgres DSN is required for region %q", cfg.Region)
 	}
-	if cfg.MinIOEndpoint == "" {
-		return fmt.Errorf("dbrouter: minio endpoint is required for region %q", cfg.Region)
+	if cfg.R2Endpoint == "" {
+		return fmt.Errorf("dbrouter: r2 endpoint is required for region %q", cfg.Region)
 	}
-	if cfg.MinIOAccessKey == "" {
-		return fmt.Errorf("dbrouter: minio access key is required for region %q", cfg.Region)
+	if cfg.R2AccessKey == "" {
+		return fmt.Errorf("dbrouter: r2 access key is required for region %q", cfg.Region)
 	}
-	if cfg.MinIOSecretKey == "" {
-		return fmt.Errorf("dbrouter: minio secret key is required for region %q", cfg.Region)
+	if cfg.R2SecretKey == "" {
+		return fmt.Errorf("dbrouter: r2 secret key is required for region %q", cfg.Region)
 	}
-	if cfg.MinIOBucket == "" {
-		return fmt.Errorf("dbrouter: minio bucket is required for region %q", cfg.Region)
+	if cfg.R2Bucket == "" {
+		return fmt.Errorf("dbrouter: r2 bucket is required for region %q", cfg.Region)
 	}
 	return nil
 }
@@ -150,29 +144,14 @@ func newPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-func ensureMinIOBucket(ctx context.Context, client *minio.Client, reg region.Region, bucket string) error {
-	exists, err := client.BucketExists(ctx, bucket)
-	if err != nil {
-		return fmt.Errorf("dbrouter: minio bucket check %s: %w", reg, err)
-	}
-	if exists {
-		return nil
-	}
-
-	slog.Info("dbrouter creating minio bucket", "region", reg, "bucket", bucket)
-	if err := client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}); err != nil {
-		return fmt.Errorf("dbrouter: minio bucket create %s: %w", reg, err)
-	}
-	return nil
-}
-
-func newMinIOClient(cfg RegionConfig) (*minio.Client, error) {
-	client, err := minio.New(cfg.MinIOEndpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(cfg.MinIOAccessKey, cfg.MinIOSecretKey, ""),
-		Secure: cfg.MinIOUseSSL,
+func newR2Client(cfg RegionConfig) (*minio.Client, error) {
+	client, err := minio.New(cfg.R2Endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(cfg.R2AccessKey, cfg.R2SecretKey, ""),
+		Secure: cfg.R2UseSSL,
+		Region: "auto",
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create minio client: %w", err)
+		return nil, fmt.Errorf("create r2 client: %w", err)
 	}
 	return client, nil
 }
@@ -203,28 +182,28 @@ func (r *DBRouter) MustDB(reg region.Region) PgxPool {
 	return pool
 }
 
-// MinIO returns the MinIO client for reg.
-func (r *DBRouter) MinIO(reg region.Region) (*minio.Client, error) {
+// R2 returns the S3-compatible client for reg's Cloudflare R2 bucket.
+func (r *DBRouter) R2(reg region.Region) (*minio.Client, error) {
 	if r == nil {
 		return nil, ErrUnknownRegion
 	}
 
-	client, ok := r.minio[reg]
+	client, ok := r.storage[reg]
 	if !ok {
 		return nil, ErrUnknownRegion
 	}
 	if client == nil {
-		return nil, fmt.Errorf("dbrouter: minio client is nil for region %q", reg)
+		return nil, fmt.Errorf("dbrouter: r2 client is nil for region %q", reg)
 	}
 
 	return client, nil
 }
 
-// MustMinIO returns the MinIO client for reg or panics if the region is unknown.
-func (r *DBRouter) MustMinIO(reg region.Region) *minio.Client {
-	client, err := r.MinIO(reg)
+// MustR2 returns the R2 client for reg or panics if the region is unknown.
+func (r *DBRouter) MustR2(reg region.Region) *minio.Client {
+	client, err := r.R2(reg)
 	if err != nil {
-		panic(fmt.Sprintf("dbrouter: MustMinIO(%q): %v", reg, err))
+		panic(fmt.Sprintf("dbrouter: MustR2(%q): %v", reg, err))
 	}
 	return client
 }

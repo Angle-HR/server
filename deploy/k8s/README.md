@@ -4,17 +4,17 @@ Kustomize manifests for running Angle HR on Kubernetes. Two overlays:
 
 | Overlay | Purpose | Data layer |
 |---------|---------|------------|
-| [`overlays/dev`](overlays/dev) | Local development (kind/minikube) | In-cluster Postgres (5) + MinIO (4), mirroring [`docker-compose.yml`](../../docker-compose.yml) |
-| [`overlays/prod`](overlays/prod) | Production | Managed PostgreSQL + S3-compatible object storage |
+| [`overlays/dev`](overlays/dev) | Local development (kind/minikube) | In-cluster Postgres (5) + Cloudflare R2, mirroring [`docker-compose.yml`](../../docker-compose.yml) |
+| [`overlays/prod`](overlays/prod) | Production | Managed PostgreSQL + Cloudflare R2 |
 
 ## Layout
 
 ```
 deploy/k8s/
   base/                 # server, worker, fluvio-ui
-  components/           # dev-only: postgres, minio, init jobs, dashboard
+  components/           # dev-only: postgres, init jobs, dashboard
   overlays/dev/         # app tier + ingress for local hostnames
-  overlays/dev-jobs/    # migrate + minio-setup with dev image tags
+  overlays/dev-jobs/    # migrate with dev image tags
   overlays/prod/        # app tier + ingress TLS + HPA
 deploy/scripts/
   dev-up.sh             # bootstrap local kind cluster
@@ -30,7 +30,7 @@ deploy/scripts/
   - **Docker Desktop Kubernetes** — enable in Settings → Kubernetes, then `DEV_CLUSTER=docker-desktop bash deploy/scripts/dev-up.sh`
 - `.env` at repo root (copy from [`.env.example`](../../.env.example))
 
-Minimum cluster resources: ~4–8 GB RAM for the full dev stack (9 stateful pods + app tier).
+Minimum cluster resources: ~2–4 GB RAM for the full dev stack (5 Postgres StatefulSets + app tier).
 
 ## Quick start (local)
 
@@ -47,8 +47,8 @@ The script will:
 2. Install the [Kubernetes Dashboard](https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/) at `http://dashboard.anglehr.local`
 3. Build and load `server`, `worker`, and `migrate` images tagged `dev`
 3. Create the `anglehr-secrets` Secret from `.env`
-4. Deploy Postgres and MinIO StatefulSets
-5. Run `migrate` and `minio-setup` Jobs
+4. Deploy Postgres StatefulSets
+5. Run the `migrate` Job
 6. Deploy server, worker, fluvio-ui, and Ingress
 
 Add to `/etc/hosts`:
@@ -86,7 +86,6 @@ Apply overlays individually:
 
 ```bash
 kubectl apply -k deploy/k8s/components/postgres -n anglehr
-kubectl apply -k deploy/k8s/components/minio -n anglehr
 kubectl apply -k deploy/k8s/overlays/dev-jobs -n anglehr
 kubectl apply -k deploy/k8s/overlays/dev -n anglehr
 ```
@@ -104,12 +103,7 @@ Docker Compose hostnames map to Kubernetes Services (underscores become hyphens)
 | `postgres_africa` | `postgres-africa:5432` |
 | `postgres_eu` | `postgres-eu:5432` |
 | `postgres_global` | `postgres-global:5432` |
-| `minio-uk` | `minio-uk:9000` |
-| `minio-us` | `minio-us:9000` |
-| `minio-africa` | `minio-africa:9000` |
-| `minio-eu` | `minio-eu:9000` |
-
-`create-dev-secret.sh` builds DSNs using these internal hostnames automatically.
+`create-dev-secret.sh` builds DSNs using these internal hostnames automatically. R2 credentials are passed through from `.env` (see [`.env.example`](../../.env.example)).
 
 ## Container images
 
@@ -133,14 +127,14 @@ docker build -f Dockerfile.migrate -t ghcr.io/angle-hr/server-migrate:dev .
 
 ## Production deployment
 
-The prod overlay deploys **only** the application tier (server, worker, fluvio-ui). Postgres and MinIO are **not** included — use managed services.
+The prod overlay deploys **only** the application tier (server, worker, fluvio-ui). Postgres is **not** included — use managed services. Object storage is Cloudflare R2 (external).
 
 ### 1. Provision infrastructure
 
 Outside this repo (Terraform, cloud console, etc.):
 
 - PostgreSQL per region (UK, US, Africa, EU) plus a global registry database
-- S3 buckets: `anglehr-uk`, `anglehr-us`, `anglehr-africa`, `anglehr-eu`
+- Cloudflare R2 bucket names: `anglehr-uk`, `anglehr-us`, `anglehr-africa`, `anglehr-eu`
 - SMTP relay
 - Ingress controller + [cert-manager](https://cert-manager.io/) (for TLS annotations in prod Ingress)
 
@@ -155,15 +149,16 @@ DB_URL_GLOBAL=postgres://user:pass@global-host:5432/anglehr_global?sslmode=requi
 ANGLEHR_UK_POSTGRES_DSN=postgres://user:pass@uk-host:5432/anglehr_uk?sslmode=require
 ```
 
-**S3 via MinIO client** — set endpoint to the regional S3 hostname and enable TLS:
+**Cloudflare R2** — set shared API token credentials and per-region bucket names:
 
 ```
-ANGLEHR_UK_MINIO_ENDPOINT=s3.eu-west-2.amazonaws.com
-ANGLEHR_UK_MINIO_USE_SSL=true
-ANGLEHR_UK_MINIO_ACCESS_KEY=<iam-access-key>
-ANGLEHR_UK_MINIO_SECRET_KEY=<iam-secret-key>
-ANGLEHR_UK_MINIO_BUCKET=anglehr-uk
+R2_ACCESS_KEY=<r2-access-key-id>
+R2_SECRET_KEY=<r2-secret-access-key>
+R2_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com
+ANGLEHR_UK_R2_BUCKET=anglehr-uk
 ```
+
+Set `ANGLEHR_<REGION>_R2_ENDPOINT` only when a region needs a different jurisdiction host (e.g. EU).
 
 Prefer [External Secrets Operator](https://external-secrets.io/) or your cloud secret manager rather than committing secrets.
 
@@ -237,7 +232,7 @@ Or manually: `kind delete cluster --name anglehr-dev` then run `dev-up.sh` again
 **Re-run init jobs** (dev):
 
 ```bash
-kubectl delete job migrate minio-setup -n anglehr
+kubectl delete job migrate -n anglehr
 kubectl apply -k deploy/k8s/overlays/dev-jobs -n anglehr
 ```
 

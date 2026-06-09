@@ -13,7 +13,7 @@ require (
 	github.com/minio/minio-go/v7 v7.2.0
 	github.com/oschwald/geoip2-golang v1.13.0
 	github.com/pashagolub/pgxmock/v4 v4.9.0
-	github.com/software78/fluvio v0.1.2
+	github.com/software78/fluvio v0.1.4
 	github.com/swaggo/swag v1.16.4
 )
 

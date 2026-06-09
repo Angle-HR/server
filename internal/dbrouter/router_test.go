@@ -59,13 +59,19 @@ func TestLoadConfigsFromEnv_success(t *testing.T) {
 	}
 }
 
-func TestLoadConfigsFromEnv_defaultEndpoint(t *testing.T) {
+func TestLoadConfigsFromEnv_missingR2Endpoint(t *testing.T) {
+	setFullEnv(t)
+	t.Setenv("R2_ENDPOINT", "")
+
+	_, err := LoadConfigsFromEnv()
+	if err == nil {
+		t.Fatal("expected error for missing R2_ENDPOINT")
+	}
+}
+
+func TestLoadConfigsFromEnv_sharedEndpoint(t *testing.T) {
 	setFullEnv(t)
 	t.Setenv("R2_ENDPOINT", "https://default.r2.cloudflarestorage.com")
-	t.Setenv("ANGLEHR_UK_R2_ENDPOINT", "")
-	t.Setenv("ANGLEHR_US_R2_ENDPOINT", "")
-	t.Setenv("ANGLEHR_AFRICA_R2_ENDPOINT", "")
-	t.Setenv("ANGLEHR_EU_R2_ENDPOINT", "")
 
 	configs, err := LoadConfigsFromEnv()
 	if err != nil {
@@ -79,30 +85,9 @@ func TestLoadConfigsFromEnv_defaultEndpoint(t *testing.T) {
 	}
 }
 
-func TestLoadConfigsFromEnv_regionalEndpointOverride(t *testing.T) {
-	setFullEnv(t)
-	t.Setenv("R2_ENDPOINT", "https://default.r2.cloudflarestorage.com")
-	t.Setenv("ANGLEHR_EU_R2_ENDPOINT", "https://abc123.eu.r2.cloudflarestorage.com")
-
-	configs, err := LoadConfigsFromEnv()
-	if err != nil {
-		t.Fatalf("LoadConfigsFromEnv: %v", err)
-	}
-
-	for _, cfg := range configs {
-		if cfg.Region == region.RegionEU {
-			if cfg.R2Endpoint != "abc123.eu.r2.cloudflarestorage.com" {
-				t.Fatalf("eu endpoint: got %q", cfg.R2Endpoint)
-			}
-			return
-		}
-	}
-	t.Fatal("eu config not found")
-}
-
 func TestLoadConfigsFromEnv_httpsSSL(t *testing.T) {
 	setFullEnv(t)
-	t.Setenv("ANGLEHR_UK_R2_ENDPOINT", "https://abc123.r2.cloudflarestorage.com")
+	t.Setenv("R2_ENDPOINT", "https://abc123.r2.cloudflarestorage.com")
 
 	configs, err := LoadConfigsFromEnv()
 	if err != nil {
@@ -206,6 +191,7 @@ func setFullEnv(t *testing.T) {
 
 	t.Setenv("R2_ACCESS_KEY", "access")
 	t.Setenv("R2_SECRET_KEY", "secret")
+	t.Setenv("R2_ENDPOINT", "https://abc123.r2.cloudflarestorage.com")
 
 	regions := []struct {
 		suffix string
@@ -220,7 +206,6 @@ func setFullEnv(t *testing.T) {
 	for _, r := range regions {
 		prefix := "ANGLEHR_" + r.suffix
 		t.Setenv(prefix+"_POSTGRES_DSN", "postgres://"+r.suffix)
-		t.Setenv(prefix+"_R2_ENDPOINT", "abc123.r2.cloudflarestorage.com")
 		t.Setenv(prefix+"_R2_BUCKET", r.bucket)
 	}
 }

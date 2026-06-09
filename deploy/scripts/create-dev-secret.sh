@@ -39,8 +39,8 @@ for key in "${required[@]}"; do
 	fi
 done
 
-if [[ -z "${R2_ENDPOINT:-}" && -z "${ANGLEHR_UK_R2_ENDPOINT:-}" && -z "${ANGLEHR_US_R2_ENDPOINT:-}" && -z "${ANGLEHR_AFRICA_R2_ENDPOINT:-}" && -z "${ANGLEHR_EU_R2_ENDPOINT:-}" ]]; then
-	echo "R2_ENDPOINT or at least one ANGLEHR_*_R2_ENDPOINT is required in $ENV_FILE" >&2
+if [[ -z "${R2_ENDPOINT:-}" ]]; then
+	echo "R2_ENDPOINT is required in $ENV_FILE" >&2
 	exit 1
 fi
 
@@ -52,10 +52,6 @@ SMTP_FROM="${SMTP_FROM:-}"
 APP_URL="${APP_URL:-http://app.anglehr.local}"
 
 R2_ENDPOINT="${R2_ENDPOINT:-}"
-ANGLEHR_UK_R2_ENDPOINT="${ANGLEHR_UK_R2_ENDPOINT:-}"
-ANGLEHR_US_R2_ENDPOINT="${ANGLEHR_US_R2_ENDPOINT:-}"
-ANGLEHR_AFRICA_R2_ENDPOINT="${ANGLEHR_AFRICA_R2_ENDPOINT:-}"
-ANGLEHR_EU_R2_ENDPOINT="${ANGLEHR_EU_R2_ENDPOINT:-}"
 
 REDIS_DB="${REDIS_DB:-0}"
 REDIS_URL="redis://redis:6379/${REDIS_DB}"
@@ -80,16 +76,12 @@ kubectl create secret generic anglehr-secrets \
 	--from-literal=R2_ENDPOINT="$R2_ENDPOINT" \
 	--from-literal=REDIS_URL="$REDIS_URL" \
 	--from-literal=ANGLEHR_UK_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres-uk:5432/anglehr_uk?sslmode=disable" \
-	--from-literal=ANGLEHR_UK_R2_ENDPOINT="$ANGLEHR_UK_R2_ENDPOINT" \
 	--from-literal=ANGLEHR_UK_R2_BUCKET="$ANGLEHR_UK_R2_BUCKET" \
 	--from-literal=ANGLEHR_US_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_US}@postgres-us:5432/anglehr_us?sslmode=disable" \
-	--from-literal=ANGLEHR_US_R2_ENDPOINT="$ANGLEHR_US_R2_ENDPOINT" \
 	--from-literal=ANGLEHR_US_R2_BUCKET="$ANGLEHR_US_R2_BUCKET" \
 	--from-literal=ANGLEHR_AFRICA_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_AFRICA}@postgres-africa:5432/anglehr_africa?sslmode=disable" \
-	--from-literal=ANGLEHR_AFRICA_R2_ENDPOINT="$ANGLEHR_AFRICA_R2_ENDPOINT" \
 	--from-literal=ANGLEHR_AFRICA_R2_BUCKET="$ANGLEHR_AFRICA_R2_BUCKET" \
 	--from-literal=ANGLEHR_EU_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres-eu:5432/anglehr_eu?sslmode=disable" \
-	--from-literal=ANGLEHR_EU_R2_ENDPOINT="$ANGLEHR_EU_R2_ENDPOINT" \
 	--from-literal=ANGLEHR_EU_R2_BUCKET="$ANGLEHR_EU_R2_BUCKET" \
 	--from-literal=SMTP_HOST="$SMTP_HOST" \
 	--from-literal=SMTP_PORT="$SMTP_PORT" \

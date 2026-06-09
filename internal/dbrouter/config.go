@@ -49,8 +49,7 @@ func envKey(suffix, name string) string {
 }
 
 // LoadConfigsFromEnv reads per-region settings from the environment.
-// R2_ACCESS_KEY and R2_SECRET_KEY are shared across all regions.
-// R2_ENDPOINT is the default S3 API host; ANGLEHR_<REGION>_R2_ENDPOINT overrides it per region.
+// R2_ACCESS_KEY, R2_SECRET_KEY, and R2_ENDPOINT are shared across all regions.
 // All four regions must be fully configured; missing variables return an error.
 func LoadConfigsFromEnv() ([]RegionConfig, error) {
 	accessKey := strings.TrimSpace(os.Getenv("R2_ACCESS_KEY"))
@@ -63,7 +62,14 @@ func LoadConfigsFromEnv() ([]RegionConfig, error) {
 		return nil, fmt.Errorf("dbrouter: R2_SECRET_KEY is required")
 	}
 
-	defaultEndpoint := strings.TrimSpace(os.Getenv("R2_ENDPOINT"))
+	rawEndpoint := strings.TrimSpace(os.Getenv("R2_ENDPOINT"))
+	if rawEndpoint == "" {
+		return nil, fmt.Errorf("dbrouter: R2_ENDPOINT is required")
+	}
+
+	r2Endpoint := stripEndpointScheme(rawEndpoint)
+	defaultUseSSL := strings.HasPrefix(strings.ToLower(rawEndpoint), "https://") ||
+		strings.Contains(strings.ToLower(r2Endpoint), "r2.cloudflarestorage.com")
 
 	configs := make([]RegionConfig, 0, len(allRegions()))
 
@@ -73,6 +79,7 @@ func LoadConfigsFromEnv() ([]RegionConfig, error) {
 			Region:      reg,
 			R2AccessKey: accessKey,
 			R2SecretKey: secretKey,
+			R2Endpoint:  r2Endpoint,
 		}
 
 		postgresDSN := strings.TrimSpace(os.Getenv(envKey(suffix, "POSTGRES_DSN")))
@@ -87,21 +94,10 @@ func LoadConfigsFromEnv() ([]RegionConfig, error) {
 		}
 		cfg.R2Bucket = bucket
 
-		rawEndpoint := strings.TrimSpace(os.Getenv(envKey(suffix, "R2_ENDPOINT")))
-		if rawEndpoint == "" {
-			rawEndpoint = defaultEndpoint
-		}
-		if rawEndpoint == "" {
-			return nil, fmt.Errorf("dbrouter: %s or R2_ENDPOINT is required", envKey(suffix, "R2_ENDPOINT"))
-		}
-
-		cfg.R2Endpoint = stripEndpointScheme(rawEndpoint)
-
 		if sslRaw := strings.TrimSpace(os.Getenv(envKey(suffix, "R2_USE_SSL"))); sslRaw != "" {
 			cfg.R2UseSSL = sslRaw == "1" || strings.EqualFold(sslRaw, "true")
 		} else {
-			cfg.R2UseSSL = strings.HasPrefix(strings.ToLower(rawEndpoint), "https://") ||
-				strings.Contains(strings.ToLower(cfg.R2Endpoint), "r2.cloudflarestorage.com")
+			cfg.R2UseSSL = defaultUseSSL
 		}
 
 		configs = append(configs, cfg)

@@ -165,8 +165,6 @@ R2_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com
 ANGLEHR_UK_R2_BUCKET=anglehr-uk
 ```
 
-Set `ANGLEHR_<REGION>_R2_ENDPOINT` only when a region needs a different jurisdiction host (e.g. EU).
-
 Prefer [External Secrets Operator](https://external-secrets.io/) or your cloud secret manager rather than committing secrets.
 
 ### 3. Configure Ingress and ConfigMap

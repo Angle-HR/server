@@ -14,7 +14,7 @@ require (
 	github.com/oschwald/geoip2-golang v1.13.0
 	github.com/pashagolub/pgxmock/v4 v4.9.0
 	github.com/redis/go-redis/v9 v9.20.0
-	github.com/software78/fluvio v0.1.4
+	github.com/software78/fluvio v0.1.5
 	github.com/swaggo/swag v1.16.4
 )
 
@@ -69,5 +69,3 @@ require (
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 )
-
-replace github.com/software78/fluvio => ../fluvio

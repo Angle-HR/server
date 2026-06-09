@@ -216,12 +216,11 @@ services:
     restart: unless-stopped
 
   fluvio-ui:
-    image: ghcr.io/software78/fluvio_ui:latest
-    build:
-      context: https://github.com/software78/fluvio_ui.git#main
-      args:
-        # Baked into the Vite bundle at build time (not read at container runtime).
-        VITE_API_BASE_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+    image: ghcr.io/software78/fluvio_ui:1.0.1
+    environment:
+      VITE_API_BASE_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      VITE_API_BASIC_AUTH_USER: ${VITE_API_BASIC_AUTH_USER:-}
+      VITE_API_BASIC_AUTH_PASSWORD: ${VITE_API_BASIC_AUTH_PASSWORD:-}
     depends_on:
       server:
         condition: service_healthy

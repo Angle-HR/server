@@ -14,6 +14,7 @@ import (
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/mailer"
+	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/query"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
@@ -212,7 +213,7 @@ func (h *WaitlistHandler) signup(
 			Recipient: email,
 			FullName:  fullName,
 			Token:     waitlistToken.String(),
-		})
+		}, queue.DefaultEnqueueOptions()...)
 		if err != nil {
 			return uuid.Nil, fmt.Errorf("enqueue waitlist confirmation email: %w", err)
 		}

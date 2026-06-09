@@ -17,6 +17,7 @@ import (
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/mailer"
+	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/query"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
@@ -406,7 +407,7 @@ func (h *OnboardingHandler) persistOnboarding(
 			Type:      "more_info_ack",
 			Recipient: email,
 			FullName:  fullName,
-		})
+		}, queue.DefaultEnqueueOptions()...)
 		if err != nil {
 			return fmt.Errorf("enqueue onboarding acknowledgement email: %w", err)
 		}

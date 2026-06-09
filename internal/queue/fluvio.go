@@ -10,6 +10,15 @@ import (
 	"github.com/software78/fluvio/postgres"
 )
 
+const DefaultMaxAttempts int16 = 25
+
+// DefaultEnqueueOptions returns enqueue options applied to all jobs.
+func DefaultEnqueueOptions() []fluvio.EnqueueOption {
+	return []fluvio.EnqueueOption{
+		fluvio.WithMaxAttempts(DefaultMaxAttempts),
+	}
+}
+
 func postgresConfig() postgres.Config {
 	leaderID := os.Getenv("HOSTNAME")
 	if leaderID == "" {

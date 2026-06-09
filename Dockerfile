@@ -1,8 +1,11 @@
+# syntax=docker/dockerfile:1
+
 FROM golang:1.25.10-alpine AS builder
 
 WORKDIR /src
 
 COPY go.mod go.sum ./
+COPY --from=fluvio . /fluvio
 RUN go mod download
 
 COPY . .

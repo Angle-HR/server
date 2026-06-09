@@ -38,8 +38,8 @@ setup_local_cluster() {
 
 build_and_load_images() {
 	echo "Building application images..."
-	docker build -f Dockerfile --target server -t "ghcr.io/angle-hr/server:${IMAGE_TAG}" .
-	docker build -f Dockerfile --target worker -t "ghcr.io/angle-hr/server-worker:${IMAGE_TAG}" .
+	docker build -f Dockerfile --build-context fluvio=../fluvio --target server -t "ghcr.io/angle-hr/server:${IMAGE_TAG}" .
+	docker build -f Dockerfile --build-context fluvio=../fluvio --target worker -t "ghcr.io/angle-hr/server-worker:${IMAGE_TAG}" .
 	docker build -f Dockerfile.migrate -t "ghcr.io/angle-hr/server-migrate:${IMAGE_TAG}" .
 	docker build -f deploy/docker/Dockerfile.fluvio-ui \
 		--build-arg VITE_API_BASE_URL="${FLUVIO_API_BASE_URL:-http://api.anglehr.local}" \

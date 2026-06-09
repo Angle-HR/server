@@ -4,7 +4,7 @@ Kustomize manifests for running Angle HR on Kubernetes. Two overlays:
 
 | Overlay | Purpose | Data layer |
 |---------|---------|------------|
-| [`overlays/dev`](overlays/dev) | Local development (kind/minikube) | In-cluster Postgres (5) + Cloudflare R2, mirroring [`docker-compose.yml`](../../docker-compose.yml) |
+| [`overlays/dev`](overlays/dev) | Local development (kind/minikube) | In-cluster Postgres (5) + Redis + Cloudflare R2, mirroring [`docker-compose.yml`](../../docker-compose.yml) |
 | [`overlays/prod`](overlays/prod) | Production | Managed PostgreSQL + Cloudflare R2 |
 
 ## Layout
@@ -12,7 +12,7 @@ Kustomize manifests for running Angle HR on Kubernetes. Two overlays:
 ```
 deploy/k8s/
   base/                 # server, worker, fluvio-ui
-  components/           # dev-only: postgres, init jobs, dashboard
+  components/           # dev-only: postgres, redis, init jobs, dashboard
   overlays/dev/         # app tier + ingress for local hostnames
   overlays/dev-jobs/    # migrate with dev image tags
   overlays/prod/        # app tier + ingress TLS + HPA
@@ -103,6 +103,7 @@ Docker Compose hostnames map to Kubernetes Services (underscores become hyphens)
 | `postgres_africa` | `postgres-africa:5432` |
 | `postgres_eu` | `postgres-eu:5432` |
 | `postgres_global` | `postgres-global:5432` |
+| `redis` | `redis:6379` |
 `create-dev-secret.sh` builds DSNs using these internal hostnames automatically. R2 credentials are passed through from `.env` (see [`.env.example`](../../.env.example)).
 
 ## Container images
@@ -147,6 +148,12 @@ Use [`overlays/prod/secrets.example.yaml`](overlays/prod/secrets.example.yaml) a
 ```
 DB_URL_GLOBAL=postgres://user:pass@global-host:5432/anglehr_global?sslmode=require
 ANGLEHR_UK_POSTGRES_DSN=postgres://user:pass@uk-host:5432/anglehr_uk?sslmode=require
+```
+
+**Redis** — managed instance URL (required by the server):
+
+```
+REDIS_URL=redis://:password@redis-host:6379/0
 ```
 
 **Cloudflare R2** — set shared API token credentials and per-region bucket names:

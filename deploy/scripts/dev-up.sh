@@ -68,6 +68,13 @@ wait_for_statefulsets() {
 		--timeout=600s
 }
 
+wait_for_redis() {
+	echo "Waiting for Redis..."
+	kubectl wait --namespace="$NAMESPACE" \
+		--for=condition=available deployment/redis \
+		--timeout=120s
+}
+
 run_init_jobs() {
 	echo "Running database migrations..."
 	kubectl delete job migrate --namespace="$NAMESPACE" --ignore-not-found
@@ -80,9 +87,11 @@ build_and_load_images
 
 SKIP_K8S_CONTEXT_SELECT=1 bash "${ROOT_DIR}/deploy/scripts/create-dev-secret.sh"
 
-echo "Applying data layer (Postgres)..."
+echo "Applying data layer (Postgres, Redis)..."
 kubectl apply -k "${ROOT_DIR}/deploy/k8s/components/postgres" --namespace="$NAMESPACE"
+kubectl apply -k "${ROOT_DIR}/deploy/k8s/components/redis" --namespace="$NAMESPACE"
 wait_for_statefulsets
+wait_for_redis
 
 run_init_jobs
 

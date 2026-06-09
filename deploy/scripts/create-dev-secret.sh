@@ -57,6 +57,9 @@ ANGLEHR_US_R2_ENDPOINT="${ANGLEHR_US_R2_ENDPOINT:-}"
 ANGLEHR_AFRICA_R2_ENDPOINT="${ANGLEHR_AFRICA_R2_ENDPOINT:-}"
 ANGLEHR_EU_R2_ENDPOINT="${ANGLEHR_EU_R2_ENDPOINT:-}"
 
+REDIS_DB="${REDIS_DB:-0}"
+REDIS_URL="redis://redis:6379/${REDIS_DB}"
+
 kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl create secret generic anglehr-secrets \
@@ -75,6 +78,7 @@ kubectl create secret generic anglehr-secrets \
 	--from-literal=R2_ACCESS_KEY="$R2_ACCESS_KEY" \
 	--from-literal=R2_SECRET_KEY="$R2_SECRET_KEY" \
 	--from-literal=R2_ENDPOINT="$R2_ENDPOINT" \
+	--from-literal=REDIS_URL="$REDIS_URL" \
 	--from-literal=ANGLEHR_UK_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres-uk:5432/anglehr_uk?sslmode=disable" \
 	--from-literal=ANGLEHR_UK_R2_ENDPOINT="$ANGLEHR_UK_R2_ENDPOINT" \
 	--from-literal=ANGLEHR_UK_R2_BUCKET="$ANGLEHR_UK_R2_BUCKET" \

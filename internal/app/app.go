@@ -21,6 +21,7 @@ import (
 	"github.com/Angle-HR/server/pkg/config"
 	"github.com/Angle-HR/server/pkg/db"
 	"github.com/Angle-HR/server/pkg/logger"
+	redisclient "github.com/Angle-HR/server/pkg/redis"
 	"github.com/software78/fluvio/fluviui"
 )
 
@@ -35,6 +36,12 @@ func Run() error {
 
 	log := logger.New(cfg.AppEnv)
 	ctx := context.Background()
+
+	redisClient, err := redisclient.NewClient(ctx, cfg.RedisURL)
+	if err != nil {
+		return fmt.Errorf("connect redis: %w", err)
+	}
+	defer redisClient.Close()
 
 	regionConfigs, err := dbrouter.LoadConfigsFromEnv()
 	if err != nil {

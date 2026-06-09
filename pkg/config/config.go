@@ -14,11 +14,12 @@ import (
 
 // Config holds runtime configuration values.
 type Config struct {
-	ServerPort      string
-	DBUrlGlobal     string
-	AppEnv          string
-	PublicAPIURL    string
-	FluvioUIOrigin  string
+	ServerPort     string
+	DBUrlGlobal    string
+	RedisURL       string
+	AppEnv         string
+	PublicAPIURL   string
+	FluvioUIOrigin string
 }
 
 // Load reads configuration from the environment.
@@ -30,6 +31,7 @@ func Load() (Config, error) {
 	cfg := Config{
 		ServerPort:     os.Getenv("SERVER_PORT"),
 		DBUrlGlobal:    os.Getenv("DB_URL_GLOBAL"),
+		RedisURL:       os.Getenv("REDIS_URL"),
 		AppEnv:         os.Getenv("APP_ENV"),
 		PublicAPIURL:   os.Getenv("PUBLIC_API_URL"),
 		FluvioUIOrigin: os.Getenv("FLUVIO_UI_ORIGIN"),
@@ -45,6 +47,10 @@ func Load() (Config, error) {
 
 	if cfg.DBUrlGlobal == "" {
 		return Config{}, errors.New("DB_URL_GLOBAL is required")
+	}
+
+	if cfg.RedisURL == "" {
+		return Config{}, errors.New("REDIS_URL is required")
 	}
 
 	port, err := strconv.Atoi(cfg.ServerPort)

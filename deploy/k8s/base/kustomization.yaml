@@ -8,7 +8,8 @@ resources:
   - configmap.yaml
   - server/deployment.yaml
   - server/service.yaml
-  - worker/deployment.yaml
+  - email-worker/deployment.yaml
+  - upload-worker/deployment.yaml
   - fluvio-ui/deployment.yaml
   - fluvio-ui/service.yaml
 

@@ -11,7 +11,7 @@ Kustomize manifests for running Angle HR on Kubernetes. Two overlays:
 
 ```
 deploy/k8s/
-  base/                 # server, worker, fluvio-ui
+  base/                 # server, email-worker, upload-worker, fluvio-ui
   components/           # dev-only: postgres, redis, init jobs, dashboard
   overlays/dev/         # app tier + ingress for local hostnames
   overlays/dev-jobs/    # migrate with dev image tags
@@ -45,11 +45,11 @@ The script will:
 
 1. Create a kind cluster named `anglehr-dev` with **ports 80/443 mapped to localhost** ([`k8s/kind/cluster.yaml`](kind/cluster.yaml)), then install ingress-nginx
 2. Install the [Kubernetes Dashboard](https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/) at `http://dashboard.anglehr.local`
-3. Build and load `server`, `worker`, and `migrate` images tagged `dev`
+3. Build and load `server`, `email-worker`, `upload-worker`, and `migrate` images tagged `dev`
 3. Create the `anglehr-secrets` Secret from `.env`
 4. Deploy Postgres StatefulSets
 5. Run the `migrate` Job
-6. Deploy server, worker, fluvio-ui, and Ingress
+6. Deploy server, email-worker, upload-worker, fluvio-ui, and Ingress
 
 Add to `/etc/hosts`:
 
@@ -113,7 +113,8 @@ Built from the repo root:
 | Image | Dockerfile | Target |
 |-------|------------|--------|
 | `ghcr.io/angle-hr/server` | `Dockerfile` | `server` |
-| `ghcr.io/angle-hr/server-worker` | `Dockerfile` | `worker` |
+| `ghcr.io/angle-hr/server-email-worker` | `Dockerfile` | `email-worker` |
+| `ghcr.io/angle-hr/server-upload-worker` | `Dockerfile` | `upload-worker` |
 | `ghcr.io/angle-hr/server-migrate` | `Dockerfile.migrate` | — |
 
 CI pushes images on push to `main` and version tags (see [`.github/workflows/container-images.yml`](../../.github/workflows/container-images.yml)).
@@ -122,13 +123,14 @@ Build locally:
 
 ```bash
 docker build -f Dockerfile --target server -t ghcr.io/angle-hr/server:dev .
-docker build -f Dockerfile --target worker -t ghcr.io/angle-hr/server-worker:dev .
+docker build -f Dockerfile --target email-worker -t ghcr.io/angle-hr/server-email-worker:dev .
+docker build -f Dockerfile --target upload-worker -t ghcr.io/angle-hr/server-upload-worker:dev .
 docker build -f Dockerfile.migrate -t ghcr.io/angle-hr/server-migrate:dev .
 ```
 
 ## Production deployment
 
-The prod overlay deploys **only** the application tier (server, worker, fluvio-ui). Postgres is **not** included — use managed services. Object storage is Cloudflare R2 (external).
+The prod overlay deploys **only** the application tier (server, email-worker, upload-worker, fluvio-ui). Postgres is **not** included — use managed services. Object storage is Cloudflare R2 (external).
 
 ### 1. Provision infrastructure
 

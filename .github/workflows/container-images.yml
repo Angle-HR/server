@@ -48,11 +48,22 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Docker metadata (worker)
-        id: meta_worker
+      - name: Docker metadata (email-worker)
+        id: meta_email_worker
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_PREFIX }}-worker
+          images: ${{ env.IMAGE_PREFIX }}-email-worker
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Docker metadata (upload-worker)
+        id: meta_upload_worker
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-upload-worker
           tags: |
             type=ref,event=branch
             type=ref,event=tag
@@ -83,16 +94,29 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build and push worker
+      - name: Build and push email-worker
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
-          target: worker
+          target: email-worker
           platforms: ${{ env.PLATFORMS }}
           push: true
-          tags: ${{ steps.meta_worker.outputs.tags }}
-          labels: ${{ steps.meta_worker.outputs.labels }}
+          tags: ${{ steps.meta_email_worker.outputs.tags }}
+          labels: ${{ steps.meta_email_worker.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push upload-worker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: upload-worker
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          tags: ${{ steps.meta_upload_worker.outputs.tags }}
+          labels: ${{ steps.meta_upload_worker.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

@@ -189,11 +189,11 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  worker:
+  email-worker:
     build:
       context: .
       dockerfile: Dockerfile
-      target: worker
+      target: email-worker
     environment:
       APP_ENV: ${APP_ENV:-development}
       REDIS_URL: redis://redis:6379/${REDIS_DB:-0}
@@ -208,6 +208,23 @@ services:
       postgres_global:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - anglehr_net
+    restart: unless-stopped
+
+  upload-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: upload-worker
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
+    depends_on:
+      postgres_global:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully

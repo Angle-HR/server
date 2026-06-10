@@ -19,37 +19,40 @@ func DefaultEnqueueOptions() []fluvio.EnqueueOption {
 	}
 }
 
-func postgresConfig() postgres.Config {
-	leaderID := os.Getenv("HOSTNAME")
-	if leaderID == "" {
-		leaderID = "local"
+func hostname() string {
+	if id := os.Getenv("HOSTNAME"); id != "" {
+		return id
 	}
+	return "local"
+}
+
+func postgresConfig(leaderPrefix string) postgres.Config {
 	return postgres.Config{
 		UseLeaseTable: true,
-		LeaderID:      "email-worker-" + leaderID,
+		LeaderID:      leaderPrefix + "-" + hostname(),
 		PollOnly:      os.Getenv("FLUVIO_POLL_ONLY") == "true",
 	}
 }
 
-func driver(pool *pgxpool.Pool) *postgres.Driver {
-	return postgres.New(pool, postgresConfig())
+func driver(pool *pgxpool.Pool, leaderPrefix string) *postgres.Driver {
+	return postgres.New(pool, postgresConfig(leaderPrefix))
 }
 
 // Migrate applies Fluvio schema migrations on the global database.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
-	return driver(pool).Migrate(ctx)
+	return driver(pool, "migrate").Migrate(ctx)
 }
 
 // NewInsertClient returns an insert-only Fluvio client (no queue processing).
 func NewInsertClient(pool *pgxpool.Pool) (*fluvio.Client, error) {
-	return fluvio.NewClient(driver(pool), &fluvio.Config{
+	return fluvio.NewClient(driver(pool, "server"), &fluvio.Config{
 		Workers: fluvio.NewWorkers(),
 	})
 }
 
 // NewWorkerClient returns a Fluvio client configured to process jobs.
-func NewWorkerClient(pool *pgxpool.Pool, workers *fluvio.Workers, logger *slog.Logger) (*fluvio.Client, error) {
-	return fluvio.NewClient(driver(pool), &fluvio.Config{
+func NewWorkerClient(pool *pgxpool.Pool, workerName string, workers *fluvio.Workers, logger *slog.Logger) (*fluvio.Client, error) {
+	return fluvio.NewClient(driver(pool, workerName), &fluvio.Config{
 		Queues: map[string]fluvio.QueueConfig{
 			fluvio.QueueDefault: {MaxWorkers: 10},
 		},

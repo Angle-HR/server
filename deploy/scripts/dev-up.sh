@@ -39,7 +39,8 @@ setup_local_cluster() {
 build_and_load_images() {
 	echo "Building application images..."
 	docker build -f Dockerfile --target server -t "ghcr.io/angle-hr/server:${IMAGE_TAG}" .
-	docker build -f Dockerfile --target worker -t "ghcr.io/angle-hr/server-worker:${IMAGE_TAG}" .
+	docker build -f Dockerfile --target email-worker -t "ghcr.io/angle-hr/server-email-worker:${IMAGE_TAG}" .
+	docker build -f Dockerfile --target upload-worker -t "ghcr.io/angle-hr/server-upload-worker:${IMAGE_TAG}" .
 	docker build -f Dockerfile.migrate -t "ghcr.io/angle-hr/server-migrate:${IMAGE_TAG}" .
 	docker build -f deploy/docker/Dockerfile.fluvio-ui \
 		--build-arg VITE_API_BASE_URL="${FLUVIO_API_BASE_URL:-http://api.anglehr.local}" \
@@ -52,7 +53,8 @@ build_and_load_images() {
 		cluster_name="${ctx#kind-}"
 		echo "Loading images into kind cluster $cluster_name..."
 		kind load docker-image "ghcr.io/angle-hr/server:${IMAGE_TAG}" --name "$cluster_name"
-		kind load docker-image "ghcr.io/angle-hr/server-worker:${IMAGE_TAG}" --name "$cluster_name"
+		kind load docker-image "ghcr.io/angle-hr/server-email-worker:${IMAGE_TAG}" --name "$cluster_name"
+		kind load docker-image "ghcr.io/angle-hr/server-upload-worker:${IMAGE_TAG}" --name "$cluster_name"
 		kind load docker-image "ghcr.io/angle-hr/server-migrate:${IMAGE_TAG}" --name "$cluster_name"
 		kind load docker-image "ghcr.io/angle-hr/fluvio-ui:${IMAGE_TAG}" --name "$cluster_name"
 	else

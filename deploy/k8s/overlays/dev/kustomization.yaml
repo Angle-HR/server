@@ -7,13 +7,16 @@ resources:
 
 patches:
   - path: configmap.yaml
-  - path: worker-patch.yaml
+  - path: email-worker-patch.yaml
+  - path: upload-worker-patch.yaml
   - path: fluvio-ui-patch.yaml
 
 images:
   - name: ghcr.io/angle-hr/server
     newTag: dev
-  - name: ghcr.io/angle-hr/server-worker
+  - name: ghcr.io/angle-hr/server-email-worker
+    newTag: dev
+  - name: ghcr.io/angle-hr/server-upload-worker
     newTag: dev
   - name: ghcr.io/software78/fluvio_ui
     newName: ghcr.io/angle-hr/fluvio-ui

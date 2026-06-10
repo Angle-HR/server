@@ -1,26 +1,26 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: worker
+  name: upload-worker
   labels:
-    app.kubernetes.io/name: worker
-    app.kubernetes.io/component: worker
+    app.kubernetes.io/name: upload-worker
+    app.kubernetes.io/component: upload-worker
     app.kubernetes.io/part-of: anglehr
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: worker
+      app.kubernetes.io/name: upload-worker
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: worker
-        app.kubernetes.io/component: worker
+        app.kubernetes.io/name: upload-worker
+        app.kubernetes.io/component: upload-worker
         app.kubernetes.io/part-of: anglehr
     spec:
       containers:
-        - name: worker
-          image: ghcr.io/angle-hr/server-worker:latest
+        - name: upload-worker
+          image: ghcr.io/angle-hr/server-upload-worker:latest
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:

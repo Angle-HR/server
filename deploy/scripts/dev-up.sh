@@ -43,6 +43,7 @@ build_and_load_images() {
 	docker build -f Dockerfile --target upload-worker -t "ghcr.io/angle-hr/server-upload-worker:${IMAGE_TAG}" .
 	docker build -f Dockerfile.migrate -t "ghcr.io/angle-hr/server-migrate:${IMAGE_TAG}" .
 	docker build -f deploy/docker/Dockerfile.fluvio-ui \
+		--build-arg FLUVIO_UI_GIT_REF="${FLUVIO_UI_GIT_REF:-v1.0.1}" \
 		--build-arg VITE_API_BASE_URL="${FLUVIO_API_BASE_URL:-http://api.anglehr.local}" \
 		-t "ghcr.io/angle-hr/fluvio-ui:${IMAGE_TAG}" .
 

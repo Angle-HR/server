@@ -50,6 +50,7 @@ SMTP_USER="${SMTP_USER:-}"
 SMTP_PASSWORD="${SMTP_PASSWORD:-}"
 SMTP_FROM="${SMTP_FROM:-}"
 APP_URL="${APP_URL:-http://app.anglehr.local}"
+JWT_SECRET="${JWT_SECRET:-dev-insecure-jwt-secret-change-me}"
 
 R2_ENDPOINT="${R2_ENDPOINT:-}"
 
@@ -75,6 +76,7 @@ kubectl create secret generic anglehr-secrets \
 	--from-literal=R2_SECRET_KEY="$R2_SECRET_KEY" \
 	--from-literal=R2_ENDPOINT="$R2_ENDPOINT" \
 	--from-literal=REDIS_URL="$REDIS_URL" \
+	--from-literal=JWT_SECRET="$JWT_SECRET" \
 	--from-literal=ANGLEHR_UK_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres-uk:5432/anglehr_uk?sslmode=disable" \
 	--from-literal=ANGLEHR_UK_R2_BUCKET="$ANGLEHR_UK_R2_BUCKET" \
 	--from-literal=ANGLEHR_US_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_US}@postgres-us:5432/anglehr_us?sslmode=disable" \

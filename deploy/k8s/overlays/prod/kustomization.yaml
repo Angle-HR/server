@@ -18,3 +18,5 @@ images:
     newTag: latest
   - name: ghcr.io/angle-hr/server-upload-worker
     newTag: latest
+  - name: ghcr.io/software78/fluvio_ui
+    newTag: "1.0.1"

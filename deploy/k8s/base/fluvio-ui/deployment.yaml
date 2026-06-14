@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: fluvio-ui
-          image: ghcr.io/software78/fluvio_ui:latest
+          image: ghcr.io/software78/fluvio_ui:1.0.1
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

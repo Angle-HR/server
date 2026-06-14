@@ -1,6 +1,6 @@
 # Default repo for the Fluvio dashboard (Vite build arg for API base URL).
 ARG FLUVIO_UI_GIT_URL=https://github.com/software78/fluvio_ui.git
-ARG FLUVIO_UI_GIT_REF=main
+ARG FLUVIO_UI_GIT_REF=v1.0.1
 
 FROM node:22-alpine AS builder
 

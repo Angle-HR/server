@@ -158,6 +158,16 @@ ANGLEHR_UK_POSTGRES_DSN=postgres://user:pass@uk-host:5432/anglehr_uk?sslmode=req
 REDIS_URL=redis://:password@redis-host:6379/0
 ```
 
+**JWT auth** — signing secret in the Secret; token TTLs and default signup region in the ConfigMap:
+
+```
+JWT_SECRET=<long-random-secret>
+```
+
+ConfigMap keys (see [`overlays/prod/configmap.yaml`](overlays/prod/configmap.yaml)): `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`, `AUTH_DEFAULT_REGION` (default `uk`).
+
+Optional: set `FLUVIO_POLL_ONLY=true` in the ConfigMap when Postgres is behind PgBouncer transaction pooling (disables LISTEN/NOTIFY for job workers).
+
 **Cloudflare R2** — set shared API token credentials and per-region bucket names:
 
 ```
@@ -174,7 +184,7 @@ Prefer [External Secrets Operator](https://external-secrets.io/) or your cloud s
 Edit before applying:
 
 - [`overlays/prod/ingress.yaml`](overlays/prod/ingress.yaml) — replace `api.example.com` and `fluvio.example.com`
-- [`overlays/prod/configmap.yaml`](overlays/prod/configmap.yaml) — set `PUBLIC_API_URL` and `FLUVIO_UI_ORIGIN` to match
+- [`overlays/prod/configmap.yaml`](overlays/prod/configmap.yaml) — set `PUBLIC_API_URL`, `FLUVIO_UI_ORIGIN`, and auth settings (`JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`, `AUTH_DEFAULT_REGION`) to match
 
 Update the cert-manager `cluster-issuer` annotation if your issuer name differs.
 
@@ -193,9 +203,9 @@ Production SQL migrations run via the existing GitHub Actions workflow ([`.githu
 
 ## Fluvio UI note
 
-The stock `ghcr.io/software78/fluvio_ui:latest` image bakes **`http://localhost:8080/fluvio/api`** into the JS bundle, which breaks on Kubernetes (JSON parse errors, 502 on events).
+The stock `ghcr.io/software78/fluvio_ui` image bakes **`http://localhost:8080/fluvio/api`** into the JS bundle, which breaks on Kubernetes (JSON parse errors, 502 on events). Pin to **`1.0.1`** (see `docker-compose.yml`) or newer.
 
-`dev-up.sh` builds [`deploy/docker/Dockerfile.fluvio-ui`](../docker/Dockerfile.fluvio-ui) with **`VITE_API_BASE_URL=http://api.anglehr.local`**. The UI at `fluvio.anglehr.local` calls the API on `api.anglehr.local/fluvio/api/*` (CORS allowed via `FLUVIO_UI_ORIGIN`). Do not call `/fluvio/api/*` on the UI host — that path serves static HTML.
+`dev-up.sh` builds [`deploy/docker/Dockerfile.fluvio-ui`](../docker/Dockerfile.fluvio-ui) from **`v1.0.1`** with **`VITE_API_BASE_URL=http://api.anglehr.local`**. The UI at `fluvio.anglehr.local` calls the API on `api.anglehr.local/fluvio/api/*` (CORS allowed via `FLUVIO_UI_ORIGIN`). Do not call `/fluvio/api/*` on the UI host — that path serves static HTML.
 
 Verify after deploy:
 

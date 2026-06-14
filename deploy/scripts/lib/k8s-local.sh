@@ -227,9 +227,10 @@ k8s_patch_dashboard_dev_login() {
 	if ! kubectl get deployment kubernetes-dashboard -n kubernetes-dashboard >/dev/null 2>&1; then
 		return
 	fi
-	echo "Configuring dashboard for local dev (cluster-admin via token login)..."
+	echo "Configuring dashboard for local dev (HTTP ingress + token login)..."
 	kubectl patch deployment kubernetes-dashboard -n kubernetes-dashboard --type=json -p='[
-		{"op": "replace", "path": "/spec/template/spec/serviceAccountName", "value": "admin-user"}
+		{"op": "replace", "path": "/spec/template/spec/serviceAccountName", "value": "admin-user"},
+		{"op": "replace", "path": "/spec/template/spec/containers/0/args", "value": ["--auto-generate-certificates", "--namespace=kubernetes-dashboard", "--enable-insecure-login"]}
 	]' >/dev/null 2>&1 || true
 	kubectl rollout status deployment/kubernetes-dashboard -n kubernetes-dashboard --timeout=120s >/dev/null 2>&1 || true
 }

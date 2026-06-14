@@ -102,7 +102,7 @@
         "internal_handler.AuthSignupData": {
             "properties": {
                 "code_expires_in_seconds": {
-                    "example": 60,
+                    "example": 300,
                     "type": "integer"
                 },
                 "email": {
@@ -724,7 +724,7 @@
         "internal_handler.ProductOnboardingCompleteData": {
             "properties": {
                 "redirect_url": {
-                    "example": "https://app.openhr.example/dashboard",
+                    "example": "/dashboard",
                     "type": "string"
                 },
                 "status": {
@@ -1031,7 +1031,7 @@
     "host": "localhost:8080",
     "info": {
         "contact": {},
-        "description": "Waitlist and product onboarding API for Open HR.",
+        "description": "Waitlist and product onboarding API for Open HR.\nInteractive docs (Scalar) are served at `/` in non-production environments.\nProduct flow: signup → verify email (6-digit OTP, 5 min expiry) → profile → address → [business] → complete.\nOnboarding step endpoints require `Authorization: Bearer \u003caccess_token\u003e` after email verification.",
         "title": "Angle HR API",
         "version": "1.0"
     },
@@ -1041,7 +1041,7 @@
                 "consumes": [
                     "application/json"
                 ],
-                "description": "Authenticates a verified user and returns JWT tokens. Not yet implemented.",
+                "description": "Authenticates a verified user and returns JWT tokens. When credentials are valid but email is unverified, returns 403 with a new verification session in error.details.",
                 "parameters": [
                     {
                         "description": "Login payload",
@@ -1075,8 +1075,20 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1093,7 +1105,7 @@
                 "consumes": [
                     "application/json"
                 ],
-                "description": "Exchanges a valid refresh token for a new access token. Not yet implemented.",
+                "description": "Exchanges a valid refresh token for a new access token.",
                 "parameters": [
                     {
                         "description": "Refresh payload",
@@ -1127,8 +1139,8 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1145,7 +1157,7 @@
                 "consumes": [
                     "application/json"
                 ],
-                "description": "Sends a new OTP for an existing unverified signup. Rate-limited. Not yet implemented.",
+                "description": "Sends a new OTP for an existing unverified signup. Rate-limited to once every 30 seconds per session.",
                 "parameters": [
                     {
                         "description": "Resend payload",
@@ -1179,8 +1191,8 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1197,7 +1209,7 @@
                 "consumes": [
                     "application/json"
                 ],
-                "description": "Changes the email on an unverified signup and invalidates the prior OTP. Not yet implemented.",
+                "description": "Changes the email on an unverified signup and invalidates the prior OTP.",
                 "parameters": [
                     {
                         "description": "Email update payload",
@@ -1231,8 +1243,8 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1247,7 +1259,7 @@
                 "consumes": [
                     "application/json"
                 ],
-                "description": "Creates an unverified user and sends a 6-digit verification code by email. Not yet implemented.",
+                "description": "Creates an unverified user in AUTH_DEFAULT_REGION (default uk) and enqueues a 6-digit verification email. OTP expires in 300 seconds.",
                 "parameters": [
                     {
                         "description": "Signup payload",
@@ -1281,8 +1293,8 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1299,7 +1311,7 @@
                 "consumes": [
                     "application/json"
                 ],
-                "description": "Validates the 6-digit OTP and returns JWT tokens with onboarding status. Not yet implemented.",
+                "description": "Validates the 6-digit OTP and returns JWT tokens with onboarding status.",
                 "parameters": [
                     {
                         "description": "Verification payload",
@@ -1333,8 +1345,8 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1455,7 +1467,7 @@
                 "consumes": [
                     "application/json"
                 ],
-                "description": "Saves workspace address from search or manual entry. Not yet implemented.",
+                "description": "Saves workspace address from search or manual entry.",
                 "parameters": [
                     {
                         "description": "Address payload",
@@ -1489,8 +1501,8 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1543,7 +1555,7 @@
                 "consumes": [
                     "application/json"
                 ],
-                "description": "Saves business type, industry, and employee count. Business accounts only. Not yet implemented.",
+                "description": "Saves business type, industry, and employee count. Business accounts only.",
                 "parameters": [
                     {
                         "description": "Business payload",
@@ -1577,8 +1589,8 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1597,7 +1609,7 @@
         },
         "/onboarding/business-types": {
             "get": {
-                "description": "Returns business type options for the compliance step. Not yet implemented.",
+                "description": "Returns business type options for the compliance step.",
                 "produces": [
                     "application/json"
                 ],
@@ -1608,8 +1620,8 @@
                             "$ref": "#/definitions/internal_handler.BusinessTypeListEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1623,7 +1635,7 @@
         },
         "/onboarding/company-roles": {
             "get": {
-                "description": "Returns company role options for business profile step. Not yet implemented.",
+                "description": "Returns company role options for business profile step.",
                 "produces": [
                     "application/json"
                 ],
@@ -1634,8 +1646,8 @@
                             "$ref": "#/definitions/internal_handler.CompanyRoleListEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1649,7 +1661,7 @@
         },
         "/onboarding/complete": {
             "post": {
-                "description": "Finalizes onboarding after all mandatory steps are done. Not yet implemented.",
+                "description": "Finalizes onboarding after all mandatory steps are done. Sets onboarding_completed_at and enqueues an onboarding_complete welcome email.",
                 "produces": [
                     "application/json"
                 ],
@@ -1678,8 +1690,8 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1698,7 +1710,7 @@
         },
         "/onboarding/industries": {
             "get": {
-                "description": "Returns product onboarding industry options. Not yet implemented.",
+                "description": "Returns product onboarding industry options.",
                 "produces": [
                     "application/json"
                 ],
@@ -1709,8 +1721,8 @@
                             "$ref": "#/definitions/internal_handler.OnboardingIndustryListEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1727,7 +1739,7 @@
                 "consumes": [
                     "application/json"
                 ],
-                "description": "Saves account type and profile fields for individual or business accounts. Not yet implemented.",
+                "description": "Saves account type and profile fields for individual or business accounts.",
                 "parameters": [
                     {
                         "description": "Profile payload",
@@ -1761,8 +1773,8 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1781,7 +1793,7 @@
         },
         "/onboarding/status": {
             "get": {
-                "description": "Returns current step, completed steps, and saved draft fields. Not yet implemented.",
+                "description": "Returns current step, completed steps, and saved draft fields.",
                 "produces": [
                     "application/json"
                 ],
@@ -1798,8 +1810,8 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1990,12 +2002,12 @@
     "swagger": "2.0",
     "tags": [
         {
-            "description": "Reference data for waitlist forms (countries, industries, hiring tools, roles, and team sizes).",
+            "description": "Reference data for waitlist forms: countries, industries, hiring tools, roles, and team sizes.",
             "name": "waitlist/reference",
             "x-displayName": "Reference"
         },
         {
-            "description": "Initial waitlist registration.",
+            "description": "Initial waitlist registration. Creates a regional waitlist entry and global users_registry row.",
             "name": "waitlist/signup",
             "x-displayName": "Signup"
         },
@@ -2005,32 +2017,32 @@
             "x-displayName": "Waitlist onboarding"
         },
         {
-            "description": "Product signup, email verification, login, and token refresh.",
+            "description": "Product signup, 6-digit email verification (OTP expires in 300s, resend cooldown 30s), login, and token refresh.",
             "name": "auth",
             "x-displayName": "Auth"
         },
         {
-            "description": "Product onboarding catalogs (business types, industries, company roles).",
+            "description": "Product onboarding catalog endpoints (business types, industries, company roles). Separate from waitlist reference data.",
             "name": "onboarding/reference",
             "x-displayName": "Reference"
         },
         {
-            "description": "Account type and profile fields.",
+            "description": "Account type (`individual` or `business`) and profile fields. Individual accounts set region from country_id.",
             "name": "onboarding/profile",
             "x-displayName": "Profile"
         },
         {
-            "description": "Workspace address collection.",
+            "description": "Workspace address (search or manual entry). `POST /onboarding/address/verify` is reserved and returns 501.",
             "name": "onboarding/address",
             "x-displayName": "Address"
         },
         {
-            "description": "Business compliance step (business accounts only).",
+            "description": "Business compliance step: business type, industry, employee count. Business accounts only.",
             "name": "onboarding/business",
             "x-displayName": "Business"
         },
         {
-            "description": "Onboarding progress and completion.",
+            "description": "Onboarding progress and completion. Individual: verify_email → profile → address. Business: also requires business step.",
             "name": "onboarding/session",
             "x-displayName": "Session"
         }

@@ -89,8 +89,8 @@ func (h *docHandler) serveScalar(w http.ResponseWriter, _ *http.Request) {
 	html, err := scalargo.NewV2(
 		scalargo.WithSpecURL(h.specURL),
 		scalargo.WithMetaDataOpts(
-			scalargo.WithTitle("Angle HR Waitlist API"),
-			scalargo.WithKeyValue("description", "Onboarding waitlist API"),
+			scalargo.WithTitle("Angle HR API"),
+			scalargo.WithKeyValue("description", "Waitlist and product onboarding API"),
 		),
 	)
 	if err != nil {

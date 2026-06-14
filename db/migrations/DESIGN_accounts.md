@@ -1,6 +1,6 @@
 # Accounts schema design
 
-Design document for product onboarding persistence. **No migration files yet** — implement as `000002_accounts.up.sql` (regional) and `000002_onboarding_catalogs.up.sql` (global) in a future phase.
+Design document for product onboarding persistence. Migrations are implemented as `000002_accounts.up.sql` (regional) and `global_registry/000002_onboarding_catalogs.up.sql` (global).
 
 ## Architecture
 
@@ -60,7 +60,7 @@ CREATE INDEX business_types_active_sort_idx ON business_types (sort_order)
     WHERE is_active = TRUE;
 ```
 
-Seed data: see [docs/onboarding/reference/README.md](../../docs/onboarding/reference/README.md).
+Seed data: see `db/migrations/global_registry/000002_onboarding_catalogs.up.sql`.
 
 ### onboarding_industries
 
@@ -264,4 +264,4 @@ CREATE TRIGGER accounts_onboarding_progress_set_updated_at
 2. Add regional migration `000002_accounts.up.sql` with `accounts` schema.
 3. Update `internal/dbrouter/router.go` search path.
 4. Add query builders in `internal/query/`.
-5. Wire handlers per [docs/onboarding/](../../docs/onboarding/).
+5. Document endpoints in handler godoc (`@Summary`, `@Description`, `@Tags`) and run `make swagger`.

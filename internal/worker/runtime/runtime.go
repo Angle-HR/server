@@ -18,7 +18,7 @@ import (
 
 // Run connects to the global database, applies Fluvio migrations, registers
 // workers, and blocks until a shutdown signal is received.
-func Run(workerName string, register func(*fluvio.Workers)) error {
+func Run(workerName string, queues map[string]fluvio.QueueConfig, register func(*fluvio.Workers)) error {
 	_ = godotenv.Load()
 
 	appEnv := os.Getenv("APP_ENV")
@@ -49,7 +49,7 @@ func Run(workerName string, register func(*fluvio.Workers)) error {
 	workers := fluvio.NewWorkers()
 	register(workers)
 
-	fluvioClient, err := queue.NewWorkerClient(dbPool, workerName, workers, slogLogger)
+	fluvioClient, err := queue.NewWorkerClient(dbPool, queues, workers, slogLogger)
 	if err != nil {
 		return fmt.Errorf("create Fluvio client: %w", err)
 	}

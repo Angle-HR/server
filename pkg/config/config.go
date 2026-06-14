@@ -8,18 +8,25 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
+
+	"github.com/Angle-HR/server/internal/region"
 )
 
 // Config holds runtime configuration values.
 type Config struct {
-	ServerPort     string
-	DBUrlGlobal    string
-	RedisURL       string
-	AppEnv         string
-	PublicAPIURL   string
-	FluvioUIOrigin string
+	ServerPort        string
+	DBUrlGlobal       string
+	RedisURL          string
+	AppEnv            string
+	PublicAPIURL      string
+	FluvioUIOrigin    string
+	JWTSecret         string
+	JWTAccessTTL      time.Duration
+	JWTRefreshTTL     time.Duration
+	AuthDefaultRegion region.Region
 }
 
 // Load reads configuration from the environment.
@@ -35,6 +42,32 @@ func Load() (Config, error) {
 		AppEnv:         os.Getenv("APP_ENV"),
 		PublicAPIURL:   os.Getenv("PUBLIC_API_URL"),
 		FluvioUIOrigin: os.Getenv("FLUVIO_UI_ORIGIN"),
+		JWTSecret:      os.Getenv("JWT_SECRET"),
+	}
+
+	if cfg.JWTSecret == "" {
+		cfg.JWTSecret = "dev-insecure-jwt-secret-change-me"
+	}
+
+	accessTTL, err := parsePositiveIntEnv("JWT_ACCESS_TTL", 3600)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.JWTAccessTTL = time.Duration(accessTTL) * time.Second
+
+	refreshTTL, err := parsePositiveIntEnv("JWT_REFRESH_TTL", 604800)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.JWTRefreshTTL = time.Duration(refreshTTL) * time.Second
+
+	defaultRegion := os.Getenv("AUTH_DEFAULT_REGION")
+	if defaultRegion == "" {
+		defaultRegion = string(region.RegionUK)
+	}
+	cfg.AuthDefaultRegion = region.Region(defaultRegion)
+	if !region.Valid(cfg.AuthDefaultRegion) {
+		return Config{}, fmt.Errorf("invalid AUTH_DEFAULT_REGION %q", defaultRegion)
 	}
 
 	if cfg.ServerPort == "" {
@@ -67,6 +100,20 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func parsePositiveIntEnv(key string, fallback int) (int, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback, nil
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 1 {
+		return 0, fmt.Errorf("invalid %s %q", key, raw)
+	}
+
+	return value, nil
 }
 
 func validatePublicAPIURL(raw string) error {

@@ -26,12 +26,12 @@ var onboardingTagGroup = map[string]any{
 var apiTagDefinitions = []map[string]any{
 	{
 		"name":          "waitlist/reference",
-		"description":   "Reference data for waitlist forms (countries, industries, hiring tools, roles, and team sizes).",
+		"description":   "Reference data for waitlist forms: countries, industries, hiring tools, roles, and team sizes.",
 		"x-displayName": "Reference",
 	},
 	{
 		"name":          "waitlist/signup",
-		"description":   "Initial waitlist registration.",
+		"description":   "Initial waitlist registration. Creates a regional waitlist entry and global users_registry row.",
 		"x-displayName": "Signup",
 	},
 	{
@@ -41,32 +41,32 @@ var apiTagDefinitions = []map[string]any{
 	},
 	{
 		"name":          "auth",
-		"description":   "Product signup, email verification, login, and token refresh.",
+		"description":   "Product signup, 6-digit email verification (OTP expires in 300s, resend cooldown 30s), login, and token refresh.",
 		"x-displayName": "Auth",
 	},
 	{
 		"name":          "onboarding/reference",
-		"description":   "Product onboarding catalogs (business types, industries, company roles).",
+		"description":   "Product onboarding catalog endpoints (business types, industries, company roles). Separate from waitlist reference data.",
 		"x-displayName": "Reference",
 	},
 	{
 		"name":          "onboarding/profile",
-		"description":   "Account type and profile fields.",
+		"description":   "Account type (`individual` or `business`) and profile fields. Individual accounts set region from country_id.",
 		"x-displayName": "Profile",
 	},
 	{
 		"name":          "onboarding/address",
-		"description":   "Workspace address collection.",
+		"description":   "Workspace address (search or manual entry). `POST /onboarding/address/verify` is reserved and returns 501.",
 		"x-displayName": "Address",
 	},
 	{
 		"name":          "onboarding/business",
-		"description":   "Business compliance step (business accounts only).",
+		"description":   "Business compliance step: business type, industry, employee count. Business accounts only.",
 		"x-displayName": "Business",
 	},
 	{
 		"name":          "onboarding/session",
-		"description":   "Onboarding progress and completion.",
+		"description":   "Onboarding progress and completion. Individual: verify_email → profile → address. Business: also requires business step.",
 		"x-displayName": "Session",
 	},
 }

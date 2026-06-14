@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
+	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/docs"
 	"github.com/Angle-HR/server/internal/handler"
@@ -69,12 +70,18 @@ func Run() error {
 		return fmt.Errorf("create Fluvio client: %w", err)
 	}
 
+	tokenService, err := auth.NewTokenService(cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
+	if err != nil {
+		return fmt.Errorf("create token service: %w", err)
+	}
+	authMiddleware := auth.NewMiddleware(tokenService)
+
 	countriesHandler := handler.NewCountriesHandler(globalPool)
 	catalogHandler := handler.NewCatalogHandler(globalPool)
 	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, fluvioClient)
 	onboardingHandler := handler.NewOnboardingHandler(dbRouter, globalPool, fluvioClient)
-	authHandler := handler.NewAuthHandler()
-	productOnboardingHandler := handler.NewProductOnboardingHandler()
+	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, cfg.AuthDefaultRegion)
+	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient)
 
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
@@ -98,6 +105,10 @@ func Run() error {
 		onboardingHandler.RegisterRoutes(r)
 		r.Route("/auth", authHandler.RegisterRoutes)
 		productOnboardingHandler.RegisterRoutes(r)
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware.RequireAuth)
+			productOnboardingHandler.RegisterProtectedRoutes(r)
+		})
 	})
 
 	server := &http.Server{

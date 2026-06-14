@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/upload"
 	"github.com/Angle-HR/server/internal/worker/runtime"
 	"github.com/Angle-HR/server/pkg/logger"
@@ -25,7 +26,7 @@ func run() error {
 	}
 	slogLogger := logger.New(appEnv)
 
-	return runtime.Run("upload-worker", func(workers *fluvio.Workers) {
+	return runtime.Run("upload-worker", queue.UploadWorkerQueues(), func(workers *fluvio.Workers) {
 		fluvio.AddWorker(workers, &upload.UploadWorker{Logger: slogLogger})
 	})
 }

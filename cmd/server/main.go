@@ -3,6 +3,9 @@
 //	@title						Angle HR API
 //	@version					1.0
 //	@description				Waitlist and product onboarding API for Open HR.
+//	@description				Interactive docs (Scalar) are served at `/` in non-production environments.
+//	@description				Product flow: signup → verify email (6-digit OTP, 5 min expiry) → profile → address → [business] → complete.
+//	@description				Onboarding step endpoints require `Authorization: Bearer <access_token>` after email verification.
 //	@host						localhost:8080
 //	@BasePath					/api/v1
 //

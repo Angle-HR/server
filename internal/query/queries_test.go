@@ -111,3 +111,39 @@ func TestListActiveIndustriesSQL(t *testing.T) {
 		t.Fatalf("sql: %q", sql)
 	}
 }
+
+func TestListBusinessTypesSQL(t *testing.T) {
+	t.Parallel()
+
+	sql, args, err := ListBusinessTypes()
+	if err != nil {
+		t.Fatalf("ListBusinessTypes: %v", err)
+	}
+
+	if len(args) != 1 || args[0] != true {
+		t.Fatalf("args: got %v", args)
+	}
+
+	normalised := strings.Join(strings.Fields(sql), " ")
+	if !strings.Contains(normalised, `FROM "business_types"`) {
+		t.Fatalf("sql: %q", sql)
+	}
+}
+
+func TestInsertAccountUserSQL(t *testing.T) {
+	t.Parallel()
+
+	sql, args, err := InsertAccountUser("jerry@example.com", "hash")
+	if err != nil {
+		t.Fatalf("InsertAccountUser: %v", err)
+	}
+
+	if len(args) != 2 {
+		t.Fatalf("args: got %v", args)
+	}
+
+	normalised := strings.Join(strings.Fields(sql), " ")
+	if !strings.Contains(normalised, `INSERT INTO "users"`) {
+		t.Fatalf("sql: %q", sql)
+	}
+}

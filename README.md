@@ -45,8 +45,9 @@ Individual targets: `make fmt`, `make lint`, `make test`, `make cover`, `make se
 - **[ROADMAP.md](./ROADMAP.md)** — planned direction
 - **[CHANGELOG.md](./CHANGELOG.md)** — release history
 
-- **[docs/waitlist/](./docs/waitlist/)** — waitlist API (reference data, signup, waitlist onboarding)
-- **[docs/onboarding/](./docs/onboarding/)** — product onboarding API (endpoints not yet implemented)
+**API reference:** Interactive OpenAPI docs (Scalar) at `/` when running locally (`docker compose up`). Raw spec at `/openapi.json`. Regenerate after handler changes with `make swagger`.
+
+E2E smoke test for product onboarding: `./scripts/e2e-onboarding.sh`
 
 ## Project layout
 

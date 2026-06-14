@@ -213,7 +213,7 @@ func (h *WaitlistHandler) signup(
 			Recipient: email,
 			FullName:  fullName,
 			Token:     waitlistToken.String(),
-		}, queue.DefaultEnqueueOptions()...)
+		}, queue.EmailEnqueueOptions()...)
 		if err != nil {
 			return uuid.Nil, fmt.Errorf("enqueue waitlist confirmation email: %w", err)
 		}

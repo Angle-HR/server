@@ -2,7 +2,7 @@ package handler
 
 import "github.com/Angle-HR/server/internal/apidoc"
 
-// Product onboarding OpenAPI types (design-only; handlers return 501 until implemented).
+// Product onboarding OpenAPI types.
 
 // AuthSignupRequest is the product signup request body.
 type AuthSignupRequest struct {
@@ -20,7 +20,7 @@ type AuthSignupPatchRequest struct {
 type AuthSignupData struct {
 	VerificationSessionID    string `json:"verification_session_id" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Email                  string `json:"email" example:"jerry@example.com"`
-	CodeExpiresInSeconds   int    `json:"code_expires_in_seconds" example:"60"`
+	CodeExpiresInSeconds   int    `json:"code_expires_in_seconds" example:"300"`
 	ResendAvailableInSeconds int  `json:"resend_available_in_seconds" example:"30"`
 }
 
@@ -67,6 +67,14 @@ type AuthTokenEnvelope struct {
 type AuthLoginRequest struct {
 	Email    string `json:"email" example:"jerry@example.com"`
 	Password string `json:"password" example:"secure-password-here"`
+}
+
+// AuthLoginVerificationRequiredDetails is returned in error.details when login succeeds on password but email is unverified.
+type AuthLoginVerificationRequiredDetails struct {
+	VerificationSessionID      string `json:"verification_session_id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Email                      string `json:"email" example:"jerry@example.com"`
+	CodeExpiresInSeconds       int    `json:"code_expires_in_seconds" example:"300"`
+	ResendAvailableInSeconds   int    `json:"resend_available_in_seconds" example:"30"`
 }
 
 // AuthRefreshRequest exchanges a refresh token.
@@ -228,7 +236,7 @@ type ProductWorkspaceStub struct {
 type ProductOnboardingCompleteData struct {
 	Status      string               `json:"status" example:"completed"`
 	Workspace   ProductWorkspaceStub `json:"workspace"`
-	RedirectURL string               `json:"redirect_url" example:"https://app.openhr.example/dashboard"`
+	RedirectURL string               `json:"redirect_url" example:"/dashboard"`
 }
 
 // ProductOnboardingCompleteEnvelope is a successful complete response.

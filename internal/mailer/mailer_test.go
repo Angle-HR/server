@@ -18,7 +18,7 @@ func TestTemplatesRendering(t *testing.T) {
 		}
 
 		args := EmailArgs{
-			Type:      "waitlist_confirmation",
+			Type:      TypeWaitlistConfirmation,
 			Recipient: "test@example.com",
 			FullName:  "John Doe",
 			Token:     "abc123",
@@ -46,7 +46,7 @@ func TestTemplatesRendering(t *testing.T) {
 
 	t.Run("more_info_ack", func(t *testing.T) {
 		args := EmailArgs{
-			Type:      "more_info_ack",
+			Type:      TypeMoreInfoAck,
 			Recipient: "test@example.com",
 			FullName:  "Jane Smith",
 		}
@@ -65,4 +65,26 @@ func TestTemplatesRendering(t *testing.T) {
 			t.Errorf("expected rendered content to contain title, got: %s", content)
 		}
 	})
+}
+
+func TestEmailVerificationTemplate(t *testing.T) {
+	m, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	args := EmailArgs{
+		Type:             TypeEmailVerification,
+		Recipient:        "test@example.com",
+		Code:             "224879",
+		ExpiresInSeconds: 300,
+	}
+
+	var buf bytes.Buffer
+	if err := m.templates.ExecuteTemplate(&buf, "email_verification.html", args); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !bytes.Contains(buf.Bytes(), []byte("224879")) {
+		t.Fatalf("expected code in template: %s", buf.String())
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/Angle-HR/server/internal/mailer"
+	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/worker"
 	"github.com/Angle-HR/server/internal/worker/runtime"
 	"github.com/Angle-HR/server/pkg/logger"
@@ -66,7 +67,7 @@ func run() error {
 		return fmt.Errorf("initialize mailer: %w", err)
 	}
 
-	return runtime.Run("email-worker", func(workers *fluvio.Workers) {
+	return runtime.Run("email-worker", queue.EmailWorkerQueues(), func(workers *fluvio.Workers) {
 		fluvio.AddWorker(workers, &worker.EmailWorker{Mailer: m, Logger: slogLogger})
 	})
 }

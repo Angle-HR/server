@@ -9,3 +9,6 @@ data:
   APP_ENV: production
   PUBLIC_API_URL: https://api.example.com
   FLUVIO_UI_ORIGIN: https://fluvio.example.com
+  JWT_ACCESS_TTL: "3600"
+  JWT_REFRESH_TTL: "604800"
+  AUTH_DEFAULT_REGION: uk

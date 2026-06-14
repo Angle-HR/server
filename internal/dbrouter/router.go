@@ -21,7 +21,7 @@ var (
 	ErrPoolNil = errors.New("dbrouter: pool is nil for region")
 )
 
-const regionalSearchPath = "waitlist,public"
+const regionalSearchPath = "accounts,waitlist,public"
 
 // DBRouter holds one PostgreSQL pool and one R2 (S3-compatible) client per region.
 type DBRouter struct {

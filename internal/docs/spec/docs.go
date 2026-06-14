@@ -17,7 +17,7 @@ const docTemplate = `{
     "paths": {
         "/auth/login": {
             "post": {
-                "description": "Authenticates a verified user and returns JWT tokens. Not yet implemented.",
+                "description": "Authenticates a verified user and returns JWT tokens. When credentials are valid but email is unverified, returns 403 with a new verification session in error.details.",
                 "consumes": [
                     "application/json"
                 ],
@@ -58,8 +58,20 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -69,7 +81,7 @@ const docTemplate = `{
         },
         "/auth/refresh": {
             "post": {
-                "description": "Exchanges a valid refresh token for a new access token. Not yet implemented.",
+                "description": "Exchanges a valid refresh token for a new access token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -110,8 +122,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -121,7 +133,7 @@ const docTemplate = `{
         },
         "/auth/resend-verification": {
             "post": {
-                "description": "Sends a new OTP for an existing unverified signup. Rate-limited. Not yet implemented.",
+                "description": "Sends a new OTP for an existing unverified signup. Rate-limited to once every 30 seconds per session.",
                 "consumes": [
                     "application/json"
                 ],
@@ -162,8 +174,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -173,7 +185,7 @@ const docTemplate = `{
         },
         "/auth/signup": {
             "post": {
-                "description": "Creates an unverified user and sends a 6-digit verification code by email. Not yet implemented.",
+                "description": "Creates an unverified user in AUTH_DEFAULT_REGION (default uk) and enqueues a 6-digit verification email. OTP expires in 300 seconds.",
                 "consumes": [
                     "application/json"
                 ],
@@ -214,8 +226,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -223,7 +235,7 @@ const docTemplate = `{
                 }
             },
             "patch": {
-                "description": "Changes the email on an unverified signup and invalidates the prior OTP. Not yet implemented.",
+                "description": "Changes the email on an unverified signup and invalidates the prior OTP.",
                 "consumes": [
                     "application/json"
                 ],
@@ -264,8 +276,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -275,7 +287,7 @@ const docTemplate = `{
         },
         "/auth/verify-email": {
             "post": {
-                "description": "Validates the 6-digit OTP and returns JWT tokens with onboarding status. Not yet implemented.",
+                "description": "Validates the 6-digit OTP and returns JWT tokens with onboarding status.",
                 "consumes": [
                     "application/json"
                 ],
@@ -316,8 +328,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -436,7 +448,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Saves workspace address from search or manual entry. Not yet implemented.",
+                "description": "Saves workspace address from search or manual entry.",
                 "consumes": [
                     "application/json"
                 ],
@@ -477,8 +489,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -524,7 +536,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Saves business type, industry, and employee count. Business accounts only. Not yet implemented.",
+                "description": "Saves business type, industry, and employee count. Business accounts only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -565,8 +577,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -576,7 +588,7 @@ const docTemplate = `{
         },
         "/onboarding/business-types": {
             "get": {
-                "description": "Returns business type options for the compliance step. Not yet implemented.",
+                "description": "Returns business type options for the compliance step.",
                 "produces": [
                     "application/json"
                 ],
@@ -591,8 +603,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/internal_handler.BusinessTypeListEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -602,7 +614,7 @@ const docTemplate = `{
         },
         "/onboarding/company-roles": {
             "get": {
-                "description": "Returns company role options for business profile step. Not yet implemented.",
+                "description": "Returns company role options for business profile step.",
                 "produces": [
                     "application/json"
                 ],
@@ -617,8 +629,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/internal_handler.CompanyRoleListEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -633,7 +645,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Finalizes onboarding after all mandatory steps are done. Not yet implemented.",
+                "description": "Finalizes onboarding after all mandatory steps are done. Sets onboarding_completed_at and enqueues an onboarding_complete welcome email.",
                 "produces": [
                     "application/json"
                 ],
@@ -666,8 +678,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -677,7 +689,7 @@ const docTemplate = `{
         },
         "/onboarding/industries": {
             "get": {
-                "description": "Returns product onboarding industry options. Not yet implemented.",
+                "description": "Returns product onboarding industry options.",
                 "produces": [
                     "application/json"
                 ],
@@ -692,8 +704,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/internal_handler.OnboardingIndustryListEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -708,7 +720,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Saves account type and profile fields for individual or business accounts. Not yet implemented.",
+                "description": "Saves account type and profile fields for individual or business accounts.",
                 "consumes": [
                     "application/json"
                 ],
@@ -749,8 +761,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -765,7 +777,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns current step, completed steps, and saved draft fields. Not yet implemented.",
+                "description": "Returns current step, completed steps, and saved draft fields.",
                 "produces": [
                     "application/json"
                 ],
@@ -786,8 +798,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1062,7 +1074,7 @@ const docTemplate = `{
             "properties": {
                 "code_expires_in_seconds": {
                     "type": "integer",
-                    "example": 60
+                    "example": 300
                 },
                 "email": {
                     "type": "string",
@@ -1684,7 +1696,7 @@ const docTemplate = `{
             "properties": {
                 "redirect_url": {
                     "type": "string",
-                    "example": "https://app.openhr.example/dashboard"
+                    "example": "/dashboard"
                 },
                 "status": {
                     "type": "string",
@@ -2003,7 +2015,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
 	Title:            "Angle HR API",
-	Description:      "Waitlist and product onboarding API for Open HR.",
+	Description:      "Waitlist and product onboarding API for Open HR.\nInteractive docs (Scalar) are served at `/` in non-production environments.\nProduct flow: signup → verify email (6-digit OTP, 5 min expiry) → profile → address → [business] → complete.\nOnboarding step endpoints require `Authorization: Bearer <access_token>` after email verification.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

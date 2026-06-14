@@ -407,7 +407,7 @@ func (h *OnboardingHandler) persistOnboarding(
 			Type:      "more_info_ack",
 			Recipient: email,
 			FullName:  fullName,
-		}, queue.DefaultEnqueueOptions()...)
+		}, queue.EmailEnqueueOptions()...)
 		if err != nil {
 			return fmt.Errorf("enqueue onboarding acknowledgement email: %w", err)
 		}

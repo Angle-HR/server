@@ -1,13 +1,370 @@
 {
-    "swagger": "2.0",
-    "info": {
-        "description": "Waitlist signup API for Open HR.",
-        "title": "Angle HR Waitlist API",
-        "contact": {},
-        "version": "1.0"
+    "basePath": "/api/v1",
+    "definitions": {
+        "github_com_Angle-HR_server_internal_apidoc.ErrorBody": {
+            "properties": {
+                "code": {
+                    "example": "VALIDATION_ERROR",
+                    "type": "string"
+                },
+                "details": {
+                    "additionalProperties": {},
+                    "type": "object"
+                },
+                "message": {
+                    "example": "invalid request body",
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope": {
+            "properties": {
+                "error": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorBody"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "github_com_Angle-HR_server_internal_apidoc.Meta": {
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "next_cursor": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "example": "abc123",
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.CountriesEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.CountryResponse"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.CountryResponse": {
+            "properties": {
+                "icon_key": {
+                    "example": "flag-uk",
+                    "type": "string"
+                },
+                "id": {
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde",
+                    "type": "string"
+                },
+                "name": {
+                    "example": "United Kingdom",
+                    "type": "string"
+                },
+                "region": {
+                    "enum": [
+                        "uk",
+                        "us",
+                        "africa",
+                        "eu"
+                    ],
+                    "example": "uk",
+                    "type": "string"
+                },
+                "slug": {
+                    "example": "united-kingdom",
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.HiringFrustration": {
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "emoji": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.HiringFrustrationListEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.HiringFrustration"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.HiringTool": {
+            "properties": {
+                "icon_url": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.HiringToolListEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.HiringTool"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.Industry": {
+            "properties": {
+                "emoji": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.IndustryListEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.Industry"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.OnboardingData": {
+            "properties": {
+                "message": {
+                    "example": "Thanks for telling us more!",
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.OnboardingEnvelope": {
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.OnboardingData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.OnboardingRequest": {
+            "properties": {
+                "frustration_ids": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "industry_ids": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "other_frustration": {
+                    "type": "string"
+                },
+                "other_industry": {
+                    "type": "string"
+                },
+                "other_tool": {
+                    "type": "string"
+                },
+                "role_id": {
+                    "type": "string"
+                },
+                "team_size_id": {
+                    "type": "string"
+                },
+                "token": {
+                    "example": "550e8400-e29b-41d4-a716-446655440000",
+                    "type": "string"
+                },
+                "tool_ids": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "wants_early_access": {
+                    "type": "boolean"
+                },
+                "wants_user_testing": {
+                    "type": "boolean"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.Role": {
+            "properties": {
+                "emoji": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.RoleListEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.Role"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.SignupData": {
+            "properties": {
+                "message": {
+                    "example": "You're on the list!",
+                    "type": "string"
+                },
+                "region": {
+                    "example": "uk",
+                    "type": "string"
+                },
+                "token": {
+                    "example": "550e8400-e29b-41d4-a716-446655440000",
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.SignupEnvelope": {
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.SignupData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.SignupRequest": {
+            "properties": {
+                "country_id": {
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde",
+                    "type": "string"
+                },
+                "email": {
+                    "example": "jerry@example.com",
+                    "type": "string"
+                },
+                "full_name": {
+                    "example": "Jerry",
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.TeamSize": {
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "max_size": {
+                    "type": "integer"
+                },
+                "min_size": {
+                    "type": "integer"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.TeamSizeListEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.TeamSize"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        }
     },
     "host": "localhost:8080",
-    "basePath": "/api/v1",
+    "info": {
+        "contact": {},
+        "description": "Waitlist signup API for Open HR.",
+        "title": "Angle HR Waitlist API",
+        "version": "1.0"
+    },
     "paths": {
         "/countries": {
             "get": {
@@ -15,10 +372,6 @@
                 "produces": [
                     "application/json"
                 ],
-                "tags": [
-                    "countries"
-                ],
-                "summary": "List countries",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -32,7 +385,11 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     }
-                }
+                },
+                "summary": "List countries",
+                "tags": [
+                    "waitlist/reference"
+                ]
             }
         },
         "/hiring-frustrations": {
@@ -41,10 +398,6 @@
                 "produces": [
                     "application/json"
                 ],
-                "tags": [
-                    "catalog"
-                ],
-                "summary": "List hiring frustrations",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -58,7 +411,11 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     }
-                }
+                },
+                "summary": "List hiring frustrations",
+                "tags": [
+                    "waitlist/reference"
+                ]
             }
         },
         "/hiring-tools": {
@@ -67,10 +424,6 @@
                 "produces": [
                     "application/json"
                 ],
-                "tags": [
-                    "catalog"
-                ],
-                "summary": "List hiring tools",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -84,7 +437,11 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     }
-                }
+                },
+                "summary": "List hiring tools",
+                "tags": [
+                    "waitlist/reference"
+                ]
             }
         },
         "/industries": {
@@ -93,10 +450,6 @@
                 "produces": [
                     "application/json"
                 ],
-                "tags": [
-                    "catalog"
-                ],
-                "summary": "List industries",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -110,7 +463,11 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     }
-                }
+                },
+                "summary": "List industries",
+                "tags": [
+                    "waitlist/reference"
+                ]
             }
         },
         "/roles": {
@@ -119,10 +476,6 @@
                 "produces": [
                     "application/json"
                 ],
-                "tags": [
-                    "catalog"
-                ],
-                "summary": "List roles",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -136,7 +489,11 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     }
-                }
+                },
+                "summary": "List roles",
+                "tags": [
+                    "waitlist/reference"
+                ]
             }
         },
         "/team-sizes": {
@@ -145,10 +502,6 @@
                 "produces": [
                     "application/json"
                 ],
-                "tags": [
-                    "catalog"
-                ],
-                "summary": "List team sizes",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -162,32 +515,32 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     }
-                }
+                },
+                "summary": "List team sizes",
+                "tags": [
+                    "waitlist/reference"
+                ]
             }
         },
         "/waitlist": {
             "post": {
-                "description": "Registers a user for the regional waitlist and global users registry.",
                 "consumes": [
                     "application/json"
                 ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "waitlist"
-                ],
-                "summary": "Join waitlist",
+                "description": "Registers a user for the regional waitlist and global users registry.",
                 "parameters": [
                     {
                         "description": "Signup payload",
-                        "name": "body",
                         "in": "body",
+                        "name": "body",
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/internal_handler.SignupRequest"
                         }
                     }
+                ],
+                "produces": [
+                    "application/json"
                 ],
                 "responses": {
                     "201": {
@@ -214,32 +567,32 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     }
-                }
+                },
+                "summary": "Join waitlist",
+                "tags": [
+                    "waitlist/signup"
+                ]
             }
         },
         "/waitlist/onboarding": {
             "post": {
-                "description": "Saves the full onboarding form for a waitlist signup token.",
                 "consumes": [
                     "application/json"
                 ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "waitlist"
-                ],
-                "summary": "Submit waitlist onboarding",
+                "description": "Saves the full onboarding form for a waitlist signup token.",
                 "parameters": [
                     {
                         "description": "Onboarding payload",
-                        "name": "body",
                         "in": "body",
+                        "name": "body",
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/internal_handler.OnboardingRequest"
                         }
                     }
+                ],
+                "produces": [
+                    "application/json"
                 ],
                 "responses": {
                     "201": {
@@ -272,366 +625,44 @@
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     }
-                }
+                },
+                "summary": "Submit waitlist onboarding form",
+                "tags": [
+                    "waitlist/onboarding"
+                ]
             }
         }
     },
-    "definitions": {
-        "github_com_Angle-HR_server_internal_apidoc.ErrorBody": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string",
-                    "example": "VALIDATION_ERROR"
-                },
-                "details": {
-                    "type": "object",
-                    "additionalProperties": {}
-                },
-                "message": {
-                    "type": "string",
-                    "example": "invalid request body"
-                }
-            }
+    "swagger": "2.0",
+    "tags": [
+        {
+            "description": "Reference data for waitlist forms (countries, industries, hiring tools, roles, and team sizes).",
+            "name": "waitlist/reference",
+            "x-displayName": "Reference"
         },
-        "github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorBody"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
+        {
+            "description": "Initial waitlist registration.",
+            "name": "waitlist/signup",
+            "x-displayName": "Signup"
         },
-        "github_com_Angle-HR_server_internal_apidoc.Meta": {
-            "type": "object",
-            "properties": {
-                "has_more": {
-                    "type": "boolean"
-                },
-                "next_cursor": {
-                    "type": "string"
-                },
-                "request_id": {
-                    "type": "string",
-                    "example": "abc123"
-                }
-            }
-        },
-        "internal_handler.CountriesEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.CountryResponse"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.CountryResponse": {
-            "type": "object",
-            "properties": {
-                "icon_key": {
-                    "type": "string",
-                    "example": "flag-uk"
-                },
-                "id": {
-                    "type": "string",
-                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "United Kingdom"
-                },
-                "region": {
-                    "type": "string",
-                    "enum": [
-                        "uk",
-                        "us",
-                        "africa",
-                        "eu"
-                    ],
-                    "example": "uk"
-                },
-                "slug": {
-                    "type": "string",
-                    "example": "united-kingdom"
-                }
-            }
-        },
-        "internal_handler.HiringFrustration": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "emoji": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.HiringFrustrationListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.HiringFrustration"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.HiringTool": {
-            "type": "object",
-            "properties": {
-                "icon_url": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.HiringToolListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.HiringTool"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.Industry": {
-            "type": "object",
-            "properties": {
-                "emoji": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.IndustryListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.Industry"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.OnboardingData": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "example": "Thanks for telling us more!"
-                }
-            }
-        },
-        "internal_handler.OnboardingEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.OnboardingData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.OnboardingRequest": {
-            "type": "object",
-            "properties": {
-                "frustration_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "industry_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "other_frustration": {
-                    "type": "string"
-                },
-                "other_industry": {
-                    "type": "string"
-                },
-                "other_tool": {
-                    "type": "string"
-                },
-                "role_id": {
-                    "type": "string"
-                },
-                "team_size_id": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "tool_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "wants_early_access": {
-                    "type": "boolean"
-                },
-                "wants_user_testing": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "internal_handler.Role": {
-            "type": "object",
-            "properties": {
-                "emoji": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.RoleListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.Role"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.SignupData": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "example": "You're on the list!"
-                },
-                "region": {
-                    "type": "string",
-                    "example": "uk"
-                },
-                "token": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                }
-            }
-        },
-        "internal_handler.SignupEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.SignupData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.SignupRequest": {
-            "type": "object",
-            "properties": {
-                "country_id": {
-                    "type": "string",
-                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-                },
-                "email": {
-                    "type": "string",
-                    "example": "jerry@example.com"
-                },
-                "full_name": {
-                    "type": "string",
-                    "example": "Jerry"
-                }
-            }
-        },
-        "internal_handler.TeamSize": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "label": {
-                    "type": "string"
-                },
-                "max_size": {
-                    "type": "integer"
-                },
-                "min_size": {
-                    "type": "integer"
-                }
-            }
-        },
-        "internal_handler.TeamSizeListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.TeamSize"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
+        {
+            "description": "Waitlist onboarding form submission after signup (distinct from product onboarding).",
+            "name": "waitlist/onboarding",
+            "x-displayName": "Waitlist onboarding"
         }
-    }
+    ],
+    "x-tagGroups": [
+        {
+            "name": "Waitlist",
+            "tags": [
+                "waitlist/reference",
+                "waitlist/signup",
+                "waitlist/onboarding"
+            ]
+        },
+        {
+            "name": "Onboarding",
+            "tags": []
+        }
+    ]
 }

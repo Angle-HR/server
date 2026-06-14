@@ -114,6 +114,7 @@ func patchOpenAPISpec(content []byte, host, scheme string) ([]byte, error) {
 	if scheme == "http" || scheme == "https" {
 		doc["schemes"] = []string{scheme}
 	}
+	ApplyAPITagGroups(doc)
 
 	patched, err := json.Marshal(doc)
 	if err != nil {

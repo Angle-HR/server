@@ -52,6 +52,8 @@ swagger:
 		-o internal/docs/spec \
 		--parseDependency \
 		--parseInternal
+	@echo "→ Applying API tag groups..."
+	@go run ./cmd/patch-openapi
 	@echo "✅ OpenAPI docs generated."
 
 swagger-check:
@@ -61,6 +63,7 @@ swagger-check:
 		-o internal/docs/spec \
 		--parseDependency \
 		--parseInternal
+	@go run ./cmd/patch-openapi
 	@git diff --exit-code internal/docs/spec || \
 		(echo "❌ OpenAPI docs are out of date. Run 'make swagger' and commit the result." && exit 1)
 	@echo "✅ OpenAPI docs are up to date."

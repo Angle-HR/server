@@ -67,9 +67,9 @@ type onboardingRequest struct {
 
 // submit godoc
 //
-//	@Summary		Submit waitlist onboarding
+//	@Summary		Submit waitlist onboarding form
 //	@Description	Saves the full onboarding form for a waitlist signup token.
-//	@Tags			waitlist
+//	@Tags			waitlist/onboarding
 //	@Accept			json
 //	@Produce		json
 //	@Param			body	body		handler.OnboardingRequest	true	"Onboarding payload"

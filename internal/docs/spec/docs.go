@@ -22,7 +22,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "countries"
+                    "waitlist/reference"
                 ],
                 "summary": "List countries",
                 "responses": {
@@ -48,7 +48,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "catalog"
+                    "waitlist/reference"
                 ],
                 "summary": "List hiring frustrations",
                 "responses": {
@@ -74,7 +74,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "catalog"
+                    "waitlist/reference"
                 ],
                 "summary": "List hiring tools",
                 "responses": {
@@ -100,7 +100,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "catalog"
+                    "waitlist/reference"
                 ],
                 "summary": "List industries",
                 "responses": {
@@ -126,7 +126,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "catalog"
+                    "waitlist/reference"
                 ],
                 "summary": "List roles",
                 "responses": {
@@ -152,7 +152,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "catalog"
+                    "waitlist/reference"
                 ],
                 "summary": "List team sizes",
                 "responses": {
@@ -181,7 +181,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "waitlist"
+                    "waitlist/signup"
                 ],
                 "summary": "Join waitlist",
                 "parameters": [
@@ -233,9 +233,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "waitlist"
+                    "waitlist/onboarding"
                 ],
-                "summary": "Submit waitlist onboarding",
+                "summary": "Submit waitlist onboarding form",
                 "parameters": [
                     {
                         "description": "Onboarding payload",

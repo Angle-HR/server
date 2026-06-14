@@ -67,7 +67,7 @@ type signupRequest struct {
 //
 //	@Summary		Join waitlist
 //	@Description	Registers a user for the regional waitlist and global users registry.
-//	@Tags			waitlist
+//	@Tags			waitlist/signup
 //	@Accept			json
 //	@Produce		json
 //	@Param			body	body		handler.SignupRequest	true	"Signup payload"

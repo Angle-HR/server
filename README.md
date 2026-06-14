@@ -45,7 +45,8 @@ Individual targets: `make fmt`, `make lint`, `make test`, `make cover`, `make se
 - **[ROADMAP.md](./ROADMAP.md)** — planned direction
 - **[CHANGELOG.md](./CHANGELOG.md)** — release history
 
-Extended guides and API reference can live under [`docs/`](./docs/) as the project grows.
+- **[docs/waitlist/](./docs/waitlist/)** — waitlist API (reference data, signup, waitlist onboarding)
+- **[docs/onboarding/](./docs/onboarding/)** — product onboarding API (endpoints not yet implemented)
 
 ## Project layout
 

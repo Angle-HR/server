@@ -27,6 +27,7 @@ const (
 	MsgUnknownTeamSizeReference               = "unknown team size reference"
 	MsgOtherTextRequiredWhenOthersSelected    = "other text is required when Others is selected"
 	MsgOtherTextOnlyAllowedWhenOthersSelected = "other text is only allowed when Others is selected"
+	MsgNotImplemented                         = "endpoint not yet implemented"
 )
 
 var (
@@ -53,6 +54,7 @@ const (
 	CodeForbidden        = "FORBIDDEN"
 	CodeInternalError    = "INTERNAL_ERROR"
 	CodeInvalidReference = "INVALID_REFERENCE"
+	CodeNotImplemented   = "NOT_IMPLEMENTED"
 )
 
 var httpStatusByCode = map[string]int{
@@ -62,6 +64,7 @@ var httpStatusByCode = map[string]int{
 	CodeUnauthorized:     http.StatusUnauthorized,
 	CodeForbidden:        http.StatusForbidden,
 	CodeInvalidReference: http.StatusBadRequest,
+	CodeNotImplemented:   http.StatusNotImplemented,
 }
 
 // AppError is a structured application error.
@@ -198,6 +201,8 @@ func publicMessageForCode(code string) string {
 		return MsgUnauthorized
 	case CodeForbidden:
 		return MsgForbidden
+	case CodeNotImplemented:
+		return MsgNotImplemented
 	default:
 		return MsgInternalServerError
 	}

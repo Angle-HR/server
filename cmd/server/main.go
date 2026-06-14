@@ -1,10 +1,15 @@
 // Package main is the HTTP server entrypoint.
 //
-//	@title						Angle HR Waitlist API
+//	@title						Angle HR API
 //	@version					1.0
-//	@description				Waitlist signup API for Open HR.
+//	@description				Waitlist and product onboarding API for Open HR.
 //	@host						localhost:8080
 //	@BasePath					/api/v1
+//
+//	@securityDefinitions.apikey	BearerAuth
+//	@in							header
+//	@name						Authorization
+//	@description				Bearer JWT access token
 //
 // Runtime serving overrides host and schemes from PUBLIC_API_URL (see internal/docs).
 package main

@@ -1,8 +1,7 @@
 package docs
 
 // API documentation is grouped in Scalar under top-level folders (x-tagGroups).
-// Waitlist covers pre-launch signup flows; Onboarding is reserved for post-waitlist
-// product onboarding endpoints not yet implemented.
+// Waitlist covers pre-launch signup flows; Onboarding covers product signup and setup.
 var waitlistTagGroup = map[string]any{
 	"name": "Waitlist",
 	"tags": []any{
@@ -15,7 +14,12 @@ var waitlistTagGroup = map[string]any{
 var onboardingTagGroup = map[string]any{
 	"name": "Onboarding",
 	"tags": []any{
-		// Add onboarding/<domain> tags here as handlers are implemented.
+		"auth",
+		"onboarding/reference",
+		"onboarding/profile",
+		"onboarding/address",
+		"onboarding/business",
+		"onboarding/session",
 	},
 }
 
@@ -34,6 +38,36 @@ var apiTagDefinitions = []map[string]any{
 		"name":          "waitlist/onboarding",
 		"description":   "Waitlist onboarding form submission after signup (distinct from product onboarding).",
 		"x-displayName": "Waitlist onboarding",
+	},
+	{
+		"name":          "auth",
+		"description":   "Product signup, email verification, login, and token refresh.",
+		"x-displayName": "Auth",
+	},
+	{
+		"name":          "onboarding/reference",
+		"description":   "Product onboarding catalogs (business types, industries, company roles).",
+		"x-displayName": "Reference",
+	},
+	{
+		"name":          "onboarding/profile",
+		"description":   "Account type and profile fields.",
+		"x-displayName": "Profile",
+	},
+	{
+		"name":          "onboarding/address",
+		"description":   "Workspace address collection.",
+		"x-displayName": "Address",
+	},
+	{
+		"name":          "onboarding/business",
+		"description":   "Business compliance step (business accounts only).",
+		"x-displayName": "Business",
+	},
+	{
+		"name":          "onboarding/session",
+		"description":   "Onboarding progress and completion.",
+		"x-displayName": "Session",
 	},
 }
 

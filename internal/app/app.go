@@ -73,6 +73,8 @@ func Run() error {
 	catalogHandler := handler.NewCatalogHandler(globalPool)
 	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, fluvioClient)
 	onboardingHandler := handler.NewOnboardingHandler(dbRouter, globalPool, fluvioClient)
+	authHandler := handler.NewAuthHandler()
+	productOnboardingHandler := handler.NewProductOnboardingHandler()
 
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
@@ -94,6 +96,8 @@ func Run() error {
 		catalogHandler.RegisterRoutes(r)
 		waitlistHandler.RegisterRoutes(r)
 		onboardingHandler.RegisterRoutes(r)
+		r.Route("/auth", authHandler.RegisterRoutes)
+		productOnboardingHandler.RegisterRoutes(r)
 	})
 
 	server := &http.Server{

@@ -45,7 +45,9 @@ Individual targets: `make fmt`, `make lint`, `make test`, `make cover`, `make se
 - **[ROADMAP.md](./ROADMAP.md)** — planned direction
 - **[CHANGELOG.md](./CHANGELOG.md)** — release history
 
-Extended guides and API reference can live under [`docs/`](./docs/) as the project grows.
+**API reference:** Interactive OpenAPI docs (Scalar) at `/` when running locally (`docker compose up`). Raw spec at `/openapi.json`. Regenerate after handler changes with `make swagger`.
+
+E2E smoke test for product onboarding: `./scripts/e2e-onboarding.sh`
 
 ## Project layout
 

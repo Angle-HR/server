@@ -14,6 +14,7 @@ import (
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/mailer"
+	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/query"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
@@ -21,33 +22,32 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/riverqueue/river"
-	"github.com/riverqueue/river/rivertype"
+	fluvio "github.com/software78/fluvio"
 )
 
 var _ = apidoc.ErrorEnvelope{}
 
 const regionSourceExplicit = "explicit"
 
-type riverClient interface {
-	InsertTx(ctx context.Context, tx pgx.Tx, args river.JobArgs, opts *river.InsertOpts) (*rivertype.JobInsertResult, error)
+type jobEnqueuer interface {
+	EnqueueTx(ctx context.Context, tx fluvio.Tx, args fluvio.JobArgs, opts ...fluvio.EnqueueOption) (*fluvio.JobRow, error)
 }
 
 // WaitlistHandler handles waitlist signup requests.
 type WaitlistHandler struct {
 	Router   *dbrouter.DBRouter
 	GlobalDB globalDB
-	River    riverClient
+	Enqueuer jobEnqueuer
 
 	validate *validator.Validate
 }
 
 // NewWaitlistHandler returns a waitlist signup handler.
-func NewWaitlistHandler(router *dbrouter.DBRouter, globalDB globalDB, river riverClient) *WaitlistHandler {
+func NewWaitlistHandler(router *dbrouter.DBRouter, globalDB globalDB, enqueuer jobEnqueuer) *WaitlistHandler {
 	return &WaitlistHandler{
 		Router:   router,
 		GlobalDB: globalDB,
-		River:    river,
+		Enqueuer: enqueuer,
 		validate: validator.New(),
 	}
 }
@@ -67,7 +67,7 @@ type signupRequest struct {
 //
 //	@Summary		Join waitlist
 //	@Description	Registers a user for the regional waitlist and global users registry.
-//	@Tags			waitlist
+//	@Tags			waitlist/signup
 //	@Accept			json
 //	@Produce		json
 //	@Param			body	body		handler.SignupRequest	true	"Signup payload"
@@ -207,13 +207,13 @@ func (h *WaitlistHandler) signup(
 		return uuid.Nil, fmt.Errorf("insert users registry: %w", err)
 	}
 
-	if h.River != nil {
-		_, err = h.River.InsertTx(ctx, gtx, mailer.EmailArgs{
+	if h.Enqueuer != nil {
+		_, err = h.Enqueuer.EnqueueTx(ctx, gtx, mailer.EmailArgs{
 			Type:      "waitlist_confirmation",
 			Recipient: email,
 			FullName:  fullName,
 			Token:     waitlistToken.String(),
-		}, nil)
+		}, queue.EmailEnqueueOptions()...)
 		if err != nil {
 			return uuid.Nil, fmt.Errorf("enqueue waitlist confirmation email: %w", err)
 		}

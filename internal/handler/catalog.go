@@ -80,7 +80,7 @@ type TeamSize struct {
 //
 //	@Summary		List industries
 //	@Description	Returns active industry options for onboarding.
-//	@Tags			catalog
+//	@Tags			waitlist/reference
 //	@Produce		json
 //	@Success		200	{object}	handler.IndustryListEnvelope
 //	@Failure		500	{object}	apidoc.ErrorEnvelope
@@ -95,7 +95,7 @@ func (h *CatalogHandler) listIndustries(w http.ResponseWriter, r *http.Request) 
 //
 //	@Summary		List hiring tools
 //	@Description	Returns active hiring tool options for onboarding.
-//	@Tags			catalog
+//	@Tags			waitlist/reference
 //	@Produce		json
 //	@Success		200	{object}	handler.HiringToolListEnvelope
 //	@Failure		500	{object}	apidoc.ErrorEnvelope
@@ -110,7 +110,7 @@ func (h *CatalogHandler) listHiringTools(w http.ResponseWriter, r *http.Request)
 //
 //	@Summary		List hiring frustrations
 //	@Description	Returns active hiring frustration options for onboarding.
-//	@Tags			catalog
+//	@Tags			waitlist/reference
 //	@Produce		json
 //	@Success		200	{object}	handler.HiringFrustrationListEnvelope
 //	@Failure		500	{object}	apidoc.ErrorEnvelope
@@ -125,7 +125,7 @@ func (h *CatalogHandler) listHiringFrustrations(w http.ResponseWriter, r *http.R
 //
 //	@Summary		List roles
 //	@Description	Returns active role options for onboarding.
-//	@Tags			catalog
+//	@Tags			waitlist/reference
 //	@Produce		json
 //	@Success		200	{object}	handler.RoleListEnvelope
 //	@Failure		500	{object}	apidoc.ErrorEnvelope
@@ -140,7 +140,7 @@ func (h *CatalogHandler) listRoles(w http.ResponseWriter, r *http.Request) {
 //
 //	@Summary		List team sizes
 //	@Description	Returns team size band options for onboarding.
-//	@Tags			catalog
+//	@Tags			waitlist/reference
 //	@Produce		json
 //	@Success		200	{object}	handler.TeamSizeListEnvelope
 //	@Failure		500	{object}	apidoc.ErrorEnvelope

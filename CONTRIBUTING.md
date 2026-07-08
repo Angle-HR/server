@@ -92,6 +92,16 @@ make tools
 
 > **Note:** See `README.md` for full environment setup details.
 
+### API documentation
+
+HTTP endpoints are documented via OpenAPI, generated from handler godoc comments:
+
+```bash
+make swagger
+```
+
+After changing routes, request/response types, or `@Summary` / `@Description` / `@Tags` annotations, regenerate and commit `internal/docs/spec/`. Interactive docs are served at `/` in non-production environments.
+
 ---
 
 ## Commit Convention

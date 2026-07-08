@@ -18,7 +18,7 @@ import (
 //go:embed spec/swagger.json
 var openAPISpec embed.FS
 
-const developmentEnv = "development"
+const productionEnv = "production"
 
 // Config holds runtime settings for API documentation routes.
 type Config struct {
@@ -27,7 +27,7 @@ type Config struct {
 
 // IsEnabled reports whether interactive API docs should be served.
 func IsEnabled(appEnv string) bool {
-	return appEnv == developmentEnv
+	return appEnv != productionEnv
 }
 
 // RegisterRoutes mounts OpenAPI and Scalar documentation routes.
@@ -89,8 +89,8 @@ func (h *docHandler) serveScalar(w http.ResponseWriter, _ *http.Request) {
 	html, err := scalargo.NewV2(
 		scalargo.WithSpecURL(h.specURL),
 		scalargo.WithMetaDataOpts(
-			scalargo.WithTitle("Angle HR Waitlist API"),
-			scalargo.WithKeyValue("description", "Onboarding waitlist API"),
+			scalargo.WithTitle("Angle HR API"),
+			scalargo.WithKeyValue("description", "Waitlist and product onboarding API"),
 		),
 	)
 	if err != nil {
@@ -114,6 +114,7 @@ func patchOpenAPISpec(content []byte, host, scheme string) ([]byte, error) {
 	if scheme == "http" || scheme == "https" {
 		doc["schemes"] = []string{scheme}
 	}
+	ApplyAPITagGroups(doc)
 
 	patched, err := json.Marshal(doc)
 	if err != nil {

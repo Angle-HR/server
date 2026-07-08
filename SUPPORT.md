@@ -9,7 +9,7 @@ Thanks for using this project. This document explains where to go for help so yo
 Please check these resources first — your question may already be answered:
 
 - 📖 **[README](./README.md)** — setup, quickstart, and usage overview.
-- 📚 **[Documentation](./docs/)** — in-depth guides and API reference.
+- 📚 **API docs** — run the server locally and open `/` for interactive OpenAPI (Scalar), or fetch `/openapi.json`.
 - 🔍 **[Existing Issues](https://github.com/Angle-HR/server/issues)** — search before opening a new one.
 - 💬 **[Discussions](https://github.com/Angle-HR/server/discussions)** — browse Q&A, ideas, and community conversations.
 

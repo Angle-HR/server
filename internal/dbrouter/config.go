@@ -1,4 +1,4 @@
-// Package dbrouter routes database and object storage clients by geographic region.
+// Package dbrouter routes database and object-storage connections by geographic region.
 package dbrouter
 
 import (
@@ -9,15 +9,15 @@ import (
 	"github.com/Angle-HR/server/internal/region"
 )
 
-// RegionConfig holds per-region PostgreSQL and MinIO connection settings.
+// RegionConfig holds per-region PostgreSQL and Cloudflare R2 connection settings.
 type RegionConfig struct {
-	Region          region.Region
-	PostgresDSN     string
-	MinIOEndpoint   string
-	MinIOAccessKey  string
-	MinIOSecretKey  string
-	MinIOBucket     string
-	MinIOUseSSL     bool
+	Region       region.Region
+	PostgresDSN  string
+	R2Endpoint   string
+	R2AccessKey  string
+	R2SecretKey  string
+	R2Bucket     string
+	R2UseSSL     bool
 }
 
 func allRegions() []region.Region {
@@ -49,38 +49,55 @@ func envKey(suffix, name string) string {
 }
 
 // LoadConfigsFromEnv reads per-region settings from the environment.
+// R2_ACCESS_KEY, R2_SECRET_KEY, and R2_ENDPOINT are shared across all regions.
 // All four regions must be fully configured; missing variables return an error.
 func LoadConfigsFromEnv() ([]RegionConfig, error) {
+	accessKey := strings.TrimSpace(os.Getenv("R2_ACCESS_KEY"))
+	if accessKey == "" {
+		return nil, fmt.Errorf("dbrouter: R2_ACCESS_KEY is required")
+	}
+
+	secretKey := strings.TrimSpace(os.Getenv("R2_SECRET_KEY"))
+	if secretKey == "" {
+		return nil, fmt.Errorf("dbrouter: R2_SECRET_KEY is required")
+	}
+
+	rawEndpoint := strings.TrimSpace(os.Getenv("R2_ENDPOINT"))
+	if rawEndpoint == "" {
+		return nil, fmt.Errorf("dbrouter: R2_ENDPOINT is required")
+	}
+
+	r2Endpoint := stripEndpointScheme(rawEndpoint)
+	defaultUseSSL := strings.HasPrefix(strings.ToLower(rawEndpoint), "https://") ||
+		strings.Contains(strings.ToLower(r2Endpoint), "r2.cloudflarestorage.com")
+
 	configs := make([]RegionConfig, 0, len(allRegions()))
 
 	for _, reg := range allRegions() {
 		suffix := envSuffix(reg)
-		cfg := RegionConfig{Region: reg}
-
-		required := map[string]*string{
-			"POSTGRES_DSN":    &cfg.PostgresDSN,
-			"MINIO_ENDPOINT":  &cfg.MinIOEndpoint,
-			"MINIO_ACCESS_KEY": &cfg.MinIOAccessKey,
-			"MINIO_SECRET_KEY": &cfg.MinIOSecretKey,
-			"MINIO_BUCKET":    &cfg.MinIOBucket,
+		cfg := RegionConfig{
+			Region:      reg,
+			R2AccessKey: accessKey,
+			R2SecretKey: secretKey,
+			R2Endpoint:  r2Endpoint,
 		}
 
-		for name, dest := range required {
-			key := envKey(suffix, name)
-			value := strings.TrimSpace(os.Getenv(key))
-			if value == "" {
-				return nil, fmt.Errorf("dbrouter: %s is required", key)
-			}
-			*dest = value
+		postgresDSN := strings.TrimSpace(os.Getenv(envKey(suffix, "POSTGRES_DSN")))
+		if postgresDSN == "" {
+			return nil, fmt.Errorf("dbrouter: %s is required", envKey(suffix, "POSTGRES_DSN"))
 		}
+		cfg.PostgresDSN = postgresDSN
 
-		rawEndpoint := cfg.MinIOEndpoint
-		cfg.MinIOEndpoint = stripEndpointScheme(rawEndpoint)
+		bucket := strings.TrimSpace(os.Getenv(envKey(suffix, "R2_BUCKET")))
+		if bucket == "" {
+			return nil, fmt.Errorf("dbrouter: %s is required", envKey(suffix, "R2_BUCKET"))
+		}
+		cfg.R2Bucket = bucket
 
-		if sslRaw := strings.TrimSpace(os.Getenv(envKey(suffix, "MINIO_USE_SSL"))); sslRaw != "" {
-			cfg.MinIOUseSSL = sslRaw == "1" || strings.EqualFold(sslRaw, "true")
+		if sslRaw := strings.TrimSpace(os.Getenv(envKey(suffix, "R2_USE_SSL"))); sslRaw != "" {
+			cfg.R2UseSSL = sslRaw == "1" || strings.EqualFold(sslRaw, "true")
 		} else {
-			cfg.MinIOUseSSL = strings.HasPrefix(strings.ToLower(rawEndpoint), "https://")
+			cfg.R2UseSSL = defaultUseSSL
 		}
 
 		configs = append(configs, cfg)

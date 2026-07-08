@@ -19,28 +19,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  minio_uk:
-    image: minio/minio:latest
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER_UK}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD_UK}
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_uk_data:/data
-    networks:
-      anglehr_net:
-        aliases:
-          - minio-uk
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   # ========== United States (us) ==========
   postgres_us:
     image: postgres:16-alpine
@@ -56,28 +34,6 @@ services:
       - anglehr_net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U anglehr -d anglehr_us"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  minio_us:
-    image: minio/minio:latest
-    ports:
-      - "9002:9000"
-      - "9003:9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER_US}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD_US}
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_us_data:/data
-    networks:
-      anglehr_net:
-        aliases:
-          - minio-us
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -103,28 +59,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  minio_africa:
-    image: minio/minio:latest
-    ports:
-      - "9004:9000"
-      - "9005:9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER_AFRICA}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD_AFRICA}
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_africa_data:/data
-    networks:
-      anglehr_net:
-        aliases:
-          - minio-africa
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   # ========== European Union (eu) ==========
   postgres_eu:
     image: postgres:16-alpine
@@ -140,28 +74,6 @@ services:
       - anglehr_net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U anglehr -d anglehr_eu"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  minio_eu:
-    image: minio/minio:latest
-    ports:
-      - "9006:9000"
-      - "9007:9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER_EU}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD_EU}
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_eu_data:/data
-    networks:
-      anglehr_net:
-        aliases:
-          - minio-eu
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -188,16 +100,29 @@ services:
     restart: unless-stopped
 
   # ========== Shared ==========
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   migrate:
     image: postgres:16-alpine
     volumes:
       - ./db/migrations:/migrations:ro
     entrypoint: ["/bin/bash", "/migrations/migrate-all.sh", "up"]
     environment:
-      DB_URL_UK: postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres_uk:5432/anglehr_uk?sslmode=disable
-      DB_URL_US: postgres://anglehr:${POSTGRES_PASSWORD_US}@postgres_us:5432/anglehr_us?sslmode=disable
-      DB_URL_AFRICA: postgres://anglehr:${POSTGRES_PASSWORD_AFRICA}@postgres_africa:5432/anglehr_africa?sslmode=disable
-      DB_URL_EU: postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres_eu:5432/anglehr_eu?sslmode=disable
+      ANGLEHR_UK_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres_uk:5432/anglehr_uk?sslmode=disable
+      ANGLEHR_US_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_US}@postgres_us:5432/anglehr_us?sslmode=disable
+      ANGLEHR_AFRICA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_AFRICA}@postgres_africa:5432/anglehr_africa?sslmode=disable
+      ANGLEHR_EU_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres_eu:5432/anglehr_eu?sslmode=disable
       DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
     depends_on:
       postgres_uk:
@@ -213,42 +138,6 @@ services:
     networks:
       - anglehr_net
     restart: "no"
-
-  minio_setup:
-    image: minio/mc:latest
-    depends_on:
-      minio_uk:
-        condition: service_healthy
-      minio_us:
-        condition: service_healthy
-      minio_africa:
-        condition: service_healthy
-      minio_eu:
-        condition: service_healthy
-    networks:
-      - anglehr_net
-    restart: "no"
-    environment:
-      MINIO_ROOT_USER_UK: ${MINIO_ROOT_USER_UK}
-      MINIO_ROOT_PASSWORD_UK: ${MINIO_ROOT_PASSWORD_UK}
-      MINIO_ROOT_USER_US: ${MINIO_ROOT_USER_US}
-      MINIO_ROOT_PASSWORD_US: ${MINIO_ROOT_PASSWORD_US}
-      MINIO_ROOT_USER_AFRICA: ${MINIO_ROOT_USER_AFRICA}
-      MINIO_ROOT_PASSWORD_AFRICA: ${MINIO_ROOT_PASSWORD_AFRICA}
-      MINIO_ROOT_USER_EU: ${MINIO_ROOT_USER_EU}
-      MINIO_ROOT_PASSWORD_EU: ${MINIO_ROOT_PASSWORD_EU}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        mc alias set uk http://minio-uk:9000 "$$MINIO_ROOT_USER_UK" "$$MINIO_ROOT_PASSWORD_UK"
-        mc mb --ignore-existing uk/anglehr-uk
-        mc alias set us http://minio-us:9000 "$$MINIO_ROOT_USER_US" "$$MINIO_ROOT_PASSWORD_US"
-        mc mb --ignore-existing us/anglehr-us
-        mc alias set africa http://minio-africa:9000 "$$MINIO_ROOT_USER_AFRICA" "$$MINIO_ROOT_PASSWORD_AFRICA"
-        mc mb --ignore-existing africa/anglehr-africa
-        mc alias set eu http://minio-eu:9000 "$$MINIO_ROOT_USER_EU" "$$MINIO_ROOT_PASSWORD_EU"
-        mc mb --ignore-existing eu/anglehr-eu
 
   server:
     build:
@@ -260,28 +149,25 @@ services:
     environment:
       SERVER_PORT: "8080"
       APP_ENV: ${APP_ENV:-development}
-      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      FLUVIO_UI_ORIGIN: ${FLUVIO_UI_ORIGIN:-http://localhost:5173}
+      JWT_SECRET: ${JWT_SECRET:-dev-insecure-jwt-secret-change-me}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-3600}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-604800}
+      AUTH_DEFAULT_REGION: ${AUTH_DEFAULT_REGION:-uk}
+      REDIS_URL: redis://redis:6379/${REDIS_DB:-0}
+      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
+      R2_ACCESS_KEY: ${R2_ACCESS_KEY}
+      R2_SECRET_KEY: ${R2_SECRET_KEY}
+      R2_ENDPOINT: ${R2_ENDPOINT}
       ANGLEHR_UK_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres_uk:5432/anglehr_uk?sslmode=disable
-      ANGLEHR_UK_MINIO_ENDPOINT: minio-uk:9000
-      ANGLEHR_UK_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER_UK}
-      ANGLEHR_UK_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD_UK}
-      ANGLEHR_UK_MINIO_BUCKET: anglehr-uk
+      ANGLEHR_UK_R2_BUCKET: ${ANGLEHR_UK_R2_BUCKET}
       ANGLEHR_US_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_US}@postgres_us:5432/anglehr_us?sslmode=disable
-      ANGLEHR_US_MINIO_ENDPOINT: minio-us:9000
-      ANGLEHR_US_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER_US}
-      ANGLEHR_US_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD_US}
-      ANGLEHR_US_MINIO_BUCKET: anglehr-us
+      ANGLEHR_US_R2_BUCKET: ${ANGLEHR_US_R2_BUCKET}
       ANGLEHR_AFRICA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_AFRICA}@postgres_africa:5432/anglehr_africa?sslmode=disable
-      ANGLEHR_AFRICA_MINIO_ENDPOINT: minio-africa:9000
-      ANGLEHR_AFRICA_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER_AFRICA}
-      ANGLEHR_AFRICA_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD_AFRICA}
-      ANGLEHR_AFRICA_MINIO_BUCKET: anglehr-africa
+      ANGLEHR_AFRICA_R2_BUCKET: ${ANGLEHR_AFRICA_R2_BUCKET}
       ANGLEHR_EU_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres_eu:5432/anglehr_eu?sslmode=disable
-      ANGLEHR_EU_MINIO_ENDPOINT: minio-eu:9000
-      ANGLEHR_EU_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER_EU}
-      ANGLEHR_EU_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD_EU}
-      ANGLEHR_EU_MINIO_BUCKET: anglehr-eu
+      ANGLEHR_EU_R2_BUCKET: ${ANGLEHR_EU_R2_BUCKET}
     depends_on:
       postgres_uk:
         condition: service_healthy
@@ -293,35 +179,54 @@ services:
         condition: service_healthy
       postgres_global:
         condition: service_healthy
-      minio_uk:
-        condition: service_healthy
-      minio_us:
-        condition: service_healthy
-      minio_africa:
-        condition: service_healthy
-      minio_eu:
+      redis:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-      minio_setup:
-        condition: service_completed_successfully
     networks:
       - anglehr_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/api/v1/countries || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
-  worker:
+  email-worker:
     build:
       context: .
       dockerfile: Dockerfile
-      target: worker
+      target: email-worker
     environment:
       APP_ENV: ${APP_ENV:-development}
+      REDIS_URL: redis://redis:6379/${REDIS_DB:-0}
       DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_FROM: ${SMTP_FROM}
+      APP_URL: ${APP_URL}
+    depends_on:
+      postgres_global:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - anglehr_net
+    restart: unless-stopped
+
+  upload-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: upload-worker
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
     depends_on:
       postgres_global:
         condition: service_healthy
@@ -330,6 +235,21 @@ services:
     networks:
       - anglehr_net
     restart: unless-stopped
+
+  fluvio-ui:
+    image: ghcr.io/software78/fluvio_ui:1.0.1
+    environment:
+      VITE_API_BASE_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      VITE_API_BASIC_AUTH_USER: ${VITE_API_BASIC_AUTH_USER:-}
+      VITE_API_BASIC_AUTH_PASSWORD: ${VITE_API_BASIC_AUTH_PASSWORD:-}
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    networks:
+      - anglehr_net
 
 networks:
   anglehr_net:
@@ -341,7 +261,3 @@ volumes:
   postgres_africa_data:
   postgres_eu_data:
   postgres_global_data:
-  minio_uk_data:
-  minio_us_data:
-  minio_africa_data:
-  minio_eu_data:

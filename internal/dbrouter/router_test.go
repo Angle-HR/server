@@ -18,6 +18,16 @@ func TestLoadConfigsFromEnv_missing(t *testing.T) {
 	}
 }
 
+func TestLoadConfigsFromEnv_missingSharedCredentials(t *testing.T) {
+	setFullEnv(t)
+	t.Setenv("R2_ACCESS_KEY", "")
+
+	_, err := LoadConfigsFromEnv()
+	if err == nil {
+		t.Fatal("expected error for missing R2_ACCESS_KEY")
+	}
+}
+
 func TestLoadConfigsFromEnv_success(t *testing.T) {
 	setFullEnv(t)
 
@@ -38,17 +48,46 @@ func TestLoadConfigsFromEnv_success(t *testing.T) {
 	if uk.PostgresDSN != "postgres://UK" {
 		t.Fatalf("uk dsn: got %q", uk.PostgresDSN)
 	}
-	if uk.MinIOEndpoint != "localhost:9000" {
-		t.Fatalf("uk endpoint: got %q", uk.MinIOEndpoint)
+	if uk.R2Endpoint != "abc123.r2.cloudflarestorage.com" {
+		t.Fatalf("uk endpoint: got %q", uk.R2Endpoint)
 	}
-	if uk.MinIOUseSSL {
-		t.Fatal("uk MinIOUseSSL should be false without https endpoint")
+	if uk.R2AccessKey != "access" || uk.R2SecretKey != "secret" {
+		t.Fatalf("uk credentials: got %q / %q", uk.R2AccessKey, uk.R2SecretKey)
+	}
+	if !uk.R2UseSSL {
+		t.Fatal("uk R2UseSSL should be true for R2 endpoint")
+	}
+}
+
+func TestLoadConfigsFromEnv_missingR2Endpoint(t *testing.T) {
+	setFullEnv(t)
+	t.Setenv("R2_ENDPOINT", "")
+
+	_, err := LoadConfigsFromEnv()
+	if err == nil {
+		t.Fatal("expected error for missing R2_ENDPOINT")
+	}
+}
+
+func TestLoadConfigsFromEnv_sharedEndpoint(t *testing.T) {
+	setFullEnv(t)
+	t.Setenv("R2_ENDPOINT", "https://default.r2.cloudflarestorage.com")
+
+	configs, err := LoadConfigsFromEnv()
+	if err != nil {
+		t.Fatalf("LoadConfigsFromEnv: %v", err)
+	}
+
+	for _, cfg := range configs {
+		if cfg.R2Endpoint != "default.r2.cloudflarestorage.com" {
+			t.Fatalf("region %s endpoint: got %q", cfg.Region, cfg.R2Endpoint)
+		}
 	}
 }
 
 func TestLoadConfigsFromEnv_httpsSSL(t *testing.T) {
 	setFullEnv(t)
-	t.Setenv("ANGLEHR_UK_MINIO_ENDPOINT", "https://minio.example.com:9000")
+	t.Setenv("R2_ENDPOINT", "https://abc123.r2.cloudflarestorage.com")
 
 	configs, err := LoadConfigsFromEnv()
 	if err != nil {
@@ -57,11 +96,11 @@ func TestLoadConfigsFromEnv_httpsSSL(t *testing.T) {
 
 	for _, cfg := range configs {
 		if cfg.Region == region.RegionUK {
-			if !cfg.MinIOUseSSL {
-				t.Fatal("expected MinIOUseSSL true for https endpoint")
+			if !cfg.R2UseSSL {
+				t.Fatal("expected R2UseSSL true for https endpoint")
 			}
-			if cfg.MinIOEndpoint != "minio.example.com:9000" {
-				t.Fatalf("endpoint: got %q", cfg.MinIOEndpoint)
+			if cfg.R2Endpoint != "abc123.r2.cloudflarestorage.com" {
+				t.Fatalf("endpoint: got %q", cfg.R2Endpoint)
 			}
 			return
 		}
@@ -71,12 +110,12 @@ func TestLoadConfigsFromEnv_httpsSSL(t *testing.T) {
 
 func newDBRouterForTest(
 	pools map[region.Region]PgxPool,
-	minioClients map[region.Region]*minio.Client,
+	storageClients map[region.Region]*minio.Client,
 	buckets map[region.Region]string,
 ) *DBRouter {
 	return &DBRouter{
 		pools:   pools,
-		minio:   minioClients,
+		storage: storageClients,
 		buckets: buckets,
 	}
 }
@@ -112,16 +151,16 @@ func TestMustDB_panics(t *testing.T) {
 	router.MustDB(region.RegionUK)
 }
 
-func TestMinIO_unknownRegion(t *testing.T) {
+func TestR2_unknownRegion(t *testing.T) {
 	router := newDBRouterForTest(nil, map[region.Region]*minio.Client{}, nil)
 
-	_, err := router.MinIO(region.RegionUK)
+	_, err := router.R2(region.RegionUK)
 	if !errors.Is(err, ErrUnknownRegion) {
 		t.Fatalf("got %v, want ErrUnknownRegion", err)
 	}
 }
 
-func TestMustMinIO_panics(t *testing.T) {
+func TestMustR2_panics(t *testing.T) {
 	router := newDBRouterForTest(nil, map[region.Region]*minio.Client{}, nil)
 
 	defer func() {
@@ -129,7 +168,7 @@ func TestMustMinIO_panics(t *testing.T) {
 			t.Fatal("expected panic")
 		}
 	}()
-	router.MustMinIO(region.RegionUK)
+	router.MustR2(region.RegionUK)
 }
 
 func TestBucket(t *testing.T) {
@@ -150,22 +189,23 @@ func TestClose_empty(t *testing.T) {
 func setFullEnv(t *testing.T) {
 	t.Helper()
 
+	t.Setenv("R2_ACCESS_KEY", "access")
+	t.Setenv("R2_SECRET_KEY", "secret")
+	t.Setenv("R2_ENDPOINT", "https://abc123.r2.cloudflarestorage.com")
+
 	regions := []struct {
 		suffix string
-		port   string
+		bucket string
 	}{
-		{"UK", "9000"},
-		{"US", "9002"},
-		{"AFRICA", "9004"},
-		{"EU", "9006"},
+		{"UK", "anglehr-uk"},
+		{"US", "anglehr-us"},
+		{"AFRICA", "anglehr-africa"},
+		{"EU", "anglehr-eu"},
 	}
 
 	for _, r := range regions {
 		prefix := "ANGLEHR_" + r.suffix
 		t.Setenv(prefix+"_POSTGRES_DSN", "postgres://"+r.suffix)
-		t.Setenv(prefix+"_MINIO_ENDPOINT", "localhost:"+r.port)
-		t.Setenv(prefix+"_MINIO_ACCESS_KEY", "access")
-		t.Setenv(prefix+"_MINIO_SECRET_KEY", "secret")
-		t.Setenv(prefix+"_MINIO_BUCKET", "bucket-"+r.suffix)
+		t.Setenv(prefix+"_R2_BUCKET", r.bucket)
 	}
 }

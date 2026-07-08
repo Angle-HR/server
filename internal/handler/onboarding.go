@@ -17,6 +17,7 @@ import (
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/mailer"
+	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/query"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
@@ -31,16 +32,16 @@ const othersSlug = "others"
 type OnboardingHandler struct {
 	Router   *dbrouter.DBRouter
 	GlobalDB globalDB
-	River    riverClient
+	Enqueuer jobEnqueuer
 	validate *validator.Validate
 }
 
 // NewOnboardingHandler returns an onboarding handler.
-func NewOnboardingHandler(router *dbrouter.DBRouter, globalDB globalDB, river riverClient) *OnboardingHandler {
+func NewOnboardingHandler(router *dbrouter.DBRouter, globalDB globalDB, enqueuer jobEnqueuer) *OnboardingHandler {
 	return &OnboardingHandler{
 		Router:   router,
 		GlobalDB: globalDB,
-		River:    river,
+		Enqueuer: enqueuer,
 		validate: validator.New(),
 	}
 }
@@ -66,9 +67,9 @@ type onboardingRequest struct {
 
 // submit godoc
 //
-//	@Summary		Submit waitlist onboarding
+//	@Summary		Submit waitlist onboarding form
 //	@Description	Saves the full onboarding form for a waitlist signup token.
-//	@Tags			waitlist
+//	@Tags			waitlist/onboarding
 //	@Accept			json
 //	@Produce		json
 //	@Param			body	body		handler.OnboardingRequest	true	"Onboarding payload"
@@ -401,12 +402,12 @@ func (h *OnboardingHandler) persistOnboarding(
 		return err
 	}
 
-	if h.River != nil {
-		_, err = h.River.InsertTx(ctx, gtx, mailer.EmailArgs{
+	if h.Enqueuer != nil {
+		_, err = h.Enqueuer.EnqueueTx(ctx, gtx, mailer.EmailArgs{
 			Type:      "more_info_ack",
 			Recipient: email,
 			FullName:  fullName,
-		}, nil)
+		}, queue.EmailEnqueueOptions()...)
 		if err != nil {
 			return fmt.Errorf("enqueue onboarding acknowledgement email: %w", err)
 		}

@@ -5,17 +5,20 @@ import (
 	"errors"
 	"net/smtp"
 	"testing"
+
+	fluvio "github.com/software78/fluvio"
+
 	"github.com/Angle-HR/server/internal/mailer"
-	"github.com/riverqueue/river"
 )
 
 func TestEmailWorker_Work_Success(t *testing.T) {
 	t.Parallel()
 
 	m, err := mailer.New(mailer.Config{
-		Host: "smtp.example.com",
-		Port: "587",
-		From: "no-reply@example.com",
+		Host:   "smtp.example.com",
+		Port:   "587",
+		From:   "no-reply@example.com",
+		AppURL: "https://app.anglehr.com",
 	})
 	if err != nil {
 		t.Fatalf("failed to create mailer: %v", err)
@@ -25,7 +28,6 @@ func TestEmailWorker_Work_Success(t *testing.T) {
 	var calledFrom string
 	var calledTo []string
 
-	// Mock out smtp.SendMail.
 	mailer.SetSendMailForTesting(m, func(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
 		calledAddr = addr
 		calledFrom = from
@@ -34,7 +36,7 @@ func TestEmailWorker_Work_Success(t *testing.T) {
 	})
 
 	w := &EmailWorker{Mailer: m}
-	job := &river.Job[mailer.EmailArgs]{
+	job := &fluvio.Job[mailer.EmailArgs]{
 		Args: mailer.EmailArgs{
 			Type:      "waitlist_confirmation",
 			Recipient: "recipient@acme.com",
@@ -72,7 +74,7 @@ func TestEmailWorker_Work_SMTPError(t *testing.T) {
 	})
 
 	w := &EmailWorker{Mailer: m}
-	job := &river.Job[mailer.EmailArgs]{
+	job := &fluvio.Job[mailer.EmailArgs]{
 		Args: mailer.EmailArgs{
 			Type:      "more_info_ack",
 			Recipient: "recipient@acme.com",

@@ -8,11 +8,12 @@ RUN go mod download
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /server ./cmd/server
-RUN CGO_ENABLED=0 GOOS=linux go build -o /worker ./cmd/worker
+RUN CGO_ENABLED=0 GOOS=linux go build -o /email-worker ./cmd/email-worker
+RUN CGO_ENABLED=0 GOOS=linux go build -o /upload-worker ./cmd/upload-worker
 
 FROM alpine:3.21 AS server
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates wget
 
 COPY --from=builder /server /server
 
@@ -20,10 +21,18 @@ EXPOSE 8080
 
 ENTRYPOINT ["/server"]
 
-FROM alpine:3.21 AS worker
+FROM alpine:3.21 AS email-worker
 
 RUN apk add --no-cache ca-certificates
 
-COPY --from=builder /worker /worker
+COPY --from=builder /email-worker /email-worker
 
-ENTRYPOINT ["/worker"]
+ENTRYPOINT ["/email-worker"]
+
+FROM alpine:3.21 AS upload-worker
+
+RUN apk add --no-cache ca-certificates
+
+COPY --from=builder /upload-worker /upload-worker
+
+ENTRYPOINT ["/upload-worker"]

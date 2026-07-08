@@ -57,7 +57,7 @@ func (h *CountriesHandler) RegisterRoutes(r chi.Router) {
 //
 //	@Summary		List countries
 //	@Description	Returns active countries for the waitlist region dropdown.
-//	@Tags			countries
+//	@Tags			waitlist/reference
 //	@Produce		json
 //	@Success		200	{object}	handler.CountriesEnvelope
 //	@Failure		500	{object}	apidoc.ErrorEnvelope

@@ -6,7 +6,8 @@
 #   production  — used when pushing to the production branch
 #
 # Each environment needs these secrets (same names, different DSNs per env):
-#   DB_URL_UK, DB_URL_US, DB_URL_AFRICA, DB_URL_EU, DB_URL_GLOBAL
+#   ANGLEHR_UK_POSTGRES_DSN, ANGLEHR_US_POSTGRES_DSN, ANGLEHR_AFRICA_POSTGRES_DSN,
+#   ANGLEHR_EU_POSTGRES_DSN, DB_URL_GLOBAL
 #
 # Optional: enable Required reviewers on production; restrict each environment
 # to its deployment branch (staging → staging, production → production).
@@ -18,6 +19,8 @@ on:
     branches:
       - production
       - staging
+    paths:
+      - "db/migrations/**/*.sql"
 
 concurrency:
   group: migrate-${{ github.ref_name }}
@@ -36,9 +39,10 @@ jobs:
 
       - name: Run all migrations
         env:
-          DB_URL_UK: ${{ secrets.DB_URL_UK }}
-          DB_URL_US: ${{ secrets.DB_URL_US }}
-          DB_URL_AFRICA: ${{ secrets.DB_URL_AFRICA }}
-          DB_URL_EU: ${{ secrets.DB_URL_EU }}
+          ANGLEHR_UK_POSTGRES_DSN: ${{ secrets.ANGLEHR_UK_POSTGRES_DSN }}
+          ANGLEHR_US_POSTGRES_DSN: ${{ secrets.ANGLEHR_US_POSTGRES_DSN }}
+          ANGLEHR_AFRICA_POSTGRES_DSN: ${{ secrets.ANGLEHR_AFRICA_POSTGRES_DSN }}
+          ANGLEHR_EU_POSTGRES_DSN: ${{ secrets.ANGLEHR_EU_POSTGRES_DSN }}
           DB_URL_GLOBAL: ${{ secrets.DB_URL_GLOBAL }}
+          MIGRATE_COMPARE_REF: ${{ github.event.before }}
         run: bash db/migrations/migrate-all.sh up

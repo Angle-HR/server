@@ -9,9 +9,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- Product onboarding API: auth (`/auth/signup`, verify, login, refresh), onboarding steps (`/onboarding/profile`, `/address`, `/business`, `/status`, `/complete`), and product reference catalog endpoints.
+- Accounts schema (`000002_accounts`) in regional databases and onboarding catalog migration (`000002_onboarding_catalogs`) in the global registry.
+- JWT auth middleware, Redis-backed email verification (6-digit OTP), and Fluvio email jobs (`email_verification`, `onboarding_complete`).
+- Email templates for verification and onboarding completion.
+- E2E script: `scripts/e2e-onboarding.sh`.
+
 ### Changed
+- Object storage now uses Cloudflare R2 instead of self-hosted MinIO. Environment variables are renamed from `ANGLEHR_*_MINIO_*` to `ANGLEHR_*_R2_*`. `DBRouter.MinIO()` is now `DBRouter.R2()`. R2 credentials are shared via `R2_ACCESS_KEY` and `R2_SECRET_KEY`; `R2_ENDPOINT` is the default S3 API host with optional per-region `ANGLEHR_*_R2_ENDPOINT` overrides.
+- Email verification OTP expiry increased from 60 seconds to 5 minutes (300 seconds).
+- Removed redundant Markdown API docs under `docs/`; API reference is OpenAPI only (Scalar at `/`).
+
 ### Deprecated
 ### Removed
+- In-cluster MinIO StatefulSets, `minio_setup` docker-compose service, and `minio-setup` Kubernetes Job. Startup no longer checks or creates R2 buckets.
+
 ### Fixed
 ### Security
 

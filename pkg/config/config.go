@@ -17,16 +17,17 @@ import (
 
 // Config holds runtime configuration values.
 type Config struct {
-	ServerPort        string
-	DBUrlGlobal       string
-	RedisURL          string
-	AppEnv            string
-	PublicAPIURL      string
-	FluvioUIOrigin    string
-	JWTSecret         string
-	JWTAccessTTL      time.Duration
-	JWTRefreshTTL     time.Duration
-	AuthDefaultRegion region.Region
+	ServerPort         string
+	DBUrlGlobal        string
+	RedisURL           string
+	AppEnv             string
+	PublicAPIURL       string
+	FluvioUIOrigin     string
+	CORSAllowedOrigins []string
+	JWTSecret          string
+	JWTAccessTTL       time.Duration
+	JWTRefreshTTL      time.Duration
+	AuthDefaultRegion  region.Region
 }
 
 // Load reads configuration from the environment.
@@ -99,7 +100,36 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	origins, err := parseCORSAllowedOrigins(os.Getenv("CORS_ALLOWED_ORIGINS"))
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.CORSAllowedOrigins = origins
+
 	return cfg, nil
+}
+
+func parseCORSAllowedOrigins(raw string) ([]string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+
+	var origins []string
+	for _, part := range strings.Split(raw, ",") {
+		origin := strings.TrimSpace(part)
+		if origin == "" {
+			continue
+		}
+
+		if err := validatePublicAPIURL(origin); err != nil {
+			return nil, fmt.Errorf("invalid CORS_ALLOWED_ORIGINS entry %q: %w", origin, err)
+		}
+
+		origins = append(origins, strings.TrimRight(origin, "/"))
+	}
+
+	return origins, nil
 }
 
 func parsePositiveIntEnv(key string, fallback int) (int, error) {

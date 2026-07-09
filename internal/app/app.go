@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/internal/dbrouter"
@@ -87,6 +88,15 @@ func Run() error {
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.RealIP)
 	router.Use(chimiddleware.Recoverer)
+	if len(cfg.CORSAllowedOrigins) > 0 {
+		router.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   cfg.CORSAllowedOrigins,
+			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+			AllowCredentials: false,
+			MaxAge:           300,
+		}))
+	}
 
 	if docs.IsEnabled(cfg.AppEnv) {
 		docs.RegisterRoutes(router, docs.Config{PublicAPIURL: cfg.PublicAPIURL})

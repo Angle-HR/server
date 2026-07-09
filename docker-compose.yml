@@ -150,6 +150,7 @@ services:
       SERVER_PORT: "8080"
       APP_ENV: ${APP_ENV:-development}
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
       FLUVIO_UI_ORIGIN: ${FLUVIO_UI_ORIGIN:-http://localhost:5173}
       JWT_SECRET: ${JWT_SECRET:-dev-insecure-jwt-secret-change-me}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-3600}

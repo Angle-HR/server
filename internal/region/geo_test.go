@@ -34,8 +34,7 @@ func TestRegionFromCountry(t *testing.T) {
 	}
 }
 
-// TestCountryToRegionMapCompleteness guards against silent mis-routing when new
-// countries are added to countryToRegion without a corresponding valid region.
+
 func TestCountryToRegionMapCompleteness(t *testing.T) {
 	t.Parallel()
 	for iso, r := range countryToRegion {

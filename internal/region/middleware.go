@@ -29,7 +29,7 @@ func (res *RegionResolver) Middleware() func(http.Handler) http.Handler {
 					return
 				}
 
-				// DB failures and other unexpected server errors must not surface as 400.
+			
 				response.Error(w, r, apperror.ErrInternal)
 				return
 			}

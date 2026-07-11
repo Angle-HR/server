@@ -465,8 +465,7 @@ func assertMocksMet(t *testing.T, mocks ...pgxmock.PgxPoolIface) {
 	}
 }
 
-// decodeDetailsFields extracts the "fields" slice from a validation error body.
-// Each element is a map with "field" and "message" keys.
+
 func decodeDetailsFields(t *testing.T, body response.ErrorBody) []map[string]string {
 	t.Helper()
 
@@ -475,7 +474,7 @@ func decodeDetailsFields(t *testing.T, body response.ErrorBody) []map[string]str
 		t.Fatalf("details: missing \"fields\" key; got %v", body.Details)
 	}
 
-	// After JSON round-trip Details values arrive as []any / map[string]any.
+
 	rawSlice, ok := raw.([]any)
 	if !ok {
 		t.Fatalf("details.fields: expected []any, got %T", raw)

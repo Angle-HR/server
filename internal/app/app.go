@@ -11,9 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	chimiddleware "github.com/go-chi/chi/v5/middleware"
-
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/docs"
@@ -23,10 +20,18 @@ import (
 	"github.com/Angle-HR/server/pkg/db"
 	"github.com/Angle-HR/server/pkg/logger"
 	redisclient "github.com/Angle-HR/server/pkg/redis"
+	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/software78/fluvio/fluviui"
 )
 
-const readHeaderTimeout = 5 * time.Second
+const (
+	readHeaderTimeout   = 5 * time.Second
+	readTimeout         = 15 * time.Second
+	writeTimeout        = 15 * time.Second
+	idleTimeout         = 60 * time.Second
+	maxRequestBodyBytes = 1 << 20 // 1 MB
+)
 
 // Run starts the HTTP server and blocks until shutdown.
 func Run() error {
@@ -84,6 +89,12 @@ func Run() error {
 	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient)
 
 	router := chi.NewRouter()
+	router.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+			next.ServeHTTP(w, r)
+		})
+	})
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.RealIP)
 	router.Use(chimiddleware.Recoverer)
@@ -115,6 +126,9 @@ func Run() error {
 		Addr:              ":" + cfg.ServerPort,
 		Handler:           router,
 		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 
 	errCh := make(chan error, 1)

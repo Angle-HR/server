@@ -112,8 +112,9 @@ func TestWaitlistSignup_invalidEmail(t *testing.T) {
 
 	assertStatus(t, rec, http.StatusBadRequest)
 	errBody := decodeError(t, rec)
-	if errBody.Details["field"] != "email" {
-		t.Fatalf("field: got %v, want email", errBody.Details["field"])
+	fields := decodeDetailsFields(t, errBody)
+	if len(fields) == 0 || fields[0]["field"] != "email" {
+		t.Fatalf("fields: got %v, want first field=email", fields)
 	}
 
 	assertMocksMet(t, regionalMock, globalMock)
@@ -133,8 +134,9 @@ func TestWaitlistSignup_missingFullName(t *testing.T) {
 
 	assertStatus(t, rec, http.StatusBadRequest)
 	errBody := decodeError(t, rec)
-	if errBody.Details["field"] != "full_name" {
-		t.Fatalf("field: got %v, want full_name", errBody.Details["field"])
+	fields := decodeDetailsFields(t, errBody)
+	if len(fields) == 0 || fields[0]["field"] != "full_name" {
+		t.Fatalf("fields: got %v, want first field=full_name", fields)
 	}
 
 	assertMocksMet(t, regionalMock, globalMock)
@@ -461,4 +463,36 @@ func assertMocksMet(t *testing.T, mocks ...pgxmock.PgxPoolIface) {
 			t.Fatalf("expectations: %v", err)
 		}
 	}
+}
+
+// decodeDetailsFields extracts the "fields" slice from a validation error body.
+// Each element is a map with "field" and "message" keys.
+func decodeDetailsFields(t *testing.T, body response.ErrorBody) []map[string]string {
+	t.Helper()
+
+	raw, ok := body.Details["fields"]
+	if !ok {
+		t.Fatalf("details: missing \"fields\" key; got %v", body.Details)
+	}
+
+	// After JSON round-trip Details values arrive as []any / map[string]any.
+	rawSlice, ok := raw.([]any)
+	if !ok {
+		t.Fatalf("details.fields: expected []any, got %T", raw)
+	}
+
+	result := make([]map[string]string, 0, len(rawSlice))
+	for _, item := range rawSlice {
+		m, ok := item.(map[string]any)
+		if !ok {
+			t.Fatalf("details.fields item: expected map[string]any, got %T", item)
+		}
+		entry := make(map[string]string, len(m))
+		for k, v := range m {
+			entry[k] = v.(string)
+		}
+		result = append(result, entry)
+	}
+
+	return result
 }

@@ -29,9 +29,9 @@ const (
 	MsgOtherTextOnlyAllowedWhenOthersSelected = "other text is only allowed when Others is selected"
 	MsgNotImplemented                         = "endpoint not yet implemented"
 	MsgInvalidVerificationCode                = "invalid verification code"
-	MsgVerificationExpired                      = "verification code expired"
-	MsgVerificationRateLimited                  = "verification resend rate limited"
-	MsgEmailNotVerified                         = "email address not verified"
+	MsgVerificationExpired                    = "verification code expired"
+	MsgVerificationRateLimited                = "verification resend rate limited"
+	MsgEmailNotVerified                       = "email address not verified"
 	MsgOnboardingStepIncomplete               = "onboarding step incomplete"
 	MsgInvalidAccountTypeBranch               = "invalid account type for this endpoint"
 )
@@ -53,14 +53,14 @@ var (
 
 // Stable application error codes.
 const (
-	CodeNotFound         = "NOT_FOUND"
-	CodeConflict         = "CONFLICT"
-	CodeValidationError  = "VALIDATION_ERROR"
-	CodeUnauthorized     = "UNAUTHORIZED"
-	CodeForbidden        = "FORBIDDEN"
-	CodeInternalError    = "INTERNAL_ERROR"
-	CodeInvalidReference = "INVALID_REFERENCE"
-	CodeNotImplemented            = "NOT_IMPLEMENTED"
+	CodeNotFound                = "NOT_FOUND"
+	CodeConflict                = "CONFLICT"
+	CodeValidationError         = "VALIDATION_ERROR"
+	CodeUnauthorized            = "UNAUTHORIZED"
+	CodeForbidden               = "FORBIDDEN"
+	CodeInternalError           = "INTERNAL_ERROR"
+	CodeInvalidReference        = "INVALID_REFERENCE"
+	CodeNotImplemented          = "NOT_IMPLEMENTED"
 	CodeEmailAlreadyRegistered  = "email_already_registered"
 	CodeInvalidVerificationCode = "invalid_verification_code"
 	CodeVerificationExpired     = "verification_expired"
@@ -71,20 +71,21 @@ const (
 )
 
 var httpStatusByCode = map[string]int{
-	CodeNotFound:         http.StatusNotFound,
-	CodeConflict:         http.StatusConflict,
-	CodeValidationError:  http.StatusBadRequest,
-	CodeUnauthorized:     http.StatusUnauthorized,
-	CodeForbidden:        http.StatusForbidden,
-	CodeInvalidReference: http.StatusBadRequest,
-	CodeNotImplemented:            http.StatusNotImplemented,
-	CodeEmailAlreadyRegistered:    http.StatusConflict,
-	CodeInvalidVerificationCode:   http.StatusBadRequest,
-	CodeVerificationExpired:       http.StatusBadRequest,
-	CodeVerificationRateLimited:   http.StatusTooManyRequests,
-	CodeEmailNotVerified:          http.StatusForbidden,
-	CodeOnboardingIncomplete:      http.StatusBadRequest,
-	CodeInvalidAccountBranch:      http.StatusBadRequest,
+	CodeNotFound:                http.StatusNotFound,
+	CodeConflict:                http.StatusConflict,
+	CodeValidationError:         http.StatusBadRequest,
+	CodeUnauthorized:            http.StatusUnauthorized,
+	CodeForbidden:               http.StatusForbidden,
+	CodeInternalError:           http.StatusInternalServerError,
+	CodeInvalidReference:        http.StatusBadRequest,
+	CodeNotImplemented:          http.StatusNotImplemented,
+	CodeEmailAlreadyRegistered:  http.StatusConflict,
+	CodeInvalidVerificationCode: http.StatusBadRequest,
+	CodeVerificationExpired:     http.StatusBadRequest,
+	CodeVerificationRateLimited: http.StatusTooManyRequests,
+	CodeEmailNotVerified:        http.StatusForbidden,
+	CodeOnboardingIncomplete:    http.StatusBadRequest,
+	CodeInvalidAccountBranch:    http.StatusBadRequest,
 }
 
 // AppError is a structured application error.

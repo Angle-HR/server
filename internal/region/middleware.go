@@ -10,7 +10,8 @@ import (
 )
 
 // Middleware resolves the request region and stores it on the request context.
-// It responds with 400 when region cannot be resolved or is explicitly invalid.
+// It responds with 400 when the region is explicitly invalid or cannot be resolved,
+// and 500 when a server-side error (e.g. DB failure) prevents resolution.
 func (res *RegionResolver) Middleware() func(http.Handler) http.Handler {
 	log := slog.Default()
 
@@ -23,7 +24,13 @@ func (res *RegionResolver) Middleware() func(http.Handler) http.Handler {
 					return
 				}
 
-				response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgRegionRequired))
+				if errors.Is(err, ErrUnresolved) {
+					response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgRegionRequired))
+					return
+				}
+
+				// DB failures and other unexpected server errors must not surface as 400.
+				response.Error(w, r, apperror.ErrInternal)
 				return
 			}
 

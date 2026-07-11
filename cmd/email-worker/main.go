@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+
 	"github.com/Angle-HR/server/internal/mailer"
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/worker"

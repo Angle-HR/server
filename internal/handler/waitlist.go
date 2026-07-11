@@ -276,14 +276,18 @@ func validationError(err error) error {
 		return apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequest)
 	}
 
-	ve := verrs[0]
-	field := ve.Field()
-	jsonField := jsonFieldName(field)
+	fields := make([]map[string]string, 0, len(verrs))
+	for _, ve := range verrs {
+		fields = append(fields, map[string]string{
+			"field":   jsonFieldName(ve.Field()),
+			"message": validationMessage(ve),
+		})
+	}
 
 	return apperror.NewWithDetails(
 		apperror.CodeValidationError,
-		validationMessage(ve),
-		map[string]any{"field": jsonField},
+		apperror.MsgInvalidRequest,
+		map[string]any{"fields": fields},
 	)
 }
 

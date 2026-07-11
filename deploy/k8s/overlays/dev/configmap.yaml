@@ -8,6 +8,7 @@ data:
   SERVER_PORT: "8080"
   APP_ENV: development
   PUBLIC_API_URL: http://api.anglehr.local
+  CORS_ALLOWED_ORIGINS: http://app.anglehr.local,http://fluvio.anglehr.local
   FLUVIO_UI_ORIGIN: http://fluvio.anglehr.local
   JWT_ACCESS_TTL: "3600"
   JWT_REFRESH_TTL: "604800"

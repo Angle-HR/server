@@ -15,6 +15,7 @@ func TestRegionFromCountry(t *testing.T) {
 		{"US", RegionUS, true},
 		{"CA", RegionUS, true},
 		{"NG", RegionAfrica, true},
+		{"IN", RegionAsia, true},
 		{"DE", RegionEU, true},
 		{"XX", RegionUnknown, false},
 		{"", RegionUnknown, false},

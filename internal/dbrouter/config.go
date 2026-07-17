@@ -26,6 +26,7 @@ func allRegions() []region.Region {
 		region.RegionUS,
 		region.RegionAfrica,
 		region.RegionEU,
+		region.RegionAsia,
 	}
 }
 
@@ -39,6 +40,8 @@ func envSuffix(reg region.Region) string {
 		return "AFRICA"
 	case region.RegionEU:
 		return "EU"
+	case region.RegionAsia:
+		return "ASIA"
 	default:
 		return strings.ToUpper(string(reg))
 	}
@@ -50,7 +53,7 @@ func envKey(suffix, name string) string {
 
 // LoadConfigsFromEnv reads per-region settings from the environment.
 // R2_ACCESS_KEY, R2_SECRET_KEY, and R2_ENDPOINT are shared across all regions.
-// All four regions must be fully configured; missing variables return an error.
+// All regions must be fully configured; missing variables return an error.
 func LoadConfigsFromEnv() ([]RegionConfig, error) {
 	accessKey := strings.TrimSpace(os.Getenv("R2_ACCESS_KEY"))
 	if accessKey == "" {

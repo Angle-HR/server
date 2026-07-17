@@ -43,7 +43,7 @@ CREATE TABLE waitlist.waitlist (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at TIMESTAMPTZ,
     CONSTRAINT waitlist_region_check
-        CHECK (region IN ('uk', 'us', 'africa', 'eu'))
+        CHECK (region IN ('uk', 'us', 'africa', 'eu', 'asia'))
 );
 
 CREATE INDEX waitlist_country_id_idx ON waitlist.waitlist (country_id);

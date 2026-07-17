@@ -207,6 +207,7 @@ definitions:
                     - us
                     - africa
                     - eu
+                    - asia
                 example: uk
                 type: string
             slug:

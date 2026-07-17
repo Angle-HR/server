@@ -6,4 +6,5 @@ resources:
   - postgres-us.yaml
   - postgres-africa.yaml
   - postgres-eu.yaml
+  - postgres-asia.yaml
   - postgres-global.yaml

@@ -17,7 +17,7 @@ CREATE TABLE users_registry (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT users_registry_region_check
-        CHECK (region IN ('uk', 'us', 'africa', 'eu')),
+        CHECK (region IN ('uk', 'us', 'africa', 'eu', 'asia')),
     CONSTRAINT users_registry_region_source_check
         CHECK (region_source IN ('explicit', 'inferred', 'jwt', 'subdomain', 'db', 'ip'))
 );
@@ -40,7 +40,7 @@ CREATE TABLE countries (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT countries_region_check
-        CHECK (region IN ('uk', 'us', 'africa', 'eu'))
+        CHECK (region IN ('uk', 'us', 'africa', 'eu', 'asia'))
 );
 
 CREATE INDEX countries_region_idx ON countries (region);
@@ -55,10 +55,14 @@ CREATE TRIGGER countries_set_updated_at
 INSERT INTO countries (id, name, slug, region, icon_key, sort_order) VALUES
     ('a1b2c3d4-e5f6-4789-a012-3456789abcde', 'United Kingdom', 'united-kingdom', 'uk', 'flag-uk', 1),
     ('b2c3d4e5-f6a7-4890-b123-456789abcdef', 'European Union', 'european-union', 'eu', 'flag-eu', 2),
-    ('c3d4e5f6-a7b8-4901-c234-56789abcdef0', 'United States', 'united-states', 'us', 'flag-us', 3),
-    ('d4e5f6a7-b8c9-4012-d345-6789abcdef01', 'Nigeria', 'nigeria', 'africa', 'flag-ng', 4),
-    ('e5f6a7b8-c9d0-4123-e456-789abcdef012', 'Kenya', 'kenya', 'africa', 'flag-ke', 5),
-    ('f6a7b8c9-d0e1-4234-f567-89abcdef0123', 'South Africa', 'south-africa', 'africa', 'flag-za', 6);
+    ('a7b8c9d0-e1f2-4345-a678-9abcdef01234', 'Germany', 'germany', 'eu', 'flag-de', 3),
+    ('c3d4e5f6-a7b8-4901-c234-56789abcdef0', 'United States', 'united-states', 'us', 'flag-us', 4),
+    ('d4e5f6a7-b8c9-4012-d345-6789abcdef01', 'Nigeria', 'nigeria', 'africa', 'flag-ng', 5),
+    ('b8c9d0e1-f2a3-4456-b789-abcdef012345', 'India', 'india', 'asia', 'flag-in', 6),
+    ('e5f6a7b8-c9d0-4123-e456-789abcdef012', 'Kenya', 'kenya', 'africa', 'flag-ke', 7),
+    ('f6a7b8c9-d0e1-4234-f567-89abcdef0123', 'South Africa', 'south-africa', 'africa', 'flag-za', 8);
+
+UPDATE countries SET is_active = FALSE WHERE slug = 'south-africa';
 
 CREATE TABLE tenant_subdomains (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -68,7 +72,7 @@ CREATE TABLE tenant_subdomains (
     active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT tenant_subdomains_region_check
-        CHECK (region IN ('uk', 'us', 'africa', 'eu'))
+        CHECK (region IN ('uk', 'us', 'africa', 'eu', 'asia'))
 );
 
 CREATE INDEX tenant_subdomains_subdomain_idx ON tenant_subdomains (subdomain);

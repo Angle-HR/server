@@ -16,7 +16,7 @@ Design document for product onboarding persistence. Migrations are implemented a
                │ email + user_id + region
                ▼
 ┌─────────────────────────────────────┐
-│  Regional Postgres (×4 regions)     │
+│  Regional Postgres (×5 regions)     │
 │  accounts.users                     │
 │  accounts.organizations             │
 │  accounts.addresses                 │

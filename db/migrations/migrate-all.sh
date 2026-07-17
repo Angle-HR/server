@@ -4,7 +4,7 @@ set -euo pipefail
 direction="${1:-up}"
 migrations_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 migrations_path="db/migrations"
-regions=(UK US AFRICA EU)
+regions=(UK US AFRICA EU ASIA)
 
 # Returns 0 if any .sql file under db/migrations changed (or if migrations should run).
 sql_files_changed() {

@@ -7,7 +7,7 @@
 #
 # Each environment needs these secrets (same names, different DSNs per env):
 #   ANGLEHR_UK_POSTGRES_DSN, ANGLEHR_US_POSTGRES_DSN, ANGLEHR_AFRICA_POSTGRES_DSN,
-#   ANGLEHR_EU_POSTGRES_DSN, DB_URL_GLOBAL
+#   ANGLEHR_EU_POSTGRES_DSN, ANGLEHR_ASIA_POSTGRES_DSN, DB_URL_GLOBAL
 #
 # Optional: enable Required reviewers on production; restrict each environment
 # to its deployment branch (staging → staging, production → production).
@@ -43,6 +43,7 @@ jobs:
           ANGLEHR_US_POSTGRES_DSN: ${{ secrets.ANGLEHR_US_POSTGRES_DSN }}
           ANGLEHR_AFRICA_POSTGRES_DSN: ${{ secrets.ANGLEHR_AFRICA_POSTGRES_DSN }}
           ANGLEHR_EU_POSTGRES_DSN: ${{ secrets.ANGLEHR_EU_POSTGRES_DSN }}
+          ANGLEHR_ASIA_POSTGRES_DSN: ${{ secrets.ANGLEHR_ASIA_POSTGRES_DSN }}
           DB_URL_GLOBAL: ${{ secrets.DB_URL_GLOBAL }}
           MIGRATE_COMPARE_REF: ${{ github.event.before }}
         run: bash db/migrations/migrate-all.sh up

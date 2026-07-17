@@ -102,6 +102,7 @@ Docker Compose hostnames map to Kubernetes Services (underscores become hyphens)
 | `postgres_us` | `postgres-us:5432` |
 | `postgres_africa` | `postgres-africa:5432` |
 | `postgres_eu` | `postgres-eu:5432` |
+| `postgres_asia` | `postgres-asia:5432` |
 | `postgres_global` | `postgres-global:5432` |
 | `redis` | `redis:6379` |
 `create-dev-secret.sh` builds DSNs using these internal hostnames automatically. R2 credentials are passed through from `.env` (see [`.env.example`](../../.env.example)).
@@ -136,8 +137,8 @@ The prod overlay deploys **only** the application tier (server, email-worker, up
 
 Outside this repo (Terraform, cloud console, etc.):
 
-- PostgreSQL per region (UK, US, Africa, EU) plus a global registry database
-- Cloudflare R2 bucket names: `anglehr-uk`, `anglehr-us`, `anglehr-africa`, `anglehr-eu`
+- PostgreSQL per region (UK, US, Africa, EU, Asia) plus a global registry database
+- Cloudflare R2 bucket names: `anglehr-uk`, `anglehr-us`, `anglehr-africa`, `anglehr-eu`, `anglehr-asia`
 - SMTP relay
 - Ingress controller + [cert-manager](https://cert-manager.io/) (for TLS annotations in prod Ingress)
 

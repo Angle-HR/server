@@ -28,9 +28,9 @@ source "$ENV_FILE"
 set +a
 
 required=(
-	POSTGRES_PASSWORD_UK POSTGRES_PASSWORD_US POSTGRES_PASSWORD_AFRICA POSTGRES_PASSWORD_EU POSTGRES_PASSWORD_GLOBAL
+	POSTGRES_PASSWORD_UK POSTGRES_PASSWORD_US POSTGRES_PASSWORD_AFRICA POSTGRES_PASSWORD_EU POSTGRES_PASSWORD_ASIA POSTGRES_PASSWORD_GLOBAL
 	R2_ACCESS_KEY R2_SECRET_KEY
-	ANGLEHR_UK_R2_BUCKET ANGLEHR_US_R2_BUCKET ANGLEHR_AFRICA_R2_BUCKET ANGLEHR_EU_R2_BUCKET
+	ANGLEHR_UK_R2_BUCKET ANGLEHR_US_R2_BUCKET ANGLEHR_AFRICA_R2_BUCKET ANGLEHR_EU_R2_BUCKET ANGLEHR_ASIA_R2_BUCKET
 )
 for key in "${required[@]}"; do
 	if [[ -z "${!key:-}" ]]; then
@@ -66,11 +66,13 @@ kubectl create secret generic anglehr-secrets \
 	--from-literal=POSTGRES_PASSWORD_US="$POSTGRES_PASSWORD_US" \
 	--from-literal=POSTGRES_PASSWORD_AFRICA="$POSTGRES_PASSWORD_AFRICA" \
 	--from-literal=POSTGRES_PASSWORD_EU="$POSTGRES_PASSWORD_EU" \
+	--from-literal=POSTGRES_PASSWORD_ASIA="$POSTGRES_PASSWORD_ASIA" \
 	--from-literal=POSTGRES_PASSWORD_GLOBAL="$POSTGRES_PASSWORD_GLOBAL" \
 	--from-literal=DB_URL_UK="postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres-uk:5432/anglehr_uk?sslmode=disable" \
 	--from-literal=DB_URL_US="postgres://anglehr:${POSTGRES_PASSWORD_US}@postgres-us:5432/anglehr_us?sslmode=disable" \
 	--from-literal=DB_URL_AFRICA="postgres://anglehr:${POSTGRES_PASSWORD_AFRICA}@postgres-africa:5432/anglehr_africa?sslmode=disable" \
 	--from-literal=DB_URL_EU="postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres-eu:5432/anglehr_eu?sslmode=disable" \
+	--from-literal=DB_URL_ASIA="postgres://anglehr:${POSTGRES_PASSWORD_ASIA}@postgres-asia:5432/anglehr_asia?sslmode=disable" \
 	--from-literal=DB_URL_GLOBAL="postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres-global:5432/anglehr_global?sslmode=disable" \
 	--from-literal=R2_ACCESS_KEY="$R2_ACCESS_KEY" \
 	--from-literal=R2_SECRET_KEY="$R2_SECRET_KEY" \
@@ -85,6 +87,8 @@ kubectl create secret generic anglehr-secrets \
 	--from-literal=ANGLEHR_AFRICA_R2_BUCKET="$ANGLEHR_AFRICA_R2_BUCKET" \
 	--from-literal=ANGLEHR_EU_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres-eu:5432/anglehr_eu?sslmode=disable" \
 	--from-literal=ANGLEHR_EU_R2_BUCKET="$ANGLEHR_EU_R2_BUCKET" \
+	--from-literal=ANGLEHR_ASIA_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_ASIA}@postgres-asia:5432/anglehr_asia?sslmode=disable" \
+	--from-literal=ANGLEHR_ASIA_R2_BUCKET="$ANGLEHR_ASIA_R2_BUCKET" \
 	--from-literal=SMTP_HOST="$SMTP_HOST" \
 	--from-literal=SMTP_PORT="$SMTP_PORT" \
 	--from-literal=SMTP_USER="$SMTP_USER" \

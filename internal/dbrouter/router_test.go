@@ -35,8 +35,8 @@ func TestLoadConfigsFromEnv_success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfigsFromEnv: %v", err)
 	}
-	if len(configs) != 4 {
-		t.Fatalf("got %d configs, want 4", len(configs))
+	if len(configs) != 5 {
+		t.Fatalf("got %d configs, want 5", len(configs))
 	}
 
 	byRegion := make(map[region.Region]RegionConfig, len(configs))
@@ -56,6 +56,14 @@ func TestLoadConfigsFromEnv_success(t *testing.T) {
 	}
 	if !uk.R2UseSSL {
 		t.Fatal("uk R2UseSSL should be true for R2 endpoint")
+	}
+
+	asia := byRegion[region.RegionAsia]
+	if asia.PostgresDSN != "postgres://ASIA" {
+		t.Fatalf("asia dsn: got %q", asia.PostgresDSN)
+	}
+	if asia.R2Bucket != "anglehr-asia" {
+		t.Fatalf("asia bucket: got %q", asia.R2Bucket)
 	}
 }
 
@@ -201,6 +209,7 @@ func setFullEnv(t *testing.T) {
 		{"US", "anglehr-us"},
 		{"AFRICA", "anglehr-africa"},
 		{"EU", "anglehr-eu"},
+		{"ASIA", "anglehr-asia"},
 	}
 
 	for _, r := range regions {

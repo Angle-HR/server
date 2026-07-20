@@ -32,6 +32,8 @@ var countryToRegion = map[string]Region{
 	"AO": RegionAfrica,
 	"ZW": RegionAfrica,
 	"BW": RegionAfrica,
+	// asia
+	"IN": RegionAsia,
 	// eu
 	"DE": RegionEU,
 	"FR": RegionEU,

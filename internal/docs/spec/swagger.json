@@ -300,7 +300,8 @@
                         "uk",
                         "us",
                         "africa",
-                        "eu"
+                        "eu",
+                        "asia"
                     ],
                     "example": "uk",
                     "type": "string"

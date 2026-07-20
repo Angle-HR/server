@@ -14,6 +14,7 @@ const (
 	RegionUS      Region = "us"
 	RegionAfrica  Region = "africa"
 	RegionEU      Region = "eu"
+	RegionAsia    Region = "asia"
 	RegionUnknown Region = ""
 )
 
@@ -24,10 +25,10 @@ const (
 	regionSourceContextKey
 )
 
-// Valid reports whether r is one of the four known regions.
+// Valid reports whether r is one of the known regions.
 func Valid(r Region) bool {
 	switch r {
-	case RegionUK, RegionUS, RegionAfrica, RegionEU:
+	case RegionUK, RegionUS, RegionAfrica, RegionEU, RegionAsia:
 		return true
 	default:
 		return false

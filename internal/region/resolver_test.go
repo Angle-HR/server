@@ -34,6 +34,7 @@ func TestValid(t *testing.T) {
 		{RegionUS, true},
 		{RegionAfrica, true},
 		{RegionEU, true},
+		{RegionAsia, true},
 		{RegionUnknown, false},
 		{Region("invalid"), false},
 		{Region("UK"), false},

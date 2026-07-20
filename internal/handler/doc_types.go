@@ -10,7 +10,7 @@ type CountryResponse struct {
 	ID      string  `json:"id" example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
 	Name    string  `json:"name" example:"United Kingdom"`
 	Slug    string  `json:"slug" example:"united-kingdom"`
-	Region  string  `json:"region" example:"uk" enums:"uk,us,africa,eu"`
+	Region  string  `json:"region" example:"uk" enums:"uk,us,africa,eu,asia"`
 	IconKey *string `json:"icon_key,omitempty" example:"flag-uk"`
 }
 

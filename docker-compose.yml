@@ -79,6 +79,26 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # ========== Asia (asia) ==========
+  postgres_asia:
+    image: postgres:16-alpine
+    ports:
+      - "5437:5432"
+    environment:
+      POSTGRES_USER: anglehr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_ASIA}
+      POSTGRES_DB: anglehr_asia
+    volumes:
+      - postgres_asia_data:/var/lib/postgresql/data
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anglehr -d anglehr_asia"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   # ========== Global registry (routing metadata) ==========
   postgres_global:
     image: postgres:16-alpine
@@ -123,6 +143,7 @@ services:
       ANGLEHR_US_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_US}@postgres_us:5432/anglehr_us?sslmode=disable
       ANGLEHR_AFRICA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_AFRICA}@postgres_africa:5432/anglehr_africa?sslmode=disable
       ANGLEHR_EU_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres_eu:5432/anglehr_eu?sslmode=disable
+      ANGLEHR_ASIA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_ASIA}@postgres_asia:5432/anglehr_asia?sslmode=disable
       DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
     depends_on:
       postgres_uk:
@@ -132,6 +153,8 @@ services:
       postgres_africa:
         condition: service_healthy
       postgres_eu:
+        condition: service_healthy
+      postgres_asia:
         condition: service_healthy
       postgres_global:
         condition: service_healthy
@@ -169,6 +192,8 @@ services:
       ANGLEHR_AFRICA_R2_BUCKET: ${ANGLEHR_AFRICA_R2_BUCKET}
       ANGLEHR_EU_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres_eu:5432/anglehr_eu?sslmode=disable
       ANGLEHR_EU_R2_BUCKET: ${ANGLEHR_EU_R2_BUCKET}
+      ANGLEHR_ASIA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_ASIA}@postgres_asia:5432/anglehr_asia?sslmode=disable
+      ANGLEHR_ASIA_R2_BUCKET: ${ANGLEHR_ASIA_R2_BUCKET}
     depends_on:
       postgres_uk:
         condition: service_healthy
@@ -177,6 +202,8 @@ services:
       postgres_africa:
         condition: service_healthy
       postgres_eu:
+        condition: service_healthy
+      postgres_asia:
         condition: service_healthy
       postgres_global:
         condition: service_healthy
@@ -261,4 +288,5 @@ volumes:
   postgres_us_data:
   postgres_africa_data:
   postgres_eu_data:
+  postgres_asia_data:
   postgres_global_data:

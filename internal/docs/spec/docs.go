@@ -1272,7 +1272,8 @@ const docTemplate = `{
                         "uk",
                         "us",
                         "africa",
-                        "eu"
+                        "eu",
+                        "asia"
                     ],
                     "example": "uk"
                 },

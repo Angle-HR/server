@@ -214,7 +214,7 @@ func (res *RegionResolver) regionFromParam(r *http.Request) (Region, error) {
 		return RegionUnknown, nil
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) 
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return RegionUnknown, fmt.Errorf("read request body: %w", err)
 	}

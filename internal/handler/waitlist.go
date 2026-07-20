@@ -270,17 +270,22 @@ func maskEmail(email string) string {
 	return string(first) + "***@" + domain
 }
 
+type fieldError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}
+
 func validationError(err error) error {
 	var verrs validator.ValidationErrors
 	if !errors.As(err, &verrs) || len(verrs) == 0 {
 		return apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequest)
 	}
 
-	fields := make([]map[string]string, 0, len(verrs))
+	fields := make([]fieldError, 0, len(verrs))
 	for _, ve := range verrs {
-		fields = append(fields, map[string]string{
-			"field":   jsonFieldName(ve.Field()),
-			"message": validationMessage(ve),
+		fields = append(fields, fieldError{
+			Field:   jsonFieldName(ve.Field()),
+			Message: validationMessage(ve),
 		})
 	}
 

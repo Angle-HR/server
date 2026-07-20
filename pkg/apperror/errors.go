@@ -27,6 +27,7 @@ const (
 	MsgUnknownTeamSizeReference               = "unknown team size reference"
 	MsgOtherTextRequiredWhenOthersSelected    = "other text is required when Others is selected"
 	MsgOtherTextOnlyAllowedWhenOthersSelected = "other text is only allowed when Others is selected"
+	MsgRequestBodyTooLarge                    = "request body too large"
 	MsgNotImplemented                         = "endpoint not yet implemented"
 	MsgInvalidVerificationCode                = "invalid verification code"
 	MsgVerificationExpired                    = "verification code expired"
@@ -68,6 +69,7 @@ const (
 	CodeEmailNotVerified        = "email_not_verified"
 	CodeOnboardingIncomplete    = "onboarding_step_incomplete"
 	CodeInvalidAccountBranch    = "invalid_account_type_branch"
+	CodePayloadTooLarge         = "PAYLOAD_TOO_LARGE"
 )
 
 var httpStatusByCode = map[string]int{
@@ -86,6 +88,7 @@ var httpStatusByCode = map[string]int{
 	CodeEmailNotVerified:        http.StatusForbidden,
 	CodeOnboardingIncomplete:    http.StatusBadRequest,
 	CodeInvalidAccountBranch:    http.StatusBadRequest,
+	CodePayloadTooLarge:         http.StatusRequestEntityTooLarge,
 }
 
 // AppError is a structured application error.

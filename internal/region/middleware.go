@@ -1,6 +1,7 @@
 package region
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -11,7 +12,8 @@ import (
 
 // Middleware resolves the request region and stores it on the request context.
 // It responds with 400 when the region is explicitly invalid or cannot be resolved,
-// and 500 when a server-side error (e.g. DB failure) prevents resolution.
+// 413 when the request body exceeds the configured size limit, and 500 when an
+// unexpected server-side error (e.g. DB failure) prevents resolution.
 func (res *RegionResolver) Middleware() func(http.Handler) http.Handler {
 	log := slog.Default()
 
@@ -29,7 +31,18 @@ func (res *RegionResolver) Middleware() func(http.Handler) http.Handler {
 					return
 				}
 
-			
+				// DB failures and other unexpected server errors must not surface as 400.
+				var maxBytesErr *http.MaxBytesError
+				if errors.As(err, &maxBytesErr) {
+					response.Error(w, r, apperror.New(apperror.CodePayloadTooLarge, apperror.MsgRequestBodyTooLarge))
+					return
+				}
+
+				// Client disconnected or timed out — no response needed.
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return
+				}
+
 				response.Error(w, r, apperror.ErrInternal)
 				return
 			}

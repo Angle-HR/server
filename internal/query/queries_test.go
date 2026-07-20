@@ -19,11 +19,10 @@ func TestListActiveCountriesSQL(t *testing.T) {
 		t.Fatalf("args: got %v", args)
 	}
 
-	normalised := strings.Join(strings.Fields(sql), " ")
-	if !strings.Contains(normalised, `SELECT "id", "name", "slug", "region", "icon_key" FROM "countries"`) {
+	if !strings.Contains(sql, `SELECT "id", "name", "slug", "region", "icon_key" FROM "countries"`) {
 		t.Fatalf("sql: %q", sql)
 	}
-	if !strings.Contains(normalised, `"is_active" = $1`) {
+	if !strings.Contains(sql, `"is_active" = $1`) {
 		t.Fatalf("sql: %q", sql)
 	}
 }
@@ -41,8 +40,7 @@ func TestLookupCountryByIDSQL(t *testing.T) {
 		t.Fatalf("args: got %v", args)
 	}
 
-	normalised := strings.Join(strings.Fields(sql), " ")
-	if !strings.Contains(normalised, `"id" = $1 AND "is_active" = $2`) {
+	if !strings.Contains(sql, `"id" = $1 AND "is_active" = $2`) {
 		t.Fatalf("sql: %q", sql)
 	}
 }
@@ -60,11 +58,10 @@ func TestInsertWaitlistSignupSQL(t *testing.T) {
 		t.Fatalf("args: got %v", args)
 	}
 
-	normalised := strings.Join(strings.Fields(sql), " ")
-	if !strings.Contains(normalised, `INSERT INTO "waitlist"`) {
+	if !strings.Contains(sql, `INSERT INTO "waitlist"`) {
 		t.Fatalf("sql: %q", sql)
 	}
-	if !strings.Contains(normalised, `ON CONFLICT ("email") DO NOTHING RETURNING "uuid"`) {
+	if !strings.Contains(sql, `ON CONFLICT ("email") DO NOTHING RETURNING "uuid"`) {
 		t.Fatalf("sql: %q", sql)
 	}
 }
@@ -82,14 +79,13 @@ func TestInsertUsersRegistrySQL(t *testing.T) {
 		t.Fatalf("args: got %v", args)
 	}
 
-	normalised := strings.Join(strings.Fields(sql), " ")
-	if !strings.Contains(normalised, `INSERT INTO "users_registry"`) {
+	if !strings.Contains(sql, `INSERT INTO "users_registry"`) {
 		t.Fatalf("sql: %q", sql)
 	}
-	if !strings.Contains(normalised, `ON CONFLICT ("email") DO NOTHING`) {
+	if !strings.Contains(sql, `ON CONFLICT ("email") DO NOTHING`) {
 		t.Fatalf("sql: %q", sql)
 	}
-	if !strings.Contains(normalised, `"waitlist_token"`) {
+	if !strings.Contains(sql, `"waitlist_token"`) {
 		t.Fatalf("sql: %q", sql)
 	}
 }
@@ -106,8 +102,7 @@ func TestListActiveIndustriesSQL(t *testing.T) {
 		t.Fatalf("args: got %v", args)
 	}
 
-	normalised := strings.Join(strings.Fields(sql), " ")
-	if !strings.Contains(normalised, `FROM "industries"`) {
+	if !strings.Contains(sql, `FROM "industries"`) {
 		t.Fatalf("sql: %q", sql)
 	}
 }
@@ -124,8 +119,7 @@ func TestListBusinessTypesSQL(t *testing.T) {
 		t.Fatalf("args: got %v", args)
 	}
 
-	normalised := strings.Join(strings.Fields(sql), " ")
-	if !strings.Contains(normalised, `FROM "business_types"`) {
+	if !strings.Contains(sql, `FROM "business_types"`) {
 		t.Fatalf("sql: %q", sql)
 	}
 }
@@ -142,8 +136,7 @@ func TestInsertAccountUserSQL(t *testing.T) {
 		t.Fatalf("args: got %v", args)
 	}
 
-	normalised := strings.Join(strings.Fields(sql), " ")
-	if !strings.Contains(normalised, `INSERT INTO "users"`) {
+	if !strings.Contains(sql, `INSERT INTO "users"`) {
 		t.Fatalf("sql: %q", sql)
 	}
 }

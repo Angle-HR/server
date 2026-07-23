@@ -3,40 +3,159 @@
 
 <head>
     <meta charset="utf-8">
-    <title>You're on the Angle HR waitlist</title>
+    <title>You're on the OpenHR waitlist</title>
 </head>
 
 <body
     style="margin: 0; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f9fafb; color: #111827;">
     <div
         style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 40px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+
         <div style="margin-bottom: 32px; text-align: left;">
-            <span style="font-size: 20px; font-weight: 700; color: #0284c7; letter-spacing: -0.025em;">Angle HR</span>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
+                <tr>
+                    <td style="vertical-align: middle; padding-right: 8px;">
+                        <svg width="22" height="16" viewBox="0 0 22 16" xmlns="http://www.w3.org/2000/svg"
+                            style="display: block;">
+                            <rect x="0" y="7" width="22" height="9" rx="4.5" fill="#0f172a" />
+                            <circle cx="6" cy="7" r="5" fill="#0f172a" />
+                            <circle cx="12" cy="5" r="6" fill="#0f172a" />
+                            <circle cx="18" cy="8" r="4" fill="#0f172a" />
+                        </svg>
+                    </td>
+                    <td style="vertical-align: middle;">
+                        <span
+                            style="font-size: 14px; font-weight: 700; color: #0f172a; letter-spacing: 0.08em;">OPEN
+                            HR</span>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div style="position: relative; height: 150px; margin-bottom: 32px;">
+            <svg viewBox="0 0 500 150" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"
+                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+                <line x1="8" y1="126" x2="250" y2="126" stroke="#cbd5e1" stroke-width="2"
+                    stroke-linecap="round" stroke-dasharray="0.1,7" />
+                <line x1="250" y1="126" x2="270" y2="126" stroke="#cbd5e1" stroke-width="2"
+                    stroke-linecap="round" stroke-dasharray="0.1,7" />
+                <path d="M270,126 Q325,126 380,72" fill="none" stroke="#cbd5e1" stroke-width="2"
+                    stroke-linecap="round" stroke-dasharray="0.1,7" />
+                <line x1="380" y1="72" x2="460" y2="72" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"
+                    stroke-dasharray="0.1,7" />
+                <path d="M455,66 L470,72 L455,78" fill="none" stroke="#cbd5e1" stroke-width="1.5"
+                    stroke-linecap="round" stroke-linejoin="round" />
+
+                <line x1="250" y1="126" x2="250" y2="72" stroke="#4338ca" stroke-width="1.5" />
+                <line x1="380" y1="72" x2="380" y2="30" stroke="#94a3b8" stroke-width="1.5" />
+
+                <rect x="4.3" y="122" width="7.5" height="7.5" fill="#fb7185"
+                    transform="rotate(45 8 126)" />
+                <rect x="246.3" y="122" width="7.5" height="7.5" fill="#fb7185"
+                    transform="rotate(45 250 126)" />
+                <rect x="376.3" y="68" width="7.5" height="7.5" fill="#fb7185"
+                    transform="rotate(45 380 72)" />
+            </svg>
+
+            <div
+                style="position: absolute; left: 4px; top: 92px; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: #475569; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 999px; padding: 4px 10px;">
+                INTERNAL TESTING</div>
+            <div
+                style="position: absolute; left: 210px; top: 44px; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: #ffffff; background-color: #4338ca; border-radius: 6px; padding: 4px 12px;">
+                INVITED</div>
+            <div
+                style="position: absolute; left: 345px; top: 2px; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: #475569; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 999px; padding: 4px 10px;">
+                LAUNCH</div>
         </div>
 
         <h1
-            style="font-size: 24px; font-weight: 700; line-height: 32px; color: #0f172a; margin-top: 0; margin-bottom: 16px; letter-spacing: -0.025em;">
-            You're on the list!</h1>
+            style="font-size: 22px; font-weight: 700; line-height: 30px; color: #0f172a; margin-top: 0; margin-bottom: 8px; letter-spacing: -0.025em;">
+            Hi {{.FullName}},</h1>
 
-        <p style="font-size: 16px; line-height: 24px; color: #475569; margin-top: 0; margin-bottom: 24px;">Hi
-            {{.FullName}},</p>
+        <p style="font-size: 16px; line-height: 24px; color: #475569; margin-top: 0; margin-bottom: 24px;">You're on
+            the list. We'll be in touch when early access opens.</p>
 
-        <p style="font-size: 16px; line-height: 24px; color: #475569; margin-top: 0; margin-bottom: 24px;">Thanks for
-            joining the Angle HR waitlist. We are excited to help you streamline your hiring and candidate pipeline.</p>
+        <p style="font-size: 16px; line-height: 24px; color: #475569; margin-top: 0; margin-bottom: 32px;">We're
+            building Open HR around founders and growing teams like yours, help us get it right.</p>
 
-        <p style="font-size: 16px; line-height: 24px; color: #475569; margin-top: 0; margin-bottom: 32px;">
-            <strong>What's next?</strong> We are rolling out early access in stages to ensure the best possible
-            experience. We'll send you an invitation email as soon as a slot opens up in your region.
-        </p>
-        <div style="text-align: center; margin-top: 24px;">
-            <a href="{{.AppURL}}/onboarding?token={{.Token}}"
-                style="display: inline-block; background-color: #0284c7; color: #ffffff; padding: 12px 24px; font-size: 16px; font-weight: 600; text-decoration: none; border-radius: 8px;">Join
-                Now</a>
+        <div style="text-align: left; margin-bottom: 32px;">
+            <a href="{{.AppURL}}/survey"
+                style="display: inline-block; background-color: #4338ca; color: #ffffff; padding: 12px 24px; font-size: 15px; font-weight: 600; text-decoration: none; border-radius: 8px;">Help
+                shape our product</a>
         </div>
 
-        <div style="border-top: 1px solid #f1f5f9; padding-top: 24px; margin-top: 32px;">
-            <p style="font-size: 14px; line-height: 20px; color: #94a3b8; margin: 0;">Best regards,<br>The Angle HR Team
+        <div style="border-top: 1px dashed #e2e8f0; margin-bottom: 24px;"></div>
+
+        <h2
+            style="font-size: 15px; font-weight: 700; color: #0f172a; margin-top: 0; margin-bottom: 16px; letter-spacing: -0.01em;">
+            What happens next?</h2>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+            style="border-collapse: collapse; margin-bottom: 24px;">
+            <tr>
+                <td style="padding-bottom: 8px; border-bottom: 1px dashed #c7d2fe;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                            <td style="font-size: 14px; padding-right: 8px; vertical-align: middle;">✅</td>
+                            <td style="font-size: 14px; line-height: 20px; color: #334155; vertical-align: middle;">We'll
+                                notify you when early access opens.</td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+            <tr>
+                <td style="height: 8px;"></td>
+            </tr>
+            <tr>
+                <td style="padding-bottom: 8px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                            <td style="font-size: 14px; padding-right: 8px; vertical-align: middle;">✅</td>
+                            <td style="font-size: 14px; line-height: 20px; color: #334155; vertical-align: middle;">You'll
+                                be the first to try OpenHR and see what we've built.</td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+
+        <div style="border-top: 1px solid #f1f5f9; padding-top: 24px; position: relative;">
+            <div style="position: absolute; right: 0; bottom: 0; width: 90px; height: 60px;">
+                <div
+                    style="position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; background-color: #c7d2fe; border-radius: 3px;">
+                </div>
+                <div
+                    style="position: absolute; right: 18px; bottom: 0; width: 14px; height: 14px; background-color: #a5b4fc; border-radius: 3px;">
+                </div>
+                <div
+                    style="position: absolute; right: 8px; bottom: 18px; width: 14px; height: 14px; background-color: #e0e7ff; border-radius: 3px;">
+                </div>
+                <div
+                    style="position: absolute; right: 28px; bottom: 26px; width: 10px; height: 10px; background-color: #c7d2fe; border-radius: 3px;">
+                </div>
+            </div>
+
+            <p style="font-size: 12px; line-height: 18px; color: #94a3b8; margin: 0 0 4px 0;">Sent by Angle Open
+                Source Ltd</p>
+            <p style="font-size: 12px; line-height: 18px; color: #94a3b8; margin: 0 0 12px 0;">71-75 Shelton Street,
+                London, England, WC2H 9JQ<br>© 2026 Angle Open Source Ltd. All rights reserved.</p>
+
+            <p style="font-size: 12px; line-height: 18px; margin: 0 0 16px 0;">
+                <a href="{{.AppURL}}/contact" style="color: #64748b; text-decoration: underline;">Contact Us</a>
             </p>
+
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                    <td style="padding-right: 8px;">
+                        <a href="https://x.com/tryopenhr"
+                            style="display: inline-block; width: 30px; height: 30px; line-height: 30px; text-align: center; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; color: #334155; font-size: 13px; font-weight: 700; text-decoration: none;">X</a>
+                    </td>
+                    <td>
+                        <a href="https://www.linkedin.com/company/try-open-hr/"
+                            style="display: inline-block; width: 30px; height: 30px; line-height: 30px; text-align: center; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; color: #334155; font-size: 12px; font-weight: 700; text-decoration: none;">in</a>
+                    </td>
+                </tr>
+            </table>
         </div>
     </div>
 </body>

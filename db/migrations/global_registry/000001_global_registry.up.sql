@@ -53,14 +53,16 @@ CREATE TRIGGER countries_set_updated_at
     EXECUTE FUNCTION set_updated_at();
 
 INSERT INTO countries (id, name, slug, region, icon_key, sort_order) VALUES
-    ('a1b2c3d4-e5f6-4789-a012-3456789abcde', 'United Kingdom', 'united-kingdom', 'uk', 'flag-uk', 1),
-    ('b2c3d4e5-f6a7-4890-b123-456789abcdef', 'European Union', 'european-union', 'eu', 'flag-eu', 2),
-    ('a7b8c9d0-e1f2-4345-a678-9abcdef01234', 'Germany', 'germany', 'eu', 'flag-de', 3),
-    ('c3d4e5f6-a7b8-4901-c234-56789abcdef0', 'United States', 'united-states', 'us', 'flag-us', 4),
+    ('b2c3d4e5-f6a7-4890-b123-456789abcdef', 'European Union', 'european-union', 'eu', 'flag-eu', 1),
+    ('a7b8c9d0-e1f2-4345-a678-9abcdef01234', 'Germany', 'germany', 'eu', 'flag-de', 2),
+    ('b8c9d0e1-f2a3-4456-b789-abcdef012345', 'India', 'india', 'asia', 'flag-in', 3),
+    ('e5f6a7b8-c9d0-4123-e456-789abcdef012', 'Kenya', 'kenya', 'africa', 'flag-ke', 4),
     ('d4e5f6a7-b8c9-4012-d345-6789abcdef01', 'Nigeria', 'nigeria', 'africa', 'flag-ng', 5),
-    ('b8c9d0e1-f2a3-4456-b789-abcdef012345', 'India', 'india', 'asia', 'flag-in', 6),
-    ('e5f6a7b8-c9d0-4123-e456-789abcdef012', 'Kenya', 'kenya', 'africa', 'flag-ke', 7),
-    ('f6a7b8c9-d0e1-4234-f567-89abcdef0123', 'South Africa', 'south-africa', 'africa', 'flag-za', 8);
+    ('f6a7b8c9-d0e1-4234-f567-89abcdef0123', 'South Africa', 'south-africa', 'africa', 'flag-za', 6);
+    ('a1b2c3d4-e5f6-4789-a012-3456789abcde', 'United Kingdom', 'united-kingdom', 'uk', 'flag-uk', 7),
+    ('c3d4e5f6-a7b8-4901-c234-56789abcdef0', 'United States', 'united-states', 'us', 'flag-us', 8),
+
+
 
 UPDATE countries SET is_active = FALSE WHERE slug = 'south-africa';
 

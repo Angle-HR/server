@@ -35,7 +35,6 @@ func TestRegionFromCountry(t *testing.T) {
 	}
 }
 
-
 func TestCountryToRegionMapCompleteness(t *testing.T) {
 	t.Parallel()
 	for iso, r := range countryToRegion {

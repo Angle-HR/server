@@ -49,6 +49,7 @@ SMTP_HOST="${SMTP_HOST:-}"
 SMTP_USER="${SMTP_USER:-}"
 SMTP_PASSWORD="${SMTP_PASSWORD:-}"
 SMTP_FROM="${SMTP_FROM:-}"
+SMTP_FROM_NAME="${SMTP_FROM_NAME:-}"
 APP_URL="${APP_URL:-http://app.anglehr.local}"
 JWT_SECRET="${JWT_SECRET:-dev-insecure-jwt-secret-change-me}"
 
@@ -94,6 +95,7 @@ kubectl create secret generic anglehr-secrets \
 	--from-literal=SMTP_USER="$SMTP_USER" \
 	--from-literal=SMTP_PASSWORD="$SMTP_PASSWORD" \
 	--from-literal=SMTP_FROM="$SMTP_FROM" \
+	--from-literal=SMTP_FROM_NAME="$SMTP_FROM_NAME" \
 	--from-literal=APP_URL="$APP_URL" \
 	| kubectl apply -f -
 

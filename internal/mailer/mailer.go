@@ -41,7 +41,8 @@ type Config struct {
 	Port     string
 	User     string
 	Password string
-	From     string
+	From     string // envelope and address portion of From
+	FromName string // optional display name shown in inboxes
 	AppURL   string
 	Logger   *slog.Logger
 }
@@ -146,6 +147,8 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 		"body_bytes", body.Len(),
 	)
 
+	fromHeader := formatFromHeader(m.cfg.FromName, m.cfg.From)
+
 	// Compose the RFC 822 email message.
 	message := []byte(fmt.Sprintf(
 		"To: %s\r\n"+
@@ -156,7 +159,7 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 			"\r\n"+
 			"%s\r\n",
 		args.Recipient,
-		m.cfg.From,
+		fromHeader,
 		subject,
 		body.String(),
 	))
@@ -172,18 +175,19 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 		"type", args.Type,
 		"recipient", args.Recipient,
 		"smtp_addr", addr,
-		"from", m.cfg.From,
+		"from", fromHeader,
 		"auth_enabled", authEnabled,
 		"message_bytes", len(message),
 	)
 
+	// SMTP envelope uses the bare address; display name is header-only.
 	if err := m.sendMail(addr, auth, m.cfg.From, []string{args.Recipient}, message); err != nil {
 		err = fmt.Errorf("smtp send mail to %s: %w", args.Recipient, err)
 		m.logger.Error("smtp send failed",
 			"type", args.Type,
 			"recipient", args.Recipient,
 			"smtp_addr", addr,
-			"from", m.cfg.From,
+			"from", fromHeader,
 			"auth_enabled", authEnabled,
 			"error", err,
 		)
@@ -194,10 +198,22 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 		"type", args.Type,
 		"recipient", args.Recipient,
 		"smtp_addr", addr,
-		"from", m.cfg.From,
+		"from", fromHeader,
 	)
 
 	return nil
+}
+
+// formatFromHeader builds an RFC 5322 From value from optional display name + address.
+func formatFromHeader(name, email string) string {
+	name = strings.TrimSpace(name)
+	email = strings.TrimSpace(email)
+	if name == "" {
+		return email
+	}
+	escaped := strings.ReplaceAll(name, `\`, `\\`)
+	escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+	return fmt.Sprintf(`"%s" <%s>`, escaped, email)
 }
 
 // SetSendMailForTesting allows setting a custom sendMail implementation for unit tests.

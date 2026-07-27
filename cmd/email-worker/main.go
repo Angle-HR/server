@@ -36,6 +36,7 @@ func run() error {
 	smtpUser := os.Getenv("SMTP_USER")
 	smtpPassword := os.Getenv("SMTP_PASSWORD")
 	smtpFrom := os.Getenv("SMTP_FROM")
+	smtpFromName := os.Getenv("SMTP_FROM_NAME")
 	appURL := os.Getenv("APP_URL")
 
 	if smtpHost == "" {
@@ -49,6 +50,7 @@ func run() error {
 		"host", smtpHost,
 		"port", smtpPort,
 		"from", smtpFrom,
+		"from_name", smtpFromName,
 		"user_set", smtpUser != "",
 		"password_set", smtpPassword != "",
 		"app_url", appURL,
@@ -60,6 +62,7 @@ func run() error {
 		User:     smtpUser,
 		Password: smtpPassword,
 		From:     smtpFrom,
+		FromName: smtpFromName,
 		AppURL:   appURL,
 		Logger:   slogLogger,
 	})

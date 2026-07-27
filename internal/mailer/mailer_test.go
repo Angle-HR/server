@@ -35,7 +35,7 @@ func TestTemplatesRendering(t *testing.T) {
 		}
 
 		content := buf.String()
-		wantHref := `href="https://app.anglehr.com/onboarding?token=abc123"`
+		wantHref := `href="https://tryopenhr.com/survey"`
 		if !bytes.Contains(buf.Bytes(), []byte(wantHref)) {
 			t.Errorf("expected rendered content to contain %q, got: %s", wantHref, content)
 		}
@@ -52,7 +52,11 @@ func TestTemplatesRendering(t *testing.T) {
 		}
 
 		var buf bytes.Buffer
-		err := m.templates.ExecuteTemplate(&buf, "more_info_ack.html", args)
+		data := struct {
+			EmailArgs
+			AppURL string
+		}{args, m.cfg.AppURL}
+		err := m.templates.ExecuteTemplate(&buf, "more_info_ack.html", data)
 		if err != nil {
 			t.Fatalf("failed to render template: %v", err)
 		}
@@ -61,7 +65,7 @@ func TestTemplatesRendering(t *testing.T) {
 		if !bytes.Contains(buf.Bytes(), []byte("Jane Smith")) {
 			t.Errorf("expected rendered content to contain 'Jane Smith', got: %s", content)
 		}
-		if !bytes.Contains(buf.Bytes(), []byte("Thanks for sharing more!")) {
+		if !bytes.Contains(buf.Bytes(), []byte("What happens next?")) {
 			t.Errorf("expected rendered content to contain title, got: %s", content)
 		}
 	})

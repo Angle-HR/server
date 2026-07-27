@@ -21,7 +21,7 @@ func (w *EmailWorker) Work(ctx context.Context, job *fluvio.Job[mailer.EmailArgs
 		logger = slog.Default()
 	}
 
-	logger.Info("email job received",
+	logger.Info("email job received", 
 		"job_id", job.ID,
 		"queue", job.Queue,
 		"kind", job.Kind,

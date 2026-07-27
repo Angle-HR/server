@@ -35,7 +35,7 @@ func TestTemplatesRendering(t *testing.T) {
 		}
 
 		content := buf.String()
-		wantHref := `href="https://app.anglehr.com/survey"`
+		wantHref := `href="https://tryopenhr.com/survey"`
 		if !bytes.Contains(buf.Bytes(), []byte(wantHref)) {
 			t.Errorf("expected rendered content to contain %q, got: %s", wantHref, content)
 		}

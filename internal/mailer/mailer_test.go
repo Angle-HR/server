@@ -92,3 +92,21 @@ func TestEmailVerificationTemplate(t *testing.T) {
 		t.Fatalf("expected code in template: %s", buf.String())
 	}
 }
+
+func TestFormatFromHeader(t *testing.T) {
+	tests := []struct {
+		name  string
+		email string
+		want  string
+	}{
+		{name: "", email: "hello@example.com", want: "hello@example.com"},
+		{name: "Angle HR", email: "hello@example.com", want: `"Angle HR" <hello@example.com>`},
+		{name: `Foo "Bar"`, email: "a@b.com", want: `"Foo \"Bar\"" <a@b.com>`},
+	}
+	for _, tt := range tests {
+		got := formatFromHeader(tt.name, tt.email)
+		if got != tt.want {
+			t.Errorf("formatFromHeader(%q, %q) = %q, want %q", tt.name, tt.email, got, tt.want)
+		}
+	}
+}

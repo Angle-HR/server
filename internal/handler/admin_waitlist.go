@@ -231,7 +231,12 @@ func (h *AdminHandler) deleteWaitlist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tag, err := pool.Exec(r.Context(), `DELETE FROM waitlist.waitlist WHERE uuid = $1 AND deleted_at IS NULL`, id)
+	// Prefer UPDATE over DELETE: a BEFORE DELETE soft_delete_row trigger cancels the
+	// physical delete (RETURN NULL), so RowsAffected can be 0 even when soft-delete succeeded.
+	tag, err := pool.Exec(r.Context(), `
+		UPDATE waitlist.waitlist SET deleted_at = now(), updated_at = now()
+		WHERE uuid = $1 AND deleted_at IS NULL
+	`, id)
 	if err != nil {
 		response.Error(w, r, err)
 		return

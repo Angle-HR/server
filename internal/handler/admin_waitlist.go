@@ -49,6 +49,11 @@ type adminWaitlistDetail struct {
 	FrustrationIDs []uuid.UUID `json:"frustration_ids"`
 }
 
+type waitlistRegistryRow struct {
+	Token  uuid.UUID
+	Region region.Region
+}
+
 // listWaitlist godoc
 //
 //	@Summary		List waitlist entries
@@ -70,20 +75,33 @@ func (h *AdminHandler) listWaitlist(w http.ResponseWriter, r *http.Request) {
 	includeDeleted := r.URL.Query().Get("include_deleted") == "true"
 	limit := parseLimit(r.URL.Query().Get("limit"), 50, 100)
 
-	regions, err := adminRegionsFilter(r.URL.Query().Get("region"))
+	regionFilter := strings.TrimSpace(r.URL.Query().Get("region"))
+	if regionFilter != "" {
+		if _, err := region.ParseRegion(regionFilter); err != nil {
+			response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRegion))
+			return
+		}
+	}
+
+	registryRows, err := h.queryWaitlistRegistry(r.Context(), regionFilter, q, limit)
 	if err != nil {
-		response.Error(w, r, err)
+		response.Error(w, r, fmt.Errorf("list waitlist registry: %w", err))
 		return
 	}
 
+	byRegion := map[region.Region][]uuid.UUID{}
+	for _, row := range registryRows {
+		byRegion[row.Region] = append(byRegion[row.Region], row.Token)
+	}
+
 	var items []adminWaitlistItem
-	for _, reg := range regions {
+	for reg, tokens := range byRegion {
 		pool, err := h.Router.DB(reg)
 		if err != nil {
 			response.Error(w, r, err)
 			return
 		}
-		part, err := queryWaitlist(r.Context(), pool, q, onboarding, includeDeleted, limit)
+		part, err := queryWaitlistByUUIDs(r.Context(), pool, tokens, q, onboarding, includeDeleted)
 		if err != nil {
 			response.Error(w, r, fmt.Errorf("list waitlist %s: %w", reg, err))
 			return
@@ -122,31 +140,22 @@ func (h *AdminHandler) getWaitlist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	regions, err := adminRegionsFilter(r.URL.Query().Get("region"))
+	_, pool, err := h.findWaitlistRegion(r.Context(), id, r.URL.Query().Get("region"))
 	if err != nil {
 		response.Error(w, r, err)
 		return
 	}
 
-	for _, reg := range regions {
-		pool, err := h.Router.DB(reg)
-		if err != nil {
-			response.Error(w, r, err)
-			return
-		}
-		detail, err := queryWaitlistDetail(r.Context(), pool, id)
+	detail, err := queryWaitlistDetail(r.Context(), pool, id)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			continue
-		}
-		if err != nil {
-			response.Error(w, r, err)
+			response.Error(w, r, apperror.ErrNotFound)
 			return
 		}
-		response.Success(w, r, http.StatusOK, detail)
+		response.Error(w, r, err)
 		return
 	}
-
-	response.Error(w, r, apperror.ErrNotFound)
+	response.Success(w, r, http.StatusOK, detail)
 }
 
 type patchWaitlistBody struct {
@@ -297,39 +306,134 @@ func (h *AdminHandler) restoreWaitlist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) findWaitlistRegion(ctx context.Context, id uuid.UUID, regionHint string) (region.Region, dbrouter.PgxPool, error) {
-	regions, err := adminRegionsFilter(regionHint)
+	var regStr string
+	err := h.GlobalDB.QueryRow(ctx, `
+		SELECT region FROM waitlist.registry WHERE waitlist_token = $1
+	`, id).Scan(&regStr)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return region.RegionUnknown, nil, apperror.ErrNotFound
+	}
 	if err != nil {
 		return region.RegionUnknown, nil, err
 	}
-	for _, reg := range regions {
-		pool, err := h.Router.DB(reg)
+
+	reg, err := region.ParseRegion(regStr)
+	if err != nil {
+		return region.RegionUnknown, nil, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRegion)
+	}
+
+	if hint := strings.TrimSpace(regionHint); hint != "" {
+		hintReg, err := region.ParseRegion(hint)
 		if err != nil {
-			return region.RegionUnknown, nil, err
+			return region.RegionUnknown, nil, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRegion)
 		}
-		var exists bool
-		err = pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM waitlist.waitlist WHERE uuid = $1)`, id).Scan(&exists)
-		if err != nil {
-			return region.RegionUnknown, nil, err
-		}
-		if exists {
-			return reg, pool, nil
+		if hintReg != reg {
+			return region.RegionUnknown, nil, apperror.ErrNotFound
 		}
 	}
-	return region.RegionUnknown, nil, apperror.ErrNotFound
+
+	pool, err := h.Router.DB(reg)
+	if err != nil {
+		return region.RegionUnknown, nil, err
+	}
+	return reg, pool, nil
 }
 
-func queryWaitlist(ctx context.Context, pool dbrouter.PgxPool, q, onboarding string, includeDeleted bool, limit int) ([]adminWaitlistItem, error) {
+func (h *AdminHandler) queryWaitlistRegistry(ctx context.Context, regionFilter, q string, limit int) ([]waitlistRegistryRow, error) {
+	// Recent window (supports name search after regional hydrate).
+	fetchLimit := limit * 5
+	rows, err := h.GlobalDB.Query(ctx, `
+		SELECT waitlist_token, region
+		FROM waitlist.registry
+		WHERE ($1 = '' OR region = $1)
+		ORDER BY created_at DESC
+		LIMIT $2
+	`, regionFilter, fetchLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	seen := map[uuid.UUID]struct{}{}
+	var out []waitlistRegistryRow
+	appendRow := func(token uuid.UUID, regStr string) error {
+		if _, ok := seen[token]; ok {
+			return nil
+		}
+		reg, err := region.ParseRegion(regStr)
+		if err != nil {
+			return nil
+		}
+		seen[token] = struct{}{}
+		out = append(out, waitlistRegistryRow{Token: token, Region: reg})
+		return nil
+	}
+
+	for rows.Next() {
+		var token uuid.UUID
+		var regStr string
+		if err := rows.Scan(&token, &regStr); err != nil {
+			return nil, err
+		}
+		_ = appendRow(token, regStr)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Exact email hits may be older than the recent window — pull them explicitly.
+	if q != "" {
+		emailRows, err := h.GlobalDB.Query(ctx, `
+			SELECT waitlist_token, region
+			FROM waitlist.registry
+			WHERE ($1 = '' OR region = $1)
+			  AND email ILIKE '%' || $2 || '%'
+			ORDER BY created_at DESC
+			LIMIT $3
+		`, regionFilter, q, limit)
+		if err != nil {
+			return nil, err
+		}
+		defer emailRows.Close()
+
+		for emailRows.Next() {
+			var token uuid.UUID
+			var regStr string
+			if err := emailRows.Scan(&token, &regStr); err != nil {
+				return nil, err
+			}
+			_ = appendRow(token, regStr)
+		}
+		if err := emailRows.Err(); err != nil {
+			return nil, err
+		}
+	}
+
+	return out, nil
+}
+
+func queryWaitlistByUUIDs(
+	ctx context.Context,
+	pool dbrouter.PgxPool,
+	tokens []uuid.UUID,
+	q, onboarding string,
+	includeDeleted bool,
+) ([]adminWaitlistItem, error) {
+	if len(tokens) == 0 {
+		return nil, nil
+	}
+
 	rows, err := pool.Query(ctx, `
 		SELECT uuid, full_name, email, country_id, region, region_source, metadata,
 			onboarding_submitted_at, wants_early_access, wants_user_testing,
 			role_id, team_size_id, created_at, updated_at, deleted_at
 		FROM waitlist.waitlist
-		WHERE ($1 = '' OR email ILIKE '%' || $1 || '%' OR full_name ILIKE '%' || $1 || '%')
-		  AND ($2 = '' OR ($2 = 'pending' AND onboarding_submitted_at IS NULL) OR ($2 = 'complete' AND onboarding_submitted_at IS NOT NULL))
-		  AND ($3 OR deleted_at IS NULL)
+		WHERE uuid = ANY($1)
+		  AND ($2 = '' OR email ILIKE '%' || $2 || '%' OR full_name ILIKE '%' || $2 || '%')
+		  AND ($3 = '' OR ($3 = 'pending' AND onboarding_submitted_at IS NULL) OR ($3 = 'complete' AND onboarding_submitted_at IS NOT NULL))
+		  AND ($4 OR deleted_at IS NULL)
 		ORDER BY created_at DESC
-		LIMIT $4
-	`, q, onboarding, includeDeleted, limit)
+	`, tokens, q, onboarding, includeDeleted)
 	if err != nil {
 		return nil, err
 	}
@@ -405,18 +509,6 @@ func queryUUIDColumn(ctx context.Context, pool dbrouter.PgxPool, sql string, id 
 		out = append(out, v)
 	}
 	return out, rows.Err()
-}
-
-func adminRegionsFilter(raw string) ([]region.Region, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return dbrouter.Regions(), nil
-	}
-	reg, err := region.ParseRegion(raw)
-	if err != nil {
-		return nil, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRegion)
-	}
-	return []region.Region{reg}, nil
 }
 
 func parseLimit(raw string, def, max int) int {

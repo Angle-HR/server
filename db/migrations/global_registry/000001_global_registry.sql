@@ -1,3 +1,5 @@
+-- +goose Up
+-- +goose StatementBegin
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE OR REPLACE FUNCTION set_updated_at()
@@ -58,7 +60,7 @@ INSERT INTO countries (id, name, slug, region, icon_key, sort_order) VALUES
     ('b8c9d0e1-f2a3-4456-b789-abcdef012345', 'India', 'india', 'asia', 'flag-in', 3),
     ('e5f6a7b8-c9d0-4123-e456-789abcdef012', 'Kenya', 'kenya', 'africa', 'flag-ke', 4),
     ('d4e5f6a7-b8c9-4012-d345-6789abcdef01', 'Nigeria', 'nigeria', 'africa', 'flag-ng', 5),
-    ('f6a7b8c9-d0e1-4234-f567-89abcdef0123', 'South Africa', 'south-africa', 'africa', 'flag-za', 6)
+    ('f6a7b8c9-d0e1-4234-f567-89abcdef0123', 'South Africa', 'south-africa', 'africa', 'flag-za', 6),
     ('a1b2c3d4-e5f6-4789-a012-3456789abcde', 'United Kingdom', 'united-kingdom', 'uk', 'flag-uk', 7),
     ('c3d4e5f6-a7b8-4901-c234-56789abcdef0', 'United States', 'united-states', 'us', 'flag-us', 8);
 
@@ -228,3 +230,27 @@ INSERT INTO team_sizes (id, label, min_size, max_size, sort_order) VALUES
     ('50000000-0000-4000-8000-000000000002', '2-10', 2, 10, 2),
     ('50000000-0000-4000-8000-000000000003', '10-20', 10, 20, 3),
     ('50000000-0000-4000-8000-000000000004', '20+', 21, NULL, 4);
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+DROP TRIGGER IF EXISTS team_sizes_set_updated_at ON team_sizes;
+DROP TRIGGER IF EXISTS roles_set_updated_at ON roles;
+DROP TRIGGER IF EXISTS hiring_frustrations_set_updated_at ON hiring_frustrations;
+DROP TRIGGER IF EXISTS hiring_tools_set_updated_at ON hiring_tools;
+DROP TRIGGER IF EXISTS industries_set_updated_at ON industries;
+DROP TRIGGER IF EXISTS countries_set_updated_at ON countries;
+DROP TRIGGER IF EXISTS users_registry_set_updated_at ON users_registry;
+
+DROP TABLE IF EXISTS team_sizes;
+DROP TABLE IF EXISTS roles;
+DROP TABLE IF EXISTS hiring_frustrations;
+DROP TABLE IF EXISTS hiring_tools;
+DROP TABLE IF EXISTS industries;
+DROP TABLE IF EXISTS tenant_subdomains;
+DROP TABLE IF EXISTS countries;
+DROP TABLE IF EXISTS users_registry;
+
+DROP FUNCTION IF EXISTS set_updated_at();
+DROP EXTENSION IF EXISTS pgcrypto;
+-- +goose StatementEnd

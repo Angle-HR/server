@@ -1,3 +1,5 @@
+-- +goose Up
+-- +goose StatementBegin
 ALTER TABLE users_registry
     ADD COLUMN user_id UUID;
 
@@ -94,3 +96,14 @@ INSERT INTO company_roles (id, name, slug, icon_key, sort_order) VALUES
     ('60000000-0000-4000-8000-000000000006', 'Customer Support', 'customer-support', 'phone', 6),
     ('60000000-0000-4000-8000-000000000007', 'Operations', 'operations', 'globe', 7),
     ('60000000-0000-4000-8000-000000000008', 'Others', 'others', 'more', 8);
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+DROP TABLE IF EXISTS company_roles;
+DROP TABLE IF EXISTS onboarding_industries;
+DROP TABLE IF EXISTS business_types;
+
+DROP INDEX IF EXISTS users_registry_user_id_idx;
+ALTER TABLE users_registry DROP COLUMN IF EXISTS user_id;
+-- +goose StatementEnd

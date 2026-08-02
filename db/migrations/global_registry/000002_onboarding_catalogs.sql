@@ -1,12 +1,12 @@
 -- +goose Up
 -- +goose StatementBegin
-ALTER TABLE users_registry
+ALTER TABLE auth.users_registry
     ADD COLUMN user_id UUID;
 
-CREATE INDEX users_registry_user_id_idx ON users_registry (user_id)
+CREATE INDEX users_registry_user_id_idx ON auth.users_registry (user_id)
     WHERE user_id IS NOT NULL;
 
-CREATE TABLE business_types (
+CREATE TABLE accounts.business_types (
     id UUID PRIMARY KEY,
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
@@ -16,15 +16,15 @@ CREATE TABLE business_types (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX business_types_active_sort_idx ON business_types (sort_order)
+CREATE INDEX business_types_active_sort_idx ON accounts.business_types (sort_order)
     WHERE is_active = TRUE;
 
 CREATE TRIGGER business_types_set_updated_at
-    BEFORE UPDATE ON business_types
+    BEFORE UPDATE ON accounts.business_types
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 
-CREATE TABLE onboarding_industries (
+CREATE TABLE accounts.onboarding_industries (
     id UUID PRIMARY KEY,
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
@@ -35,15 +35,15 @@ CREATE TABLE onboarding_industries (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX onboarding_industries_active_sort_idx ON onboarding_industries (sort_order)
+CREATE INDEX onboarding_industries_active_sort_idx ON accounts.onboarding_industries (sort_order)
     WHERE is_active = TRUE;
 
 CREATE TRIGGER onboarding_industries_set_updated_at
-    BEFORE UPDATE ON onboarding_industries
+    BEFORE UPDATE ON accounts.onboarding_industries
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 
-CREATE TABLE company_roles (
+CREATE TABLE accounts.company_roles (
     id UUID PRIMARY KEY,
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
@@ -54,15 +54,15 @@ CREATE TABLE company_roles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX company_roles_active_sort_idx ON company_roles (sort_order)
+CREATE INDEX company_roles_active_sort_idx ON accounts.company_roles (sort_order)
     WHERE is_active = TRUE;
 
 CREATE TRIGGER company_roles_set_updated_at
-    BEFORE UPDATE ON company_roles
+    BEFORE UPDATE ON accounts.company_roles
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 
-INSERT INTO business_types (id, name, slug, sort_order) VALUES
+INSERT INTO accounts.business_types (id, name, slug, sort_order) VALUES
     ('61000000-0000-4000-8000-000000000001', 'Early-stage startup', 'early-stage-startup', 1),
     ('61000000-0000-4000-8000-000000000002', 'Small business', 'small-business', 2),
     ('61000000-0000-4000-8000-000000000003', 'Mid-size company', 'mid-size-company', 3),
@@ -70,7 +70,7 @@ INSERT INTO business_types (id, name, slug, sort_order) VALUES
     ('61000000-0000-4000-8000-000000000005', 'Non-profit', 'non-profit', 5),
     ('61000000-0000-4000-8000-000000000006', 'Freelancer / agency', 'freelancer-agency', 6);
 
-INSERT INTO onboarding_industries (id, name, slug, emoji, sort_order) VALUES
+INSERT INTO accounts.onboarding_industries (id, name, slug, emoji, sort_order) VALUES
     ('62000000-0000-4000-8000-000000000001', 'Tech / Software', 'tech-software', E'💻', 1),
     ('62000000-0000-4000-8000-000000000002', 'Finance / Fintech', 'finance-fintech', E'💰', 2),
     ('62000000-0000-4000-8000-000000000003', 'Retail / E-commerce', 'retail-ecommerce', E'🛍️', 3),
@@ -87,7 +87,7 @@ INSERT INTO onboarding_industries (id, name, slug, emoji, sort_order) VALUES
     ('62000000-0000-4000-8000-00000000000e', 'Construction', 'construction', E'🏗️', 14),
     ('62000000-0000-4000-8000-00000000000f', 'Others', 'others', NULL, 15);
 
-INSERT INTO company_roles (id, name, slug, icon_key, sort_order) VALUES
+INSERT INTO accounts.company_roles (id, name, slug, icon_key, sort_order) VALUES
     ('60000000-0000-4000-8000-000000000001', 'Founder / CEO', 'founder-ceo', 'building', 1),
     ('60000000-0000-4000-8000-000000000002', 'Engineer / Designer', 'engineer-designer', 'code', 2),
     ('60000000-0000-4000-8000-000000000003', 'Marketing / Sales', 'marketing-sales', 'megaphone', 3),
@@ -100,10 +100,10 @@ INSERT INTO company_roles (id, name, slug, icon_key, sort_order) VALUES
 
 -- +goose Down
 -- +goose StatementBegin
-DROP TABLE IF EXISTS company_roles;
-DROP TABLE IF EXISTS onboarding_industries;
-DROP TABLE IF EXISTS business_types;
+DROP TABLE IF EXISTS accounts.company_roles;
+DROP TABLE IF EXISTS accounts.onboarding_industries;
+DROP TABLE IF EXISTS accounts.business_types;
 
-DROP INDEX IF EXISTS users_registry_user_id_idx;
-ALTER TABLE users_registry DROP COLUMN IF EXISTS user_id;
+DROP INDEX IF EXISTS auth.users_registry_user_id_idx;
+ALTER TABLE auth.users_registry DROP COLUMN IF EXISTS user_id;
 -- +goose StatementEnd

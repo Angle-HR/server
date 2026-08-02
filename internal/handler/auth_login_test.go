@@ -189,8 +189,8 @@ func expectVerifiedLoginMocks(t *testing.T, emailVerifiedAt *time.Time) (pgxmock
 		t.Fatalf("LookupUsersRegistryByEmail: %v", err)
 	}
 	globalMock.ExpectQuery(registrySQL).WithArgs(registryArgs...).WillReturnRows(
-		pgxmock.NewRows([]string{"id", "email", "region", "user_id", "waitlist_token"}).
-			AddRow(uuid.New(), testLoginEmail, "uk", &testLoginUserID, nil),
+		pgxmock.NewRows([]string{"id", "email", "region", "user_id"}).
+			AddRow(uuid.New(), testLoginEmail, "uk", &testLoginUserID),
 	)
 
 	regionalMock, err := pgxmock.NewPool(pgxmock.QueryMatcherOption(pgxmock.QueryMatcherEqual))

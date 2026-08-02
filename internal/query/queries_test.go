@@ -66,20 +66,20 @@ func TestInsertWaitlistSignupSQL(t *testing.T) {
 	}
 }
 
-func TestInsertUsersRegistrySQL(t *testing.T) {
+func TestInsertWaitlistRegistrySQL(t *testing.T) {
 	t.Parallel()
 
 	token := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
-	sql, args, err := InsertUsersRegistry("jane@acme.com", "uk", "explicit", token)
+	sql, args, err := InsertWaitlistRegistry("jane@acme.com", "uk", "explicit", token)
 	if err != nil {
-		t.Fatalf("InsertUsersRegistry: %v", err)
+		t.Fatalf("InsertWaitlistRegistry: %v", err)
 	}
 
 	if len(args) != 4 {
 		t.Fatalf("args: got %v", args)
 	}
 
-	if !strings.Contains(sql, `INSERT INTO "users_registry"`) {
+	if !strings.Contains(sql, `INSERT INTO "registry"`) {
 		t.Fatalf("sql: %q", sql)
 	}
 	if !strings.Contains(sql, `ON CONFLICT ("email") DO NOTHING`) {

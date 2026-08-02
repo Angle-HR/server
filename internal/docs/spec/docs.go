@@ -2045,7 +2045,7 @@ const docTemplate = `{
         },
         "/waitlist": {
             "post": {
-                "description": "Registers a user for the regional waitlist and global users registry.",
+                "description": "Registers a signup for the regional waitlist and global waitlist registry.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3828,9 +3828,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user_id": {
-                    "type": "string"
-                },
-                "waitlist_token": {
                     "type": "string"
                 }
             }

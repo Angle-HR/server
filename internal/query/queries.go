@@ -92,19 +92,19 @@ func InsertWaitlistSignup(
 		ToSQL())
 }
 
-// InsertUsersRegistry returns SQL and args for a global users_registry row.
-func InsertUsersRegistry(email, region, regionSource string, waitlistToken uuid.UUID) (string, []any, error) {
-	return mustSQL(postgres.Insert("users_registry").
+// InsertWaitlistRegistry returns SQL and args for a global waitlist.registry row.
+func InsertWaitlistRegistry(email, region, regionSource string, waitlistToken uuid.UUID) (string, []any, error) {
+	return mustSQL(postgres.Insert("registry").
 		Columns("email", "region", "region_source", "waitlist_token").
 		Values(email, region, regionSource, waitlistToken).
 		OnConflict("email").DoNothing().
 		ToSQL())
 }
 
-// LookupUsersRegistryByWaitlistToken returns SQL to resolve region and email for a token.
-func LookupUsersRegistryByWaitlistToken(token uuid.UUID) (string, []any, error) {
+// LookupWaitlistRegistryByToken returns SQL to resolve region and email for a waitlist token.
+func LookupWaitlistRegistryByToken(token uuid.UUID) (string, []any, error) {
 	return mustSQL(postgres.Select("email", "region").
-		From("users_registry").
+		From("registry").
 		Where("waitlist_token", "=", token).
 		ToSQL())
 }

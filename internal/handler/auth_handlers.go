@@ -704,8 +704,7 @@ func (h *AuthHandler) resolveUserRegion(ctx context.Context, email string) (regi
 	var registryEmail string
 	var reg string
 	var userID *uuid.UUID
-	var waitlistToken *uuid.UUID
-	if err := h.GlobalDB.QueryRow(ctx, sql, args...).Scan(&registryID, &registryEmail, &reg, &userID, &waitlistToken); err != nil {
+	if err := h.GlobalDB.QueryRow(ctx, sql, args...).Scan(&registryID, &registryEmail, &reg, &userID); err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return region.RegionUnknown, uuid.Nil, err
 		}

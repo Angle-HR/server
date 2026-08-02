@@ -338,9 +338,9 @@ func expectSuccessfulSignup(t *testing.T) (pgxmock.PgxPoolIface, pgxmock.PgxPool
 	expectCountryLookup(t, globalMock, testCountryID)
 
 	globalMock.ExpectBegin()
-	registrySQL, registryArgs, err := query.InsertUsersRegistry("jane@acme.com", "uk", "explicit", testToken)
+	registrySQL, registryArgs, err := query.InsertWaitlistRegistry("jane@acme.com", "uk", "explicit", testToken)
 	if err != nil {
-		t.Fatalf("InsertUsersRegistry: %v", err)
+		t.Fatalf("InsertWaitlistRegistry: %v", err)
 	}
 	globalMock.ExpectExec(registrySQL).WithArgs(registryArgs...).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))

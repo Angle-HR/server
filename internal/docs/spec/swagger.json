@@ -1674,9 +1674,6 @@
                 },
                 "user_id": {
                     "type": "string"
-                },
-                "waitlist_token": {
-                    "type": "string"
                 }
             },
             "type": "object"
@@ -3870,7 +3867,7 @@
                 "consumes": [
                     "application/json"
                 ],
-                "description": "Registers a user for the regional waitlist and global users registry.",
+                "description": "Registers a signup for the regional waitlist and global waitlist registry.",
                 "parameters": [
                     {
                         "description": "Signup payload",

@@ -34,7 +34,6 @@ type adminUserDetail struct {
 	Email                 string     `json:"email"`
 	Region                string     `json:"region"`
 	RegionSource          string     `json:"region_source"`
-	WaitlistToken         *uuid.UUID `json:"waitlist_token,omitempty"`
 	UserID                *uuid.UUID `json:"user_id,omitempty"`
 	CreatedAt             time.Time  `json:"created_at"`
 	UpdatedAt             time.Time  `json:"updated_at"`
@@ -82,7 +81,8 @@ func (h *AdminHandler) listUsers(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.GlobalDB.Query(r.Context(), `
 		SELECT id, email, region, user_id, created_at, updated_at
 		FROM auth.users_registry
-		WHERE ($1 = '' OR email ILIKE '%' || $1 || '%')
+		WHERE user_id IS NOT NULL
+		  AND ($1 = '' OR email ILIKE '%' || $1 || '%')
 		  AND ($2 = '' OR region = $2)
 		ORDER BY created_at DESC
 		LIMIT $3 OFFSET $4
@@ -219,11 +219,11 @@ func (h *AdminHandler) patchUser(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) loadUserDetail(ctx context.Context, id uuid.UUID) (adminUserDetail, error) {
 	var d adminUserDetail
 	err := h.GlobalDB.QueryRow(ctx, `
-		SELECT id, email, region, region_source, waitlist_token, user_id, created_at, updated_at
+		SELECT id, email, region, region_source, user_id, created_at, updated_at
 		FROM auth.users_registry
 		WHERE id = $1 OR user_id = $1
 	`, id).Scan(
-		&d.RegistryID, &d.Email, &d.Region, &d.RegionSource, &d.WaitlistToken, &d.UserID, &d.CreatedAt, &d.UpdatedAt,
+		&d.RegistryID, &d.Email, &d.Region, &d.RegionSource, &d.UserID, &d.CreatedAt, &d.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return adminUserDetail{}, apperror.ErrNotFound

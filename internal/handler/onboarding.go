@@ -196,9 +196,9 @@ func (h *OnboardingHandler) processSubmit(ctx context.Context, req onboardingReq
 }
 
 func (h *OnboardingHandler) lookupRegistry(ctx context.Context, token uuid.UUID) (string, region.Region, error) {
-	sql, args, err := query.LookupUsersRegistryByWaitlistToken(token)
+	sql, args, err := query.LookupWaitlistRegistryByToken(token)
 	if err != nil {
-		return "", "", fmt.Errorf("build registry lookup: %w", err)
+		return "", "", fmt.Errorf("build waitlist registry lookup: %w", err)
 	}
 
 	var email string

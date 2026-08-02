@@ -1,3 +1,5 @@
+-- +goose Up
+-- +goose StatementBegin
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE OR REPLACE FUNCTION set_updated_at()
@@ -85,3 +87,20 @@ CREATE TABLE waitlist.waitlist_frustrations (
 );
 
 CREATE INDEX waitlist_frustrations_waitlist_id_idx ON waitlist.waitlist_frustrations (waitlist_id);
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+DROP TRIGGER IF EXISTS waitlist_soft_delete ON waitlist.waitlist;
+DROP TRIGGER IF EXISTS waitlist_set_updated_at ON waitlist.waitlist;
+DROP TABLE IF EXISTS waitlist.waitlist_frustrations;
+DROP TABLE IF EXISTS waitlist.waitlist_hiring_tools;
+DROP TABLE IF EXISTS waitlist.waitlist_industries;
+DROP TABLE IF EXISTS waitlist.waitlist;
+
+DROP SCHEMA IF EXISTS waitlist;
+
+DROP FUNCTION IF EXISTS soft_delete_row();
+DROP FUNCTION IF EXISTS set_updated_at();
+DROP EXTENSION IF EXISTS pgcrypto;
+-- +goose StatementEnd

@@ -17,17 +17,20 @@ import (
 
 // Config holds runtime configuration values.
 type Config struct {
-	ServerPort         string
-	DBUrlGlobal        string
-	RedisURL           string
-	AppEnv             string
-	PublicAPIURL       string
-	FluvioUIOrigin     string
-	CORSAllowedOrigins []string
-	JWTSecret          string
-	JWTAccessTTL       time.Duration
-	JWTRefreshTTL      time.Duration
-	AuthDefaultRegion  region.Region
+	ServerPort             string
+	DBUrlGlobal            string
+	RedisURL               string
+	AppEnv                 string
+	PublicAPIURL           string
+	FluvioUIOrigin         string
+	CORSAllowedOrigins     []string
+	JWTSecret              string
+	JWTAccessTTL           time.Duration
+	JWTRefreshTTL          time.Duration
+	AuthDefaultRegion      region.Region
+	AdminBootstrapEmail    string
+	AdminBootstrapPassword string
+	AdminBootstrapName     string
 }
 
 // Load reads configuration from the environment.
@@ -37,13 +40,16 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		ServerPort:     os.Getenv("SERVER_PORT"),
-		DBUrlGlobal:    os.Getenv("DB_URL_GLOBAL"),
-		RedisURL:       os.Getenv("REDIS_URL"),
-		AppEnv:         os.Getenv("APP_ENV"),
-		PublicAPIURL:   os.Getenv("PUBLIC_API_URL"),
-		FluvioUIOrigin: os.Getenv("FLUVIO_UI_ORIGIN"),
-		JWTSecret:      os.Getenv("JWT_SECRET"),
+		ServerPort:             os.Getenv("SERVER_PORT"),
+		DBUrlGlobal:            os.Getenv("DB_URL_GLOBAL"),
+		RedisURL:               os.Getenv("REDIS_URL"),
+		AppEnv:                 os.Getenv("APP_ENV"),
+		PublicAPIURL:           os.Getenv("PUBLIC_API_URL"),
+		FluvioUIOrigin:         os.Getenv("FLUVIO_UI_ORIGIN"),
+		JWTSecret:              os.Getenv("JWT_SECRET"),
+		AdminBootstrapEmail:    strings.TrimSpace(os.Getenv("ADMIN_BOOTSTRAP_EMAIL")),
+		AdminBootstrapPassword: os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
+		AdminBootstrapName:     strings.TrimSpace(os.Getenv("ADMIN_BOOTSTRAP_NAME")),
 	}
 
 	if cfg.JWTSecret == "" {

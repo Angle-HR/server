@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/Angle-HR/server/internal/queue"
+	"github.com/Angle-HR/server/pkg/db"
 	"github.com/Angle-HR/server/pkg/logger"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	fluvio "github.com/software78/fluvio"
 )
@@ -34,7 +34,7 @@ func Run(workerName string, queues map[string]fluvio.QueueConfig, register func(
 		return errors.New("DB_URL_GLOBAL is required")
 	}
 
-	dbPool, err := pgxpool.New(ctx, dbURL)
+	dbPool, err := db.NewGlobalPool(ctx, dbURL)
 	if err != nil {
 		return fmt.Errorf("connect to global database: %w", err)
 	}

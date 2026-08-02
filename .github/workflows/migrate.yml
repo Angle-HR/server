@@ -5,7 +5,8 @@
 #   staging     — used when pushing to the staging branch
 #   production  — used when pushing to the production branch
 #
-# Each environment needs these secrets (same names, different DSNs per env):
+# Each environment needs these secrets (same names, different DSNs per env).
+# Prefer one Postgres host with distinct dbnames (anglehr_uk|us|africa|eu|asia|global):
 #   ANGLEHR_UK_POSTGRES_DSN, ANGLEHR_US_POSTGRES_DSN, ANGLEHR_AFRICA_POSTGRES_DSN,
 #   ANGLEHR_EU_POSTGRES_DSN, ANGLEHR_ASIA_POSTGRES_DSN, DB_URL_GLOBAL
 #
@@ -34,8 +35,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install goose
+        run: |
+          curl -fsSL -o /tmp/goose \
+            https://github.com/pressly/goose/releases/download/v3.24.1/goose_linux_x86_64
+          sudo install -m 0755 /tmp/goose /usr/local/bin/goose
+          goose --version
 
       - name: Run all migrations
         env:

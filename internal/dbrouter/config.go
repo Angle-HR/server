@@ -21,6 +21,11 @@ type RegionConfig struct {
 }
 
 func allRegions() []region.Region {
+	return Regions()
+}
+
+// Regions returns the configured geographic regions in stable order.
+func Regions() []region.Region {
 	return []region.Region{
 		region.RegionUK,
 		region.RegionUS,

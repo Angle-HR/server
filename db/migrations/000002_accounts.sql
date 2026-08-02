@@ -1,3 +1,5 @@
+-- +goose Up
+-- +goose StatementBegin
 CREATE SCHEMA IF NOT EXISTS accounts;
 
 CREATE TABLE accounts.users (
@@ -86,3 +88,13 @@ CREATE TRIGGER accounts_onboarding_progress_set_updated_at
     BEFORE UPDATE ON accounts.onboarding_progress
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+DROP TABLE IF EXISTS accounts.onboarding_progress;
+DROP TABLE IF EXISTS accounts.addresses;
+DROP TABLE IF EXISTS accounts.organizations;
+DROP TABLE IF EXISTS accounts.users;
+DROP SCHEMA IF EXISTS accounts;
+-- +goose StatementEnd

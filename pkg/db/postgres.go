@@ -19,9 +19,13 @@ const (
 	defaultConnectTimeout  = 5 * time.Second
 )
 
-// NewGlobalPool creates a pool for the global registry database (public schema only).
+// globalSearchPath resolves unqualified names across domain schemas.
+// fluvio is first so library migrations create fluvio_* tables in that schema.
+const globalSearchPath = "fluvio,admin,accounts,waitlist,auth,public"
+
+// NewGlobalPool creates a pool for the global registry database.
 func NewGlobalPool(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
-	return newPool(ctx, dbURL, "public")
+	return newPool(ctx, dbURL, globalSearchPath)
 }
 
 func newPool(ctx context.Context, dbURL, searchPath string) (*pgxpool.Pool, error) {

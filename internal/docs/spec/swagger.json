@@ -1,6 +1,90 @@
 {
     "basePath": "/api/v1",
     "definitions": {
+        "github_com_Angle-HR_server_internal_admin.AuditLog": {
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "actor_email": {
+                    "type": "string"
+                },
+                "actor_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "ip": {
+                    "type": "string"
+                },
+                "meta": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "type": "array"
+                },
+                "resource_id": {
+                    "type": "string"
+                },
+                "resource_type": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "github_com_Angle-HR_server_internal_admin.RoleWithPermissions": {
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "permissions": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "github_com_Angle-HR_server_internal_admin.StaffMember": {
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "roles": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
         "github_com_Angle-HR_server_internal_apidoc.ErrorBody": {
             "properties": {
                 "code": {
@@ -40,6 +124,330 @@
                 "request_id": {
                     "example": "abc123",
                     "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminAuditListEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.AuditLog"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminCatalogItemEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminCatalogListEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "items": {
+                            "type": "integer"
+                        },
+                        "type": "array"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminCatalogUpsertRequest": {
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "emoji": {
+                    "type": "string"
+                },
+                "icon_key": {
+                    "type": "string"
+                },
+                "icon_url": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "max_size": {
+                    "type": "integer"
+                },
+                "min_size": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminCreateStaffRequest": {
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "roles": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminJobEnvelope": {
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.adminJobView"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminJobListEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.adminJobView"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminLoginRequest": {
+            "properties": {
+                "email": {
+                    "example": "admin@anglehr.local",
+                    "type": "string"
+                },
+                "password": {
+                    "example": "changeme123",
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminMeEnvelope": {
+            "properties": {
+                "data": {
+                    "additionalProperties": {},
+                    "type": "object"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminPatchStaffRequest": {
+            "properties": {
+                "is_active": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "roles": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminRefreshRequest": {
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminRolesEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.RoleWithPermissions"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminStaffEnvelope": {
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.StaffMember"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminStaffListEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.StaffMember"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminTokenData": {
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "token_type": {
+                    "example": "Bearer",
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminTokenEnvelope": {
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.AdminTokenData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminUserDetailEnvelope": {
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.adminUserDetail"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminUserListEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.adminUserListItem"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminUserPatchRequest": {
+            "properties": {
+                "deleted": {
+                    "type": "boolean"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminWaitlistDetailEnvelope": {
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.adminWaitlistDetail"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminWaitlistListEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.adminWaitlistItem"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminWaitlistPatchRequest": {
+            "properties": {
+                "metadata": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "type": "array"
+                },
+                "wants_early_access": {
+                    "type": "boolean"
+                },
+                "wants_user_testing": {
+                    "type": "boolean"
                 }
             },
             "type": "object"
@@ -1027,16 +1435,1223 @@
                 }
             },
             "type": "object"
+        },
+        "internal_handler.adminJobView": {
+            "properties": {
+                "args": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "type": "array"
+                },
+                "attempt": {
+                    "type": "integer"
+                },
+                "attempted_at": {
+                    "type": "string"
+                },
+                "attempted_by": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "error_trace": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "type": "array"
+                },
+                "finalized_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "max_attempts": {
+                    "type": "integer"
+                },
+                "metadata": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "type": "array"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "queue": {
+                    "type": "string"
+                },
+                "scheduled_at": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "tags": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "unique_key": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.adminUserDetail": {
+            "properties": {
+                "account_type": {
+                    "type": "string"
+                },
+                "completed_steps": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "country_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "email_verified_at": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "legal_full_name": {
+                    "type": "string"
+                },
+                "onboarding_completed_at": {
+                    "type": "string"
+                },
+                "onboarding_step": {
+                    "type": "string"
+                },
+                "organization_legal_name": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "region_source": {
+                    "type": "string"
+                },
+                "registry_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "waitlist_token": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.adminUserListItem": {
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.adminWaitlistDetail": {
+            "properties": {
+                "country_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "frustration_ids": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "hiring_tool_ids": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "industry_ids": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "metadata": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "type": "array"
+                },
+                "onboarding_submitted_at": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "region_source": {
+                    "type": "string"
+                },
+                "role_id": {
+                    "type": "string"
+                },
+                "team_size_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "uuid": {
+                    "type": "string"
+                },
+                "wants_early_access": {
+                    "type": "boolean"
+                },
+                "wants_user_testing": {
+                    "type": "boolean"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.adminWaitlistItem": {
+            "properties": {
+                "country_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "type": "array"
+                },
+                "onboarding_submitted_at": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "region_source": {
+                    "type": "string"
+                },
+                "role_id": {
+                    "type": "string"
+                },
+                "team_size_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "uuid": {
+                    "type": "string"
+                },
+                "wants_early_access": {
+                    "type": "boolean"
+                },
+                "wants_user_testing": {
+                    "type": "boolean"
+                }
+            },
+            "type": "object"
         }
     },
     "host": "localhost:8080",
     "info": {
         "contact": {},
-        "description": "Waitlist and product onboarding API for Open HR.\nInteractive docs (Scalar) are served at `/` in non-production environments.\nProduct flow: signup → verify email (6-digit OTP, 5 min expiry) → profile → address → [business] → complete.\nOnboarding step endpoints require `Authorization: Bearer \u003caccess_token\u003e` after email verification.",
+        "description": "Waitlist and product onboarding API for Open HR.\nInteractive docs (Scalar) are served at `/` in non-production environments.\nProduct flow: signup → verify email (6-digit OTP, 5 min expiry) → profile → address → [business] → complete.\nOnboarding step endpoints require `Authorization: Bearer \u003caccess_token\u003e` after email verification.\nAdmin ops console APIs live under `/api/v1/admin` and require a separate admin JWT (`token_use=admin`).",
         "title": "Angle HR API",
         "version": "1.0"
     },
     "paths": {
+        "/admin/audit-logs": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "Actor UUID",
+                        "in": "query",
+                        "name": "actor_id",
+                        "type": "string"
+                    },
+                    {
+                        "description": "Action filter",
+                        "in": "query",
+                        "name": "action",
+                        "type": "string"
+                    },
+                    {
+                        "description": "Resource type",
+                        "in": "query",
+                        "name": "resource_type",
+                        "type": "string"
+                    },
+                    {
+                        "description": "Page size",
+                        "in": "query",
+                        "name": "limit",
+                        "type": "integer"
+                    },
+                    {
+                        "description": "Offset",
+                        "in": "query",
+                        "name": "offset",
+                        "type": "integer"
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminAuditListEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "List admin audit logs",
+                "tags": [
+                    "admin/audit"
+                ]
+            }
+        },
+        "/admin/auth/login": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "description": "Authenticates an admin user and returns admin JWT tokens.",
+                "parameters": [
+                    {
+                        "description": "Login payload",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminLoginRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminTokenEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "summary": "Admin login",
+                "tags": [
+                    "admin/auth"
+                ]
+            }
+        },
+        "/admin/auth/me": {
+            "get": {
+                "description": "Returns the authenticated admin profile, roles, and permissions.",
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminMeEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Admin profile",
+                "tags": [
+                    "admin/auth"
+                ]
+            }
+        },
+        "/admin/auth/refresh": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "description": "Issues a new admin access/refresh pair from a valid admin refresh token.",
+                "parameters": [
+                    {
+                        "description": "Refresh payload",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminRefreshRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminTokenEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "summary": "Admin token refresh",
+                "tags": [
+                    "admin/auth"
+                ]
+            }
+        },
+        "/admin/catalogs/{type}": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "Catalog type",
+                        "in": "path",
+                        "name": "type",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminCatalogListEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "List catalog entries",
+                "tags": [
+                    "admin/catalogs"
+                ]
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "description": "Catalog type",
+                        "in": "path",
+                        "name": "type",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "description": "Create payload",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminCatalogUpsertRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminCatalogItemEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Create catalog entry",
+                "tags": [
+                    "admin/catalogs"
+                ]
+            }
+        },
+        "/admin/catalogs/{type}/{id}": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "description": "Catalog type",
+                        "in": "path",
+                        "name": "type",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "description": "Entry UUID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "description": "Patch payload",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminCatalogUpsertRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminCatalogItemEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Update catalog entry",
+                "tags": [
+                    "admin/catalogs"
+                ]
+            }
+        },
+        "/admin/jobs": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "Queue name",
+                        "in": "query",
+                        "name": "queue",
+                        "type": "string"
+                    },
+                    {
+                        "description": "Job state",
+                        "in": "query",
+                        "name": "state",
+                        "type": "string"
+                    },
+                    {
+                        "description": "Job kind",
+                        "in": "query",
+                        "name": "kind",
+                        "type": "string"
+                    },
+                    {
+                        "description": "Page size",
+                        "in": "query",
+                        "name": "limit",
+                        "type": "integer"
+                    },
+                    {
+                        "description": "Offset",
+                        "in": "query",
+                        "name": "offset",
+                        "type": "integer"
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminJobListEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "List Fluvio jobs",
+                "tags": [
+                    "admin/jobs"
+                ]
+            }
+        },
+        "/admin/jobs/{id}": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "Job ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "type": "integer"
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminJobEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Get Fluvio job",
+                "tags": [
+                    "admin/jobs"
+                ]
+            }
+        },
+        "/admin/jobs/{id}/retry": {
+            "post": {
+                "description": "Replays dead jobs, runs scheduled jobs now, or requeues failed jobs as pending.",
+                "parameters": [
+                    {
+                        "description": "Job ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "type": "integer"
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminJobEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Retry Fluvio job",
+                "tags": [
+                    "admin/jobs"
+                ]
+            }
+        },
+        "/admin/roles": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminRolesEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "List roles and permissions",
+                "tags": [
+                    "admin/staff"
+                ]
+            }
+        },
+        "/admin/staff": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminStaffListEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "List admin staff",
+                "tags": [
+                    "admin/staff"
+                ]
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "description": "Staff payload",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminCreateStaffRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminStaffEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Create admin staff",
+                "tags": [
+                    "admin/staff"
+                ]
+            }
+        },
+        "/admin/staff/{id}": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "description": "Staff UUID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "description": "Patch payload",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminPatchStaffRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminStaffEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Update admin staff",
+                "tags": [
+                    "admin/staff"
+                ]
+            }
+        },
+        "/admin/users": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "Region filter",
+                        "in": "query",
+                        "name": "region",
+                        "type": "string"
+                    },
+                    {
+                        "description": "Search email",
+                        "in": "query",
+                        "name": "q",
+                        "type": "string"
+                    },
+                    {
+                        "description": "Page size",
+                        "in": "query",
+                        "name": "limit",
+                        "type": "integer"
+                    },
+                    {
+                        "description": "Offset",
+                        "in": "query",
+                        "name": "offset",
+                        "type": "integer"
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminUserListEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "List product users",
+                "tags": [
+                    "admin/users"
+                ]
+            }
+        },
+        "/admin/users/{id}": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "Registry UUID or regional user UUID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminUserDetailEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Get product user detail",
+                "tags": [
+                    "admin/users"
+                ]
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "description": "Soft-delete or restore a regional account (`deleted: true|false`).",
+                "parameters": [
+                    {
+                        "description": "Registry UUID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "description": "Patch payload",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminUserPatchRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminUserDetailEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Update product user",
+                "tags": [
+                    "admin/users"
+                ]
+            }
+        },
+        "/admin/waitlist": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "Region filter",
+                        "in": "query",
+                        "name": "region",
+                        "type": "string"
+                    },
+                    {
+                        "description": "Search email or name",
+                        "in": "query",
+                        "name": "q",
+                        "type": "string"
+                    },
+                    {
+                        "description": "pending|complete",
+                        "in": "query",
+                        "name": "onboarding",
+                        "type": "string"
+                    },
+                    {
+                        "description": "Include soft-deleted",
+                        "in": "query",
+                        "name": "include_deleted",
+                        "type": "boolean"
+                    },
+                    {
+                        "description": "Page size (max 100)",
+                        "in": "query",
+                        "name": "limit",
+                        "type": "integer"
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminWaitlistListEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "List waitlist entries",
+                "tags": [
+                    "admin/waitlist"
+                ]
+            }
+        },
+        "/admin/waitlist/{uuid}": {
+            "delete": {
+                "parameters": [
+                    {
+                        "description": "Waitlist UUID",
+                        "in": "path",
+                        "name": "uuid",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "description": "Region hint",
+                        "in": "query",
+                        "name": "region",
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Soft-delete waitlist entry",
+                "tags": [
+                    "admin/waitlist"
+                ]
+            },
+            "get": {
+                "parameters": [
+                    {
+                        "description": "Waitlist UUID",
+                        "in": "path",
+                        "name": "uuid",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "description": "Region hint",
+                        "in": "query",
+                        "name": "region",
+                        "type": "string"
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminWaitlistDetailEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Get waitlist entry",
+                "tags": [
+                    "admin/waitlist"
+                ]
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "description": "Waitlist UUID",
+                        "in": "path",
+                        "name": "uuid",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "description": "Region hint",
+                        "in": "query",
+                        "name": "region",
+                        "type": "string"
+                    },
+                    {
+                        "description": "Patch payload",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminWaitlistPatchRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminWaitlistDetailEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Update waitlist entry",
+                "tags": [
+                    "admin/waitlist"
+                ]
+            }
+        },
+        "/admin/waitlist/{uuid}/restore": {
+            "post": {
+                "parameters": [
+                    {
+                        "description": "Waitlist UUID",
+                        "in": "path",
+                        "name": "uuid",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "description": "Region hint",
+                        "in": "query",
+                        "name": "region",
+                        "type": "string"
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminWaitlistDetailEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Restore soft-deleted waitlist entry",
+                "tags": [
+                    "admin/waitlist"
+                ]
+            }
+        },
         "/auth/login": {
             "post": {
                 "consumes": [
@@ -2046,6 +3661,41 @@
             "description": "Onboarding progress and completion. Individual: verify_email → profile → address. Business: also requires business step.",
             "name": "onboarding/session",
             "x-displayName": "Session"
+        },
+        {
+            "description": "Admin console login, token refresh, and current admin profile with RBAC permissions.",
+            "name": "admin/auth",
+            "x-displayName": "Auth"
+        },
+        {
+            "description": "Cross-region waitlist list, detail, flag updates, soft-delete, and restore.",
+            "name": "admin/waitlist",
+            "x-displayName": "Waitlist"
+        },
+        {
+            "description": "Product account directory via global registry and regional accounts.",
+            "name": "admin/users",
+            "x-displayName": "Users"
+        },
+        {
+            "description": "CMS for waitlist and product onboarding catalog tables.",
+            "name": "admin/catalogs",
+            "x-displayName": "Catalogs"
+        },
+        {
+            "description": "Fluvio job inspection and retry for email/upload queues.",
+            "name": "admin/jobs",
+            "x-displayName": "Jobs"
+        },
+        {
+            "description": "Admin staff users, role assignment, and permission matrix.",
+            "name": "admin/staff",
+            "x-displayName": "Staff"
+        },
+        {
+            "description": "Immutable audit trail of admin mutations.",
+            "name": "admin/audit",
+            "x-displayName": "Audit"
         }
     ],
     "x-tagGroups": [
@@ -2066,6 +3716,18 @@
                 "onboarding/address",
                 "onboarding/business",
                 "onboarding/session"
+            ]
+        },
+        {
+            "name": "Admin",
+            "tags": [
+                "admin/auth",
+                "admin/waitlist",
+                "admin/users",
+                "admin/catalogs",
+                "admin/jobs",
+                "admin/staff",
+                "admin/audit"
             ]
         }
     ]

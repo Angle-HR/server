@@ -23,6 +23,19 @@ var onboardingTagGroup = map[string]any{
 	},
 }
 
+var adminTagGroup = map[string]any{
+	"name": "Admin",
+	"tags": []any{
+		"admin/auth",
+		"admin/waitlist",
+		"admin/users",
+		"admin/catalogs",
+		"admin/jobs",
+		"admin/staff",
+		"admin/audit",
+	},
+}
+
 var apiTagDefinitions = []map[string]any{
 	{
 		"name":          "waitlist/reference",
@@ -69,11 +82,46 @@ var apiTagDefinitions = []map[string]any{
 		"description":   "Onboarding progress and completion. Individual: verify_email → profile → address. Business: also requires business step.",
 		"x-displayName": "Session",
 	},
+	{
+		"name":          "admin/auth",
+		"description":   "Admin console login, token refresh, and current admin profile with RBAC permissions.",
+		"x-displayName": "Auth",
+	},
+	{
+		"name":          "admin/waitlist",
+		"description":   "Cross-region waitlist list, detail, flag updates, soft-delete, and restore.",
+		"x-displayName": "Waitlist",
+	},
+	{
+		"name":          "admin/users",
+		"description":   "Product account directory via global registry and regional accounts.",
+		"x-displayName": "Users",
+	},
+	{
+		"name":          "admin/catalogs",
+		"description":   "CMS for waitlist and product onboarding catalog tables.",
+		"x-displayName": "Catalogs",
+	},
+	{
+		"name":          "admin/jobs",
+		"description":   "Fluvio job inspection and retry for email/upload queues.",
+		"x-displayName": "Jobs",
+	},
+	{
+		"name":          "admin/staff",
+		"description":   "Admin staff users, role assignment, and permission matrix.",
+		"x-displayName": "Staff",
+	},
+	{
+		"name":          "admin/audit",
+		"description":   "Immutable audit trail of admin mutations.",
+		"x-displayName": "Audit",
+	},
 }
 
 // ApplyAPITagGroups injects Scalar x-tagGroups and tag metadata into an OpenAPI document.
 func ApplyAPITagGroups(doc map[string]any) {
-	doc["x-tagGroups"] = []any{waitlistTagGroup, onboardingTagGroup}
+	doc["x-tagGroups"] = []any{waitlistTagGroup, onboardingTagGroup, adminTagGroup}
 
 	tags := make([]any, len(apiTagDefinitions))
 	for i, tag := range apiTagDefinitions {

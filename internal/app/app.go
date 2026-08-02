@@ -5,6 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/Angle-HR/server/internal/admin"
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/docs"
@@ -18,11 +25,6 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/software78/fluvio/fluviui"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 )
 
 const (
@@ -81,12 +83,29 @@ func Run() error {
 	}
 	authMiddleware := auth.NewMiddleware(tokenService)
 
+	adminStore := admin.NewStore(globalPool)
+	if cfg.AdminBootstrapEmail != "" && cfg.AdminBootstrapPassword != "" {
+		hash, err := auth.HashPassword(cfg.AdminBootstrapPassword)
+		if err != nil {
+			return fmt.Errorf("hash admin bootstrap password: %w", err)
+		}
+		if err := admin.Bootstrap(ctx, adminStore, admin.BootstrapConfig{
+			Email:        cfg.AdminBootstrapEmail,
+			PasswordHash: hash,
+			Name:         cfg.AdminBootstrapName,
+		}); err != nil {
+			return fmt.Errorf("bootstrap admin: %w", err)
+		}
+	}
+	adminMiddleware := auth.NewAdminMiddleware(tokenService, adminStore)
+
 	countriesHandler := handler.NewCountriesHandler(globalPool)
 	catalogHandler := handler.NewCatalogHandler(globalPool)
 	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, fluvioClient)
 	onboardingHandler := handler.NewOnboardingHandler(dbRouter, globalPool, fluvioClient)
 	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, cfg.AuthDefaultRegion)
 	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient)
+	adminHandler := handler.NewAdminHandler(adminStore, dbRouter, globalPool, tokenService, fluvioClient)
 
 	router := chi.NewRouter()
 	router.Use(func(next http.Handler) http.Handler {
@@ -128,6 +147,14 @@ func Run() error {
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.RequireAuth)
 			productOnboardingHandler.RegisterProtectedRoutes(r)
+		})
+
+		r.Route("/admin", func(r chi.Router) {
+			adminHandler.RegisterPublicRoutes(r)
+			r.Group(func(r chi.Router) {
+				r.Use(adminMiddleware.RequireAdmin)
+				adminHandler.RegisterProtectedRoutes(r, adminMiddleware)
+			})
 		})
 	})
 

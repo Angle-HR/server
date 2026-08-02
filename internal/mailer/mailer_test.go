@@ -2,6 +2,8 @@ package mailer
 
 import (
 	"bytes"
+	"context"
+	"net/smtp"
 	"testing"
 )
 
@@ -94,7 +96,7 @@ func TestEmailVerificationTemplate(t *testing.T) {
 }
 
 func TestAdminInviteTemplate(t *testing.T) {
-	m, err := New(Config{AppURL: "https://app.example.com"})
+	m, err := New(Config{AdminAppURL: "https://admin.example.com"})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -110,15 +112,34 @@ func TestAdminInviteTemplate(t *testing.T) {
 	data := struct {
 		EmailArgs
 		AppURL string
-	}{args, m.cfg.AppURL}
+	}{args, m.cfg.AdminAppURL}
 	if err := m.templates.ExecuteTemplate(&buf, "admin_invite.html", data); err != nil {
 		t.Fatalf("render: %v", err)
 	}
-	if !bytes.Contains(buf.Bytes(), []byte("https://app.example.com/admin/accept-invite?token=invite-token")) {
+	if !bytes.Contains(buf.Bytes(), []byte("https://admin.example.com/admin/accept-invite?token=invite-token")) {
 		t.Fatalf("expected invite link, got: %s", buf.String())
 	}
 	if !bytes.Contains(buf.Bytes(), []byte("Ops User")) {
 		t.Fatalf("expected name, got: %s", buf.String())
+	}
+}
+
+func TestAdminInviteRequiresAdminAppURL(t *testing.T) {
+	m, err := New(Config{AppURL: "https://app.example.com"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	SetSendMailForTesting(m, func(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
+		t.Fatal("sendMail should not be called")
+		return nil
+	})
+	err = m.Send(context.Background(), EmailArgs{
+		Type:      TypeAdminInvite,
+		Recipient: "ops@example.com",
+		Token:     "tok",
+	})
+	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("ADMIN_APP_URL")) {
+		t.Fatalf("expected ADMIN_APP_URL error, got %v", err)
 	}
 }
 

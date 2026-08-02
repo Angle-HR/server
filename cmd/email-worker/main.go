@@ -38,12 +38,16 @@ func run() error {
 	smtpFrom := os.Getenv("SMTP_FROM")
 	smtpFromName := os.Getenv("SMTP_FROM_NAME")
 	appURL := os.Getenv("APP_URL")
+	adminAppURL := os.Getenv("ADMIN_APP_URL")
 
 	if smtpHost == "" {
 		slogLogger.Warn("SMTP_HOST is not set; emails may fail to deliver")
 	}
 	if appURL == "" {
 		slogLogger.Warn("APP_URL is not set; waitlist email links will be invalid")
+	}
+	if adminAppURL == "" {
+		slogLogger.Warn("ADMIN_APP_URL is not set; admin invite email links will be invalid")
 	}
 
 	slogLogger.Info("smtp configuration loaded",
@@ -54,17 +58,19 @@ func run() error {
 		"user_set", smtpUser != "",
 		"password_set", smtpPassword != "",
 		"app_url", appURL,
+		"admin_app_url", adminAppURL,
 	)
 
 	m, err := mailer.New(mailer.Config{
-		Host:     smtpHost,
-		Port:     smtpPort,
-		User:     smtpUser,
-		Password: smtpPassword,
-		From:     smtpFrom,
-		FromName: smtpFromName,
-		AppURL:   appURL,
-		Logger:   slogLogger,
+		Host:        smtpHost,
+		Port:        smtpPort,
+		User:        smtpUser,
+		Password:    smtpPassword,
+		From:        smtpFrom,
+		FromName:    smtpFromName,
+		AppURL:      appURL,
+		AdminAppURL: adminAppURL,
+		Logger:      slogLogger,
 	})
 	if err != nil {
 		return fmt.Errorf("initialize mailer: %w", err)

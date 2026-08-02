@@ -51,6 +51,7 @@ SMTP_PASSWORD="${SMTP_PASSWORD:-}"
 SMTP_FROM="${SMTP_FROM:-}"
 SMTP_FROM_NAME="${SMTP_FROM_NAME:-}"
 APP_URL="${APP_URL:-http://app.anglehr.local}"
+ADMIN_APP_URL="${ADMIN_APP_URL:-http://admin.anglehr.local}"
 JWT_SECRET="${JWT_SECRET:-dev-insecure-jwt-secret-change-me}"
 ADMIN_BOOTSTRAP_EMAIL="${ADMIN_BOOTSTRAP_EMAIL:-admin@anglehr.local}"
 ADMIN_BOOTSTRAP_PASSWORD="${ADMIN_BOOTSTRAP_PASSWORD:-changeme123}"
@@ -93,6 +94,7 @@ kubectl create secret generic anglehr-secrets \
 	--from-literal=SMTP_FROM="$SMTP_FROM" \
 	--from-literal=SMTP_FROM_NAME="$SMTP_FROM_NAME" \
 	--from-literal=APP_URL="$APP_URL" \
+	--from-literal=ADMIN_APP_URL="$ADMIN_APP_URL" \
 	| kubectl apply -f -
 
 echo "Secret anglehr-secrets applied in namespace $NAMESPACE"

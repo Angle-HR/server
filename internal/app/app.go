@@ -42,7 +42,7 @@ func Run() error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	log := logger.New(cfg.AppEnv)
+	log := logger.New(cfg.AppEnv, cfg.LogLevel)
 	ctx := context.Background()
 
 	redisClient, err := redisclient.NewClient(ctx, cfg.RedisURL)
@@ -116,6 +116,7 @@ func Run() error {
 	})
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.RealIP)
+	router.Use(logger.RequestLogger(log))
 	router.Use(chimiddleware.Recoverer)
 	if len(cfg.CORSAllowedOrigins) > 0 {
 		router.Use(cors.Handler(cors.Options{
@@ -169,7 +170,8 @@ func Run() error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Info("server listening", "addr", server.Addr, "env", cfg.AppEnv)
+		level, _ := logger.ParseLevel(cfg.LogLevel, cfg.AppEnv)
+		log.Info("server listening", "addr", server.Addr, "env", cfg.AppEnv, "log_level", level.String())
 		if serveErr := server.ListenAndServe(); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
 			errCh <- fmt.Errorf("listen and serve: %w", serveErr)
 		}

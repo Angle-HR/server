@@ -13,6 +13,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/Angle-HR/server/internal/region"
+	"github.com/Angle-HR/server/pkg/logger"
 )
 
 // Config holds runtime configuration values.
@@ -21,6 +22,7 @@ type Config struct {
 	DBUrlGlobal            string
 	RedisURL               string
 	AppEnv                 string
+	LogLevel               string
 	PublicAPIURL           string
 	FluvioUIOrigin         string
 	CORSAllowedOrigins     []string
@@ -44,6 +46,7 @@ func Load() (Config, error) {
 		DBUrlGlobal:            os.Getenv("DB_URL_GLOBAL"),
 		RedisURL:               os.Getenv("REDIS_URL"),
 		AppEnv:                 os.Getenv("APP_ENV"),
+		LogLevel:               strings.TrimSpace(os.Getenv("LOG_LEVEL")),
 		PublicAPIURL:           os.Getenv("PUBLIC_API_URL"),
 		FluvioUIOrigin:         os.Getenv("FLUVIO_UI_ORIGIN"),
 		JWTSecret:              os.Getenv("JWT_SECRET"),
@@ -83,6 +86,10 @@ func Load() (Config, error) {
 
 	if cfg.AppEnv == "" {
 		cfg.AppEnv = "development"
+	}
+
+	if _, err := logger.ParseLevel(cfg.LogLevel, cfg.AppEnv); err != nil {
+		return Config{}, err
 	}
 
 	if cfg.DBUrlGlobal == "" {

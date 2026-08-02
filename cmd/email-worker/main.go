@@ -26,7 +26,7 @@ func run() error {
 	if appEnv == "" {
 		appEnv = "development"
 	}
-	slogLogger := logger.New(appEnv)
+	slogLogger := logger.New(appEnv, os.Getenv("LOG_LEVEL"))
 
 	smtpHost := os.Getenv("SMTP_HOST")
 	smtpPort := os.Getenv("SMTP_PORT")

@@ -105,6 +105,7 @@ services:
     environment:
       SERVER_PORT: "8080"
       APP_ENV: ${APP_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8081}
       FLUVIO_UI_ORIGIN: ${FLUVIO_UI_ORIGIN:-http://localhost:5173}
@@ -166,6 +167,7 @@ services:
       target: email-worker
     environment:
       APP_ENV: ${APP_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
       REDIS_URL: redis://redis:6379/${REDIS_DB:-0}
       DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_global?sslmode=disable
       SMTP_HOST: ${SMTP_HOST:-mailhog}

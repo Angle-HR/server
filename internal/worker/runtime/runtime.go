@@ -26,7 +26,7 @@ func Run(workerName string, queues map[string]fluvio.QueueConfig, register func(
 		appEnv = "development"
 	}
 
-	slogLogger := logger.New(appEnv)
+	slogLogger := logger.New(appEnv, os.Getenv("LOG_LEVEL"))
 	ctx := context.Background()
 
 	dbURL := os.Getenv("DB_URL_GLOBAL")

@@ -24,7 +24,7 @@ func run() error {
 	if appEnv == "" {
 		appEnv = "development"
 	}
-	slogLogger := logger.New(appEnv)
+	slogLogger := logger.New(appEnv, os.Getenv("LOG_LEVEL"))
 
 	return runtime.Run("upload-worker", queue.UploadWorkerQueues(), func(workers *fluvio.Workers) {
 		fluvio.AddWorker(workers, &upload.UploadWorker{Logger: slogLogger})

@@ -6,6 +6,7 @@
 //	@description				Interactive docs (Scalar) are served at `/` in non-production environments.
 //	@description				Product flow: signup → verify email (6-digit OTP, 5 min expiry) → profile → address → [business] → complete.
 //	@description				Onboarding step endpoints require `Authorization: Bearer <access_token>` after email verification.
+//	@description				Admin ops console APIs live under `/api/v1/admin` and require a separate admin JWT (`token_use=admin`).
 //	@host						localhost:8080
 //	@BasePath					/api/v1
 //

@@ -52,6 +52,9 @@ SMTP_FROM="${SMTP_FROM:-}"
 SMTP_FROM_NAME="${SMTP_FROM_NAME:-}"
 APP_URL="${APP_URL:-http://app.anglehr.local}"
 JWT_SECRET="${JWT_SECRET:-dev-insecure-jwt-secret-change-me}"
+ADMIN_BOOTSTRAP_EMAIL="${ADMIN_BOOTSTRAP_EMAIL:-admin@anglehr.local}"
+ADMIN_BOOTSTRAP_PASSWORD="${ADMIN_BOOTSTRAP_PASSWORD:-changeme123}"
+ADMIN_BOOTSTRAP_NAME="${ADMIN_BOOTSTRAP_NAME:-Bootstrap Admin}"
 
 R2_ENDPOINT="${R2_ENDPOINT:-}"
 
@@ -70,6 +73,9 @@ kubectl create secret generic anglehr-secrets \
 	--from-literal=R2_ENDPOINT="$R2_ENDPOINT" \
 	--from-literal=REDIS_URL="$REDIS_URL" \
 	--from-literal=JWT_SECRET="$JWT_SECRET" \
+	--from-literal=ADMIN_BOOTSTRAP_EMAIL="$ADMIN_BOOTSTRAP_EMAIL" \
+	--from-literal=ADMIN_BOOTSTRAP_PASSWORD="$ADMIN_BOOTSTRAP_PASSWORD" \
+	--from-literal=ADMIN_BOOTSTRAP_NAME="$ADMIN_BOOTSTRAP_NAME" \
 	--from-literal=ANGLEHR_UK_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD}@postgres:5432/anglehr_uk?sslmode=disable" \
 	--from-literal=ANGLEHR_UK_R2_BUCKET="$ANGLEHR_UK_R2_BUCKET" \
 	--from-literal=ANGLEHR_US_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD}@postgres:5432/anglehr_us?sslmode=disable" \

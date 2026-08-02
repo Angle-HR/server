@@ -107,6 +107,27 @@ func TestListActiveIndustriesSQL(t *testing.T) {
 	}
 }
 
+func TestListActiveRolesSQL(t *testing.T) {
+	t.Parallel()
+
+	sql, args, err := ListActiveRoles()
+	if err != nil {
+		t.Fatalf("ListActiveRoles: %v", err)
+	}
+
+	if len(args) != 1 || args[0] != true {
+		t.Fatalf("args: got %v", args)
+	}
+
+	// Must be schema-qualified so admin.roles (earlier in search_path) is not used.
+	if !strings.Contains(sql, `FROM waitlist.roles`) {
+		t.Fatalf("sql: %q", sql)
+	}
+	if !strings.Contains(sql, `emoji`) {
+		t.Fatalf("sql: %q", sql)
+	}
+}
+
 func TestListBusinessTypesSQL(t *testing.T) {
 	t.Parallel()
 

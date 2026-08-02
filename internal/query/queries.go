@@ -60,13 +60,11 @@ func ListActiveHiringFrustrations() (string, []any, error) {
 }
 
 // ListActiveRoles returns SQL and args for active roles.
+// Uses schema-qualified raw SQL: the query builder quotes From() as one identifier,
+// and global search_path prefers admin.roles (RBAC) over waitlist.roles.
 func ListActiveRoles() (string, []any, error) {
-	return mustSQL(postgres.Select("id", "name", "slug", "emoji").
-		From("roles").
-		Where("is_active", "=", true).
-		OrderBy("sort_order", builder.ASC).
-		OrderBy("name", builder.ASC).
-		ToSQL())
+	return `SELECT id, name, slug, emoji FROM waitlist.roles WHERE is_active = $1 ORDER BY sort_order ASC, name ASC`,
+		[]any{true}, nil
 }
 
 // ListTeamSizes returns SQL and args for team size options.
@@ -158,12 +156,11 @@ func ActiveHiringFrustrationsByIDs(ids []uuid.UUID) (string, []any, error) {
 }
 
 // ActiveRoleByID returns SQL to load an active role.
+// Uses schema-qualified raw SQL: the query builder quotes From() as one identifier,
+// and global search_path prefers admin.roles (RBAC) over waitlist.roles.
 func ActiveRoleByID(id uuid.UUID) (string, []any, error) {
-	return mustSQL(postgres.Select("id", "slug").
-		From("roles").
-		Where("id", "=", id).
-		Where("is_active", "=", true).
-		ToSQL())
+	return `SELECT id, slug FROM waitlist.roles WHERE id = $1 AND is_active = $2`,
+		[]any{id, true}, nil
 }
 
 // TeamSizeByID returns SQL to load a team size option.

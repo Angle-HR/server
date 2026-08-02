@@ -2,6 +2,10 @@ package admin
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +18,9 @@ import (
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/pkg/apperror"
 )
+
+// InviteTTL is how long an admin invite token remains valid.
+const InviteTTL = 72 * time.Hour
 
 // DB is the subset of pgxpool used by the admin store.
 type DB interface {
@@ -41,14 +48,15 @@ type User struct {
 	IsActive     bool      `json:"is_active"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
-	PasswordHash string    `json:"-"`
+	PasswordHash *string   `json:"-"`
 }
 
 // Role is an RBAC role.
 type Role struct {
-	ID   uuid.UUID `json:"id"`
-	Slug string    `json:"slug"`
-	Name string    `json:"name"`
+	ID       uuid.UUID `json:"id"`
+	Slug     string    `json:"slug"`
+	Name     string    `json:"name"`
+	IsSystem bool      `json:"is_system"`
 }
 
 // Permission is an RBAC permission.
@@ -64,6 +72,24 @@ type RoleWithPermissions struct {
 	Permissions []string `json:"permissions"`
 }
 
+// StaffMember is an admin user with role slugs.
+type StaffMember struct {
+	ID            uuid.UUID `json:"id"`
+	Email         string    `json:"email"`
+	Name          string    `json:"name"`
+	IsActive      bool      `json:"is_active"`
+	InvitePending bool      `json:"invite_pending"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Roles         []string  `json:"roles"`
+}
+
+// InvitePreview is the public view of a pending invite.
+type InvitePreview struct {
+	Email     string    `json:"email"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 // AuditLog is an admin mutation record.
 type AuditLog struct {
 	ID           int64           `json:"id"`
@@ -77,6 +103,26 @@ type AuditLog struct {
 	CreatedAt    time.Time       `json:"created_at"`
 }
 
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// HashInviteToken returns a hex-encoded SHA-256 digest of the raw token.
+func HashInviteToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+// NewInviteToken generates a URL-safe opaque invite token.
+func NewInviteToken() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("generate invite token: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
 // CountUsers returns the number of admin users.
 func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	var n int
@@ -84,8 +130,8 @@ func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	return n, err
 }
 
-// CreateUser inserts an admin user and returns it.
-func (s *Store) CreateUser(ctx context.Context, email, passwordHash, name string, active bool) (User, error) {
+// CreateUser inserts an admin user and returns it. passwordHash may be nil for pending invites.
+func (s *Store) CreateUser(ctx context.Context, email string, passwordHash *string, name string, active bool) (User, error) {
 	var u User
 	err := s.DB.QueryRow(ctx, `
 		INSERT INTO admin.users (email, password_hash, name, is_active)
@@ -94,6 +140,9 @@ func (s *Store) CreateUser(ctx context.Context, email, passwordHash, name string
 	`, email, passwordHash, name, active).Scan(
 		&u.ID, &u.Email, &u.Name, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.PasswordHash,
 	)
+	if isUniqueViolation(err) {
+		return User{}, apperror.New(apperror.CodeConflict, "admin email already registered")
+	}
 	if err != nil {
 		return User{}, fmt.Errorf("create admin user: %w", err)
 	}
@@ -122,13 +171,18 @@ func (s *Store) AssignRoleBySlug(ctx context.Context, userID uuid.UUID, roleSlug
 	return nil
 }
 
+func scanUser(row pgx.Row) (User, error) {
+	var u User
+	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.PasswordHash)
+	return u, err
+}
+
 // GetUserByEmail loads an admin user by email.
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (User, error) {
-	var u User
-	err := s.DB.QueryRow(ctx, `
+	u, err := scanUser(s.DB.QueryRow(ctx, `
 		SELECT id, email, name, is_active, created_at, updated_at, password_hash
 		FROM admin.users WHERE email = $1
-	`, email).Scan(&u.ID, &u.Email, &u.Name, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.PasswordHash)
+	`, email))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, apperror.ErrUnauthorized
 	}
@@ -140,11 +194,10 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (User, error) 
 
 // GetUserByID loads an admin user by id.
 func (s *Store) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
-	var u User
-	err := s.DB.QueryRow(ctx, `
+	u, err := scanUser(s.DB.QueryRow(ctx, `
 		SELECT id, email, name, is_active, created_at, updated_at, password_hash
 		FROM admin.users WHERE id = $1
-	`, id).Scan(&u.ID, &u.Email, &u.Name, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.PasswordHash)
+	`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, apperror.ErrNotFound
 	}
@@ -211,14 +264,25 @@ func (s *Store) ListRolesForUser(ctx context.Context, userID uuid.UUID) ([]strin
 	return roles, rows.Err()
 }
 
+const staffSelectSQL = `
+	SELECT u.id, u.email, u.name, u.is_active,
+		(u.password_hash IS NULL) AS invite_pending,
+		u.created_at, u.updated_at,
+		COALESCE(array_agg(r.slug ORDER BY r.slug) FILTER (WHERE r.slug IS NOT NULL), '{}')
+	FROM admin.users u
+	LEFT JOIN admin.user_roles ur ON ur.user_id = u.id
+	LEFT JOIN admin.roles r ON r.id = ur.role_id
+`
+
+func scanStaffMember(row pgx.Row) (StaffMember, error) {
+	var m StaffMember
+	err := row.Scan(&m.ID, &m.Email, &m.Name, &m.IsActive, &m.InvitePending, &m.CreatedAt, &m.UpdatedAt, &m.Roles)
+	return m, err
+}
+
 // ListStaff returns admin users with their role slugs.
 func (s *Store) ListStaff(ctx context.Context) ([]StaffMember, error) {
-	rows, err := s.DB.Query(ctx, `
-		SELECT u.id, u.email, u.name, u.is_active, u.created_at, u.updated_at,
-			COALESCE(array_agg(r.slug ORDER BY r.slug) FILTER (WHERE r.slug IS NOT NULL), '{}')
-		FROM admin.users u
-		LEFT JOIN admin.user_roles ur ON ur.user_id = u.id
-		LEFT JOIN admin.roles r ON r.id = ur.role_id
+	rows, err := s.DB.Query(ctx, staffSelectSQL+`
 		GROUP BY u.id
 		ORDER BY u.created_at
 	`)
@@ -230,7 +294,7 @@ func (s *Store) ListStaff(ctx context.Context) ([]StaffMember, error) {
 	var out []StaffMember
 	for rows.Next() {
 		var m StaffMember
-		if err := rows.Scan(&m.ID, &m.Email, &m.Name, &m.IsActive, &m.CreatedAt, &m.UpdatedAt, &m.Roles); err != nil {
+		if err := rows.Scan(&m.ID, &m.Email, &m.Name, &m.IsActive, &m.InvitePending, &m.CreatedAt, &m.UpdatedAt, &m.Roles); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -241,15 +305,54 @@ func (s *Store) ListStaff(ctx context.Context) ([]StaffMember, error) {
 	return out, rows.Err()
 }
 
-// StaffMember is an admin user with role slugs.
-type StaffMember struct {
-	ID        uuid.UUID `json:"id"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	IsActive  bool      `json:"is_active"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Roles     []string  `json:"roles"`
+// GetStaffByID returns a single staff member.
+func (s *Store) GetStaffByID(ctx context.Context, id uuid.UUID) (StaffMember, error) {
+	m, err := scanStaffMember(s.DB.QueryRow(ctx, staffSelectSQL+`
+		WHERE u.id = $1
+		GROUP BY u.id
+	`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return StaffMember{}, apperror.ErrNotFound
+	}
+	return m, err
+}
+
+func guardLastSuperadmin(ctx context.Context, q interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}, userID uuid.UUID, willRemainActiveSuperadmin bool) error {
+	var has bool
+	err := q.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM admin.user_roles ur
+			JOIN admin.roles r ON r.id = ur.role_id
+			WHERE ur.user_id = $1 AND r.slug = $2
+		)
+	`, userID, RoleSuperadmin).Scan(&has)
+	if err != nil {
+		return err
+	}
+	if !has {
+		return nil
+	}
+	if willRemainActiveSuperadmin {
+		return nil
+	}
+	var n int
+	err = q.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM admin.users u
+		JOIN admin.user_roles ur ON ur.user_id = u.id
+		JOIN admin.roles r ON r.id = ur.role_id
+		WHERE u.is_active = TRUE AND r.slug = $1 AND u.id <> $2
+	`, RoleSuperadmin, userID).Scan(&n)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return apperror.New(apperror.CodeConflict, "cannot remove or deactivate the last active superadmin")
+	}
+	return nil
 }
 
 // UpdateStaff patches staff fields and optionally replaces roles.
@@ -259,6 +362,43 @@ func (s *Store) UpdateStaff(ctx context.Context, id uuid.UUID, name *string, isA
 		return StaffMember{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	var currentActive bool
+	var currentHasSuperadmin bool
+	err = tx.QueryRow(ctx, `
+		SELECT u.is_active,
+			EXISTS(
+				SELECT 1 FROM admin.user_roles ur
+				JOIN admin.roles r ON r.id = ur.role_id
+				WHERE ur.user_id = u.id AND r.slug = $2
+			)
+		FROM admin.users u WHERE u.id = $1
+	`, id, RoleSuperadmin).Scan(&currentActive, &currentHasSuperadmin)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return StaffMember{}, apperror.ErrNotFound
+	}
+	if err != nil {
+		return StaffMember{}, err
+	}
+
+	willBeActive := currentActive
+	if isActive != nil {
+		willBeActive = *isActive
+	}
+	willHaveSuperadmin := currentHasSuperadmin
+	if roleSlugs != nil {
+		willHaveSuperadmin = false
+		for _, slug := range *roleSlugs {
+			if slug == RoleSuperadmin {
+				willHaveSuperadmin = true
+				break
+			}
+		}
+	}
+
+	if err := guardLastSuperadmin(ctx, tx, id, willBeActive && willHaveSuperadmin); err != nil {
+		return StaffMember{}, err
+	}
 
 	if name != nil || isActive != nil {
 		_, err = tx.Exec(ctx, `
@@ -295,16 +435,10 @@ func (s *Store) UpdateStaff(ctx context.Context, id uuid.UUID, name *string, isA
 		}
 	}
 
-	var m StaffMember
-	err = tx.QueryRow(ctx, `
-		SELECT u.id, u.email, u.name, u.is_active, u.created_at, u.updated_at,
-			COALESCE(array_agg(r.slug ORDER BY r.slug) FILTER (WHERE r.slug IS NOT NULL), '{}')
-		FROM admin.users u
-		LEFT JOIN admin.user_roles ur ON ur.user_id = u.id
-		LEFT JOIN admin.roles r ON r.id = ur.role_id
+	m, err := scanStaffMember(tx.QueryRow(ctx, staffSelectSQL+`
 		WHERE u.id = $1
 		GROUP BY u.id
-	`, id).Scan(&m.ID, &m.Email, &m.Name, &m.IsActive, &m.CreatedAt, &m.UpdatedAt, &m.Roles)
+	`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return StaffMember{}, apperror.ErrNotFound
 	}
@@ -316,36 +450,6 @@ func (s *Store) UpdateStaff(ctx context.Context, id uuid.UUID, name *string, isA
 		return StaffMember{}, err
 	}
 	return m, nil
-}
-
-// ListRolesWithPermissions returns all roles and their permissions.
-func (s *Store) ListRolesWithPermissions(ctx context.Context) ([]RoleWithPermissions, error) {
-	rows, err := s.DB.Query(ctx, `
-		SELECT r.id, r.slug, r.name,
-			COALESCE(array_agg(p.slug ORDER BY p.slug) FILTER (WHERE p.slug IS NOT NULL), '{}')
-		FROM admin.roles r
-		LEFT JOIN admin.role_permissions rp ON rp.role_id = r.id
-		LEFT JOIN admin.permissions p ON p.id = rp.permission_id
-		GROUP BY r.id
-		ORDER BY r.slug
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var out []RoleWithPermissions
-	for rows.Next() {
-		var item RoleWithPermissions
-		if err := rows.Scan(&item.ID, &item.Slug, &item.Name, &item.Permissions); err != nil {
-			return nil, err
-		}
-		out = append(out, item)
-	}
-	if out == nil {
-		out = []RoleWithPermissions{}
-	}
-	return out, rows.Err()
 }
 
 // WriteAudit inserts an audit log row.

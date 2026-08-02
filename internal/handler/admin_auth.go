@@ -9,6 +9,7 @@ import (
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
@@ -21,6 +22,12 @@ type adminLoginBody struct {
 
 type adminRefreshBody struct {
 	RefreshToken string `json:"refresh_token" validate:"required"`
+}
+
+type acceptInviteBody struct {
+	Token    string `json:"token" validate:"required"`
+	Name     string `json:"name" validate:"required,min=1,max=120"`
+	Password string `json:"password" validate:"required,min=8,max=128"`
 }
 
 // login godoc
@@ -53,7 +60,7 @@ func (h *AdminHandler) login(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, r, apperror.ErrUnauthorized)
 		return
 	}
-	if !user.IsActive || !auth.CheckPassword(user.PasswordHash, req.Password) {
+	if !user.IsActive || user.PasswordHash == nil || !auth.CheckPassword(*user.PasswordHash, req.Password) {
 		response.Error(w, r, apperror.ErrUnauthorized)
 		return
 	}
@@ -108,7 +115,7 @@ func (h *AdminHandler) refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := h.Store.GetUserByID(r.Context(), userID)
-	if err != nil || !user.IsActive {
+	if err != nil || !user.IsActive || user.PasswordHash == nil {
 		response.Error(w, r, apperror.ErrUnauthorized)
 		return
 	}
@@ -167,5 +174,80 @@ func (h *AdminHandler) me(w http.ResponseWriter, r *http.Request) {
 		"is_active":   user.IsActive,
 		"roles":       roles,
 		"permissions": perms,
+	})
+}
+
+// getInvite godoc
+//
+//	@Summary		Preview admin invite
+//	@Description	Validates an invite token and returns the invited email and expiry.
+//	@Tags			admin/auth
+//	@Produce		json
+//	@Param			token	path		string	true	"Invite token"
+//	@Success		200		{object}	handler.AdminInvitePreviewEnvelope
+//	@Failure		404		{object}	apidoc.ErrorEnvelope
+//	@Failure		410		{object}	apidoc.ErrorEnvelope
+//	@Router			/admin/auth/invite/{token} [get]
+func (h *AdminHandler) getInvite(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimSpace(chi.URLParam(r, "token"))
+	preview, err := h.Store.GetInviteByToken(r.Context(), token)
+	if err != nil {
+		response.Error(w, r, err)
+		return
+	}
+	response.Success(w, r, http.StatusOK, preview)
+}
+
+// acceptInvite godoc
+//
+//	@Summary		Accept admin invite
+//	@Description	Sets name and password for an invited admin and returns JWT tokens.
+//	@Tags			admin/auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		handler.AdminAcceptInviteRequest	true	"Accept payload"
+//	@Success		200		{object}	handler.AdminTokenEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		404		{object}	apidoc.ErrorEnvelope
+//	@Failure		410		{object}	apidoc.ErrorEnvelope
+//	@Router			/admin/auth/accept-invite [post]
+func (h *AdminHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
+	var body acceptInviteBody
+	if err := decodeJSON(r, &body); err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		return
+	}
+	body.Token = strings.TrimSpace(body.Token)
+	body.Name = strings.TrimSpace(body.Name)
+	if err := h.validate.Struct(body); err != nil {
+		response.Error(w, r, validationError(err))
+		return
+	}
+
+	hash, err := auth.HashPassword(body.Password)
+	if err != nil {
+		response.Error(w, r, err)
+		return
+	}
+
+	result, err := h.Store.AcceptInvite(r.Context(), body.Token, body.Name, hash)
+	if err != nil {
+		response.Error(w, r, err)
+		return
+	}
+
+	_ = h.Store.WriteAudit(r.Context(), result.User.ID, "staff.invite_accept", "staff", result.User.ID.String(), nil, r.RemoteAddr)
+
+	pair, err := h.Tokens.IssueAdminPair(result.User.ID)
+	if err != nil {
+		response.Error(w, r, err)
+		return
+	}
+
+	response.Success(w, r, http.StatusOK, map[string]any{
+		"access_token":  pair.AccessToken,
+		"refresh_token": pair.RefreshToken,
+		"expires_in":    pair.ExpiresIn,
+		"token_type":    "Bearer",
 	})
 }

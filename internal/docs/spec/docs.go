@@ -71,6 +71,99 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/auth/accept-invite": {
+            "post": {
+                "description": "Sets name and password for an invited admin and returns JWT tokens.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin/auth"
+                ],
+                "summary": "Accept admin invite",
+                "parameters": [
+                    {
+                        "description": "Accept payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminAcceptInviteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminTokenEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "410": {
+                        "description": "Gone",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/auth/invite/{token}": {
+            "get": {
+                "description": "Validates an invite token and returns the invited email and expiry.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin/auth"
+                ],
+                "summary": "Preview admin invite",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invite token",
+                        "name": "token",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminInvitePreviewEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "410": {
+                        "description": "Gone",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/auth/login": {
             "post": {
                 "description": "Authenticates an admin user and returns admin JWT tokens.",
@@ -451,6 +544,30 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/permissions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin/roles"
+                ],
+                "summary": "List permission catalog",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminPermissionsEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/roles": {
             "get": {
                 "security": [
@@ -462,7 +579,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "admin/staff"
+                    "admin/roles"
                 ],
                 "summary": "List roles and permissions",
                 "responses": {
@@ -470,6 +587,115 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/internal_handler.AdminRolesEnvelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin/roles"
+                ],
+                "summary": "Create role",
+                "parameters": [
+                    {
+                        "description": "Role payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminCreateRoleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminRoleEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/roles/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin/roles"
+                ],
+                "summary": "Delete role",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Role UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin/roles"
+                ],
+                "summary": "Update role",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Role UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Patch payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminPatchRoleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminRoleEnvelope"
                         }
                     }
                 }
@@ -504,6 +730,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Creates an inactive staff user and emails an invite token to set name and password.",
                 "consumes": [
                     "application/json"
                 ],
@@ -513,10 +740,10 @@ const docTemplate = `{
                 "tags": [
                     "admin/staff"
                 ],
-                "summary": "Create admin staff",
+                "summary": "Invite admin staff",
                 "parameters": [
                     {
-                        "description": "Staff payload",
+                        "description": "Invite payload",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -568,6 +795,39 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/internal_handler.AdminPatchStaffRequest"
                         }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminStaffEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/staff/{id}/resend-invite": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin/staff"
+                ],
+                "summary": "Resend staff invite",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Staff UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -1930,11 +2190,39 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_Angle-HR_server_internal_admin.InvitePreview": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_admin.Permission": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
         "github_com_Angle-HR_server_internal_admin.RoleWithPermissions": {
             "type": "object",
             "properties": {
                 "id": {
                     "type": "string"
+                },
+                "is_system": {
+                    "type": "boolean"
                 },
                 "name": {
                     "type": "string"
@@ -1961,6 +2249,9 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "string"
+                },
+                "invite_pending": {
+                    "type": "boolean"
                 },
                 "is_active": {
                     "type": "boolean"
@@ -2019,6 +2310,20 @@ const docTemplate = `{
                 "request_id": {
                     "type": "string",
                     "example": "abc123"
+                }
+            }
+        },
+        "internal_handler.AdminAcceptInviteRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
                 }
             }
         },
@@ -2108,6 +2413,23 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_handler.AdminCreateRoleRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_handler.AdminCreateStaffRequest": {
             "type": "object",
             "properties": {
@@ -2117,14 +2439,22 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "password": {
-                    "type": "string"
-                },
                 "roles": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "internal_handler.AdminInvitePreviewEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.InvitePreview"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
                 }
             }
         },
@@ -2178,6 +2508,20 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_handler.AdminPatchRoleRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "internal_handler.AdminPatchStaffRequest": {
             "type": "object",
             "properties": {
@@ -2195,11 +2539,36 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_handler.AdminPermissionsEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.Permission"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
         "internal_handler.AdminRefreshRequest": {
             "type": "object",
             "properties": {
                 "refresh_token": {
                     "type": "string"
+                }
+            }
+        },
+        "internal_handler.AdminRoleEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.RoleWithPermissions"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
                 }
             }
         },

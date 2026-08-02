@@ -19,6 +19,7 @@ type AdminHandler struct {
 	GlobalDB globalDB
 	Tokens   *auth.TokenService
 	Jobs     *fluvio.Client
+	Enqueuer jobEnqueuer
 	validate *validator.Validate
 }
 
@@ -29,6 +30,7 @@ func NewAdminHandler(
 	globalDB globalDB,
 	tokens *auth.TokenService,
 	jobs *fluvio.Client,
+	enqueuer jobEnqueuer,
 ) *AdminHandler {
 	return &AdminHandler{
 		Store:    store,
@@ -36,6 +38,7 @@ func NewAdminHandler(
 		GlobalDB: globalDB,
 		Tokens:   tokens,
 		Jobs:     jobs,
+		Enqueuer: enqueuer,
 		validate: validator.New(),
 	}
 }
@@ -44,6 +47,8 @@ func NewAdminHandler(
 func (h *AdminHandler) RegisterPublicRoutes(r chi.Router) {
 	r.Post("/auth/login", h.login)
 	r.Post("/auth/refresh", h.refresh)
+	r.Get("/auth/invite/{token}", h.getInvite)
+	r.Post("/auth/accept-invite", h.acceptInvite)
 }
 
 // RegisterProtectedRoutes mounts authenticated admin routes. Caller must apply RequireAdmin.
@@ -71,7 +76,13 @@ func (h *AdminHandler) RegisterProtectedRoutes(r chi.Router, mw *auth.AdminMiddl
 	r.With(mw.RequirePermission(admin.PermAdminsRead)).Get("/staff", h.listStaff)
 	r.With(mw.RequirePermission(admin.PermAdminsWrite)).Post("/staff", h.createStaff)
 	r.With(mw.RequirePermission(admin.PermAdminsWrite)).Patch("/staff/{id}", h.patchStaff)
+	r.With(mw.RequirePermission(admin.PermAdminsWrite)).Post("/staff/{id}/resend-invite", h.resendInvite)
+
 	r.With(mw.RequirePermission(admin.PermAdminsRead)).Get("/roles", h.listRoles)
+	r.With(mw.RequirePermission(admin.PermAdminsWrite)).Post("/roles", h.createRole)
+	r.With(mw.RequirePermission(admin.PermAdminsWrite)).Patch("/roles/{id}", h.patchRole)
+	r.With(mw.RequirePermission(admin.PermAdminsWrite)).Delete("/roles/{id}", h.deleteRole)
+	r.With(mw.RequirePermission(admin.PermAdminsRead)).Get("/permissions", h.listPermissions)
 
 	r.With(mw.RequirePermission(admin.PermAuditRead)).Get("/audit-logs", h.listAuditLogs)
 }

@@ -70,6 +70,7 @@ const (
 	CodeOnboardingIncomplete    = "onboarding_step_incomplete"
 	CodeInvalidAccountBranch    = "invalid_account_type_branch"
 	CodePayloadTooLarge         = "PAYLOAD_TOO_LARGE"
+	CodeGone                    = "GONE"
 )
 
 var httpStatusByCode = map[string]int{
@@ -89,6 +90,7 @@ var httpStatusByCode = map[string]int{
 	CodeOnboardingIncomplete:    http.StatusBadRequest,
 	CodeInvalidAccountBranch:    http.StatusBadRequest,
 	CodePayloadTooLarge:         http.StatusRequestEntityTooLarge,
+	CodeGone:                    http.StatusGone,
 }
 
 // AppError is a structured application error.
@@ -227,6 +229,8 @@ func publicMessageForCode(code string) string {
 		return MsgForbidden
 	case CodeNotImplemented:
 		return MsgNotImplemented
+	case CodeGone:
+		return "gone"
 	case CodeEmailAlreadyRegistered:
 		return MsgEmailAlreadyRegistered
 	case CodeInvalidVerificationCode:

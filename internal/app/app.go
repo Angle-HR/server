@@ -105,7 +105,7 @@ func Run() error {
 	onboardingHandler := handler.NewOnboardingHandler(dbRouter, globalPool, fluvioClient)
 	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, cfg.AuthDefaultRegion)
 	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient)
-	adminHandler := handler.NewAdminHandler(adminStore, dbRouter, globalPool, tokenService, fluvioClient)
+	adminHandler := handler.NewAdminHandler(adminStore, dbRouter, globalPool, tokenService, fluvioClient, fluvioClient)
 
 	router := chi.NewRouter()
 	router.Use(func(next http.Handler) http.Handler {

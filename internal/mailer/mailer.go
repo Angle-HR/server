@@ -20,6 +20,7 @@ const (
 	TypeMoreInfoAck          = "more_info_ack"
 	TypeEmailVerification    = "email_verification"
 	TypeOnboardingComplete   = "onboarding_complete"
+	TypeAdminInvite          = "admin_invite"
 )
 
 // EmailArgs defines job queue arguments for email notifications.
@@ -111,6 +112,14 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 		}
 		templateName = "onboarding_complete.html"
 		subject = "Welcome to Open HR"
+	case TypeAdminInvite:
+		if m.cfg.AppURL == "" {
+			err := fmt.Errorf("APP_URL is required for admin_invite emails")
+			m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
+			return err
+		}
+		templateName = "admin_invite.html"
+		subject = "You're invited to Open HR Admin"
 	default:
 		err := fmt.Errorf("unknown email type: %s", args.Type)
 		m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)

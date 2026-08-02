@@ -35,7 +35,8 @@ func Bootstrap(ctx context.Context, store *Store, cfg BootstrapConfig) error {
 		name = "Bootstrap Admin"
 	}
 
-	user, err := store.CreateUser(ctx, email, cfg.PasswordHash, name, true)
+	hash := cfg.PasswordHash
+	user, err := store.CreateUser(ctx, email, &hash, name, true)
 	if err != nil {
 		return err
 	}

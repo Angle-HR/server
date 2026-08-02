@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/Angle-HR/server/internal/admin"
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/auth"
+	"github.com/Angle-HR/server/internal/mailer"
+	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
 )
@@ -17,10 +20,9 @@ import (
 var _ = apidoc.ErrorEnvelope{}
 
 type createStaffBody struct {
-	Email    string   `json:"email" validate:"required,email,max=254"`
-	Password string   `json:"password" validate:"required,min=8,max=128"`
-	Name     string   `json:"name" validate:"max=120"`
-	Roles    []string `json:"roles" validate:"required,min=1,dive,required"`
+	Email string   `json:"email" validate:"required,email,max=254"`
+	Name  string   `json:"name" validate:"max=120"`
+	Roles []string `json:"roles" validate:"required,min=1,dive,required"`
 }
 
 type patchStaffBody struct {
@@ -48,12 +50,13 @@ func (h *AdminHandler) listStaff(w http.ResponseWriter, r *http.Request) {
 
 // createStaff godoc
 //
-//	@Summary		Create admin staff
+//	@Summary		Invite admin staff
+//	@Description	Creates an inactive staff user and emails an invite token to set name and password.
 //	@Tags			admin/staff
 //	@Accept			json
 //	@Produce		json
 //	@Security		BearerAuth
-//	@Param			body	body		handler.AdminCreateStaffRequest	true	"Staff payload"
+//	@Param			body	body		handler.AdminCreateStaffRequest	true	"Invite payload"
 //	@Success		201		{object}	handler.AdminStaffEnvelope
 //	@Router			/admin/staff [post]
 func (h *AdminHandler) createStaff(w http.ResponseWriter, r *http.Request) {
@@ -69,37 +72,78 @@ func (h *AdminHandler) createStaff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hash, err := auth.HashPassword(body.Password)
+	actorID, _, _, _ := auth.AdminFromContext(r.Context())
+	result, err := h.Store.InviteStaff(r.Context(), body.Email, body.Name, body.Roles, actorID)
 	if err != nil {
 		response.Error(w, r, err)
 		return
 	}
 
-	user, err := h.Store.CreateUser(r.Context(), body.Email, hash, body.Name, true)
+	h.enqueueAdminInvite(r, result.Staff.Email, result.Staff.Name, result.RawToken)
+
+	h.audit(r, "staff.invite", "staff", result.Staff.ID.String(), map[string]any{"roles": body.Roles})
+	response.Success(w, r, http.StatusCreated, result.Staff)
+}
+
+// resendInvite godoc
+//
+//	@Summary		Resend staff invite
+//	@Tags			admin/staff
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path		string	true	"Staff UUID"
+//	@Success		200	{object}	handler.AdminStaffEnvelope
+//	@Router			/admin/staff/{id}/resend-invite [post]
+func (h *AdminHandler) resendInvite(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, "invalid id"))
+		return
+	}
+
+	result, err := h.Store.ResendInvite(r.Context(), id)
 	if err != nil {
 		response.Error(w, r, err)
 		return
 	}
-	for _, role := range body.Roles {
-		if err := h.Store.AssignRoleBySlug(r.Context(), user.ID, role); err != nil {
-			response.Error(w, r, err)
-			return
-		}
-	}
 
-	roles := append([]string(nil), body.Roles...)
-	staff := admin.StaffMember{
-		ID:        user.ID,
-		Email:     user.Email,
-		Name:      user.Name,
-		IsActive:  user.IsActive,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Roles:     roles,
-	}
+	h.enqueueAdminInvite(r, result.Staff.Email, result.Staff.Name, result.RawToken)
 
-	h.audit(r, "staff.create", "staff", user.ID.String(), map[string]any{"roles": body.Roles})
-	response.Success(w, r, http.StatusCreated, staff)
+	h.audit(r, "staff.invite_resend", "staff", id.String(), nil)
+	response.Success(w, r, http.StatusOK, result.Staff)
+}
+
+func (h *AdminHandler) enqueueAdminInvite(r *http.Request, email, name, rawToken string) {
+	if h.Enqueuer == nil || h.GlobalDB == nil {
+		slog.Warn("admin invite email skipped: enqueuer not configured", "email", email)
+		return
+	}
+	ctx := r.Context()
+	tx, err := h.GlobalDB.Begin(ctx)
+	if err != nil {
+		slog.Error("admin invite email begin failed", "email", email, "error", err)
+		return
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	displayName := name
+	if displayName == "" {
+		displayName = email
+	}
+	_, err = h.Enqueuer.EnqueueTx(ctx, tx, mailer.EmailArgs{
+		Type:             mailer.TypeAdminInvite,
+		Recipient:        email,
+		FullName:         displayName,
+		Token:            rawToken,
+		ExpiresInSeconds: int(admin.InviteTTL.Seconds()),
+	}, queue.EmailEnqueueOptions()...)
+	if err != nil {
+		slog.Error("admin invite email enqueue failed", "email", email, "error", err)
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		slog.Error("admin invite email commit failed", "email", email, "error", err)
+	}
 }
 
 // patchStaff godoc
@@ -109,7 +153,7 @@ func (h *AdminHandler) createStaff(w http.ResponseWriter, r *http.Request) {
 //	@Accept			json
 //	@Produce		json
 //	@Security		BearerAuth
-//	@Param			id		path		string						true	"Staff UUID"
+//	@Param			id		path		string							true	"Staff UUID"
 //	@Param			body	body		handler.AdminPatchStaffRequest	true	"Patch payload"
 //	@Success		200		{object}	handler.AdminStaffEnvelope
 //	@Router			/admin/staff/{id} [patch]
@@ -134,23 +178,6 @@ func (h *AdminHandler) patchStaff(w http.ResponseWriter, r *http.Request) {
 
 	h.audit(r, "staff.patch", "staff", id.String(), nil)
 	response.Success(w, r, http.StatusOK, staff)
-}
-
-// listRoles godoc
-//
-//	@Summary		List roles and permissions
-//	@Tags			admin/staff
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Success		200	{object}	handler.AdminRolesEnvelope
-//	@Router			/admin/roles [get]
-func (h *AdminHandler) listRoles(w http.ResponseWriter, r *http.Request) {
-	roles, err := h.Store.ListRolesWithPermissions(r.Context())
-	if err != nil {
-		response.Error(w, r, err)
-		return
-	}
-	response.Success(w, r, http.StatusOK, roles)
 }
 
 // listAuditLogs godoc

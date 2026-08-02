@@ -23,10 +23,28 @@ definitions:
             resource_type:
                 type: string
         type: object
+    github_com_Angle-HR_server_internal_admin.InvitePreview:
+        properties:
+            email:
+                type: string
+            expires_at:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_admin.Permission:
+        properties:
+            description:
+                type: string
+            id:
+                type: string
+            slug:
+                type: string
+        type: object
     github_com_Angle-HR_server_internal_admin.RoleWithPermissions:
         properties:
             id:
                 type: string
+            is_system:
+                type: boolean
             name:
                 type: string
             permissions:
@@ -44,6 +62,8 @@ definitions:
                 type: string
             id:
                 type: string
+            invite_pending:
+                type: boolean
             is_active:
                 type: boolean
             name:
@@ -82,6 +102,15 @@ definitions:
                 type: string
             request_id:
                 example: abc123
+                type: string
+        type: object
+    internal_handler.AdminAcceptInviteRequest:
+        properties:
+            name:
+                type: string
+            password:
+                type: string
+            token:
                 type: string
         type: object
     internal_handler.AdminAuditListEnvelope:
@@ -140,18 +169,34 @@ definitions:
             sort_order:
                 type: integer
         type: object
+    internal_handler.AdminCreateRoleRequest:
+        properties:
+            name:
+                type: string
+            permissions:
+                items:
+                    type: string
+                type: array
+            slug:
+                type: string
+        type: object
     internal_handler.AdminCreateStaffRequest:
         properties:
             email:
                 type: string
             name:
                 type: string
-            password:
-                type: string
             roles:
                 items:
                     type: string
                 type: array
+        type: object
+    internal_handler.AdminInvitePreviewEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_admin.InvitePreview'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
         type: object
     internal_handler.AdminJobEnvelope:
         properties:
@@ -186,6 +231,15 @@ definitions:
             meta:
                 $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
         type: object
+    internal_handler.AdminPatchRoleRequest:
+        properties:
+            name:
+                type: string
+            permissions:
+                items:
+                    type: string
+                type: array
+        type: object
     internal_handler.AdminPatchStaffRequest:
         properties:
             is_active:
@@ -197,10 +251,26 @@ definitions:
                     type: string
                 type: array
         type: object
+    internal_handler.AdminPermissionsEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_admin.Permission'
+                type: array
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
     internal_handler.AdminRefreshRequest:
         properties:
             refresh_token:
                 type: string
+        type: object
+    internal_handler.AdminRoleEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_admin.RoleWithPermissions'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
         type: object
     internal_handler.AdminRolesEnvelope:
         properties:
@@ -1194,6 +1264,67 @@ paths:
             summary: List admin audit logs
             tags:
                 - admin/audit
+    /admin/auth/accept-invite:
+        post:
+            consumes:
+                - application/json
+            description: Sets name and password for an invited admin and returns JWT tokens.
+            parameters:
+                - description: Accept payload
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.AdminAcceptInviteRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.AdminTokenEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "410":
+                    description: Gone
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            summary: Accept admin invite
+            tags:
+                - admin/auth
+    /admin/auth/invite/{token}:
+        get:
+            description: Validates an invite token and returns the invited email and expiry.
+            parameters:
+                - description: Invite token
+                  in: path
+                  name: token
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.AdminInvitePreviewEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "410":
+                    description: Gone
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            summary: Preview admin invite
+            tags:
+                - admin/auth
     /admin/auth/login:
         post:
             consumes:
@@ -1433,6 +1564,20 @@ paths:
             summary: Retry Fluvio job
             tags:
                 - admin/jobs
+    /admin/permissions:
+        get:
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.AdminPermissionsEnvelope'
+            security:
+                - BearerAuth: []
+            summary: List permission catalog
+            tags:
+                - admin/roles
     /admin/roles:
         get:
             produces:
@@ -1446,7 +1591,74 @@ paths:
                 - BearerAuth: []
             summary: List roles and permissions
             tags:
-                - admin/staff
+                - admin/roles
+        post:
+            consumes:
+                - application/json
+            parameters:
+                - description: Role payload
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.AdminCreateRoleRequest'
+            produces:
+                - application/json
+            responses:
+                "201":
+                    description: Created
+                    schema:
+                        $ref: '#/definitions/internal_handler.AdminRoleEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Create role
+            tags:
+                - admin/roles
+    /admin/roles/{id}:
+        delete:
+            parameters:
+                - description: Role UUID
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "204":
+                    description: No Content
+            security:
+                - BearerAuth: []
+            summary: Delete role
+            tags:
+                - admin/roles
+        patch:
+            consumes:
+                - application/json
+            parameters:
+                - description: Role UUID
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Patch payload
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.AdminPatchRoleRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.AdminRoleEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Update role
+            tags:
+                - admin/roles
     /admin/staff:
         get:
             produces:
@@ -1464,8 +1676,9 @@ paths:
         post:
             consumes:
                 - application/json
+            description: Creates an inactive staff user and emails an invite token to set name and password.
             parameters:
-                - description: Staff payload
+                - description: Invite payload
                   in: body
                   name: body
                   required: true
@@ -1480,7 +1693,7 @@ paths:
                         $ref: '#/definitions/internal_handler.AdminStaffEnvelope'
             security:
                 - BearerAuth: []
-            summary: Create admin staff
+            summary: Invite admin staff
             tags:
                 - admin/staff
     /admin/staff/{id}:
@@ -1509,6 +1722,26 @@ paths:
             security:
                 - BearerAuth: []
             summary: Update admin staff
+            tags:
+                - admin/staff
+    /admin/staff/{id}/resend-invite:
+        post:
+            parameters:
+                - description: Staff UUID
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.AdminStaffEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Resend staff invite
             tags:
                 - admin/staff
     /admin/users:
@@ -2387,7 +2620,7 @@ tags:
     - description: 'Onboarding progress and completion. Individual: verify_email → profile → address. Business: also requires business step.'
       name: onboarding/session
       x-displayName: Session
-    - description: Admin console login, token refresh, and current admin profile with RBAC permissions.
+    - description: Admin console login, invite acceptance, token refresh, and current admin profile with RBAC permissions.
       name: admin/auth
       x-displayName: Auth
     - description: Cross-region waitlist list, detail, flag updates, soft-delete, and restore.
@@ -2402,9 +2635,12 @@ tags:
     - description: Fluvio job inspection and retry for email/upload queues.
       name: admin/jobs
       x-displayName: Jobs
-    - description: Admin staff users, role assignment, and permission matrix.
+    - description: Invite and manage admin staff users and role assignments.
       name: admin/staff
       x-displayName: Staff
+    - description: Create and manage custom roles, assign permissions from the seeded catalog.
+      name: admin/roles
+      x-displayName: Roles
     - description: Immutable audit trail of admin mutations.
       name: admin/audit
       x-displayName: Audit
@@ -2430,4 +2666,5 @@ x-tagGroups:
         - admin/catalogs
         - admin/jobs
         - admin/staff
+        - admin/roles
         - admin/audit

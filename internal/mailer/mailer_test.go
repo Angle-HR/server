@@ -35,7 +35,7 @@ func TestTemplatesRendering(t *testing.T) {
 		}
 
 		content := buf.String()
-		wantHref := `href="https://tryopenhr.com/survey"`
+		wantHref := `href="https://app.anglehr.com/survey?token=abc123"`
 		if !bytes.Contains(buf.Bytes(), []byte(wantHref)) {
 			t.Errorf("expected rendered content to contain %q, got: %s", wantHref, content)
 		}
@@ -90,6 +90,35 @@ func TestEmailVerificationTemplate(t *testing.T) {
 	}
 	if !bytes.Contains(buf.Bytes(), []byte("224879")) {
 		t.Fatalf("expected code in template: %s", buf.String())
+	}
+}
+
+func TestAdminInviteTemplate(t *testing.T) {
+	m, err := New(Config{AppURL: "https://app.example.com"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	args := EmailArgs{
+		Type:             TypeAdminInvite,
+		Recipient:        "ops@example.com",
+		FullName:         "Ops User",
+		Token:            "invite-token",
+		ExpiresInSeconds: 259200,
+	}
+	var buf bytes.Buffer
+	data := struct {
+		EmailArgs
+		AppURL string
+	}{args, m.cfg.AppURL}
+	if err := m.templates.ExecuteTemplate(&buf, "admin_invite.html", data); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !bytes.Contains(buf.Bytes(), []byte("https://app.example.com/admin/accept-invite?token=invite-token")) {
+		t.Fatalf("expected invite link, got: %s", buf.String())
+	}
+	if !bytes.Contains(buf.Bytes(), []byte("Ops User")) {
+		t.Fatalf("expected name, got: %s", buf.String())
 	}
 }
 

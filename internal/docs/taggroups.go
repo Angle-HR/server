@@ -32,6 +32,7 @@ var adminTagGroup = map[string]any{
 		"admin/catalogs",
 		"admin/jobs",
 		"admin/staff",
+		"admin/roles",
 		"admin/audit",
 	},
 }
@@ -84,7 +85,7 @@ var apiTagDefinitions = []map[string]any{
 	},
 	{
 		"name":          "admin/auth",
-		"description":   "Admin console login, token refresh, and current admin profile with RBAC permissions.",
+		"description":   "Admin console login, invite acceptance, token refresh, and current admin profile with RBAC permissions.",
 		"x-displayName": "Auth",
 	},
 	{
@@ -109,8 +110,13 @@ var apiTagDefinitions = []map[string]any{
 	},
 	{
 		"name":          "admin/staff",
-		"description":   "Admin staff users, role assignment, and permission matrix.",
+		"description":   "Invite and manage admin staff users and role assignments.",
 		"x-displayName": "Staff",
+	},
+	{
+		"name":          "admin/roles",
+		"description":   "Create and manage custom roles, assign permissions from the seeded catalog.",
+		"x-displayName": "Roles",
 	},
 	{
 		"name":          "admin/audit",

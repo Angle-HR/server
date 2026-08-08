@@ -20,6 +20,7 @@ const (
 	TypeMoreInfoAck          = "more_info_ack"
 	TypeEmailVerification    = "email_verification"
 	TypeOnboardingComplete   = "onboarding_complete"
+	TypeAdminInvite          = "admin_invite"
 )
 
 // EmailArgs defines job queue arguments for email notifications.
@@ -37,14 +38,15 @@ func (EmailArgs) Kind() string { return "email" }
 
 // Config holds the configuration details for SMTP delivery.
 type Config struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	From     string // envelope and address portion of From
-	FromName string // optional display name shown in inboxes
-	AppURL   string
-	Logger   *slog.Logger
+	Host        string
+	Port        string
+	User        string
+	Password    string
+	From        string // envelope and address portion of From
+	FromName    string // optional display name shown in inboxes
+	AppURL      string // product / waitlist frontend base URL
+	AdminAppURL string // admin console base URL (invite links)
+	Logger      *slog.Logger
 }
 
 // Mailer exposes email template rendering and delivery via SMTP.
@@ -63,6 +65,7 @@ func New(cfg Config) (*Mailer, error) {
 	}
 
 	cfg.AppURL = strings.TrimRight(cfg.AppURL, "/")
+	cfg.AdminAppURL = strings.TrimRight(cfg.AdminAppURL, "/")
 
 	logger := cfg.Logger
 	if logger == nil {
@@ -87,6 +90,7 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 
 	var templateName string
 	var subject string
+	baseURL := m.cfg.AppURL
 
 	switch args.Type {
 	case TypeWaitlistConfirmation:
@@ -111,6 +115,15 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 		}
 		templateName = "onboarding_complete.html"
 		subject = "Welcome to Open HR"
+	case TypeAdminInvite:
+		if m.cfg.AdminAppURL == "" {
+			err := fmt.Errorf("ADMIN_APP_URL is required for admin_invite emails")
+			m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
+			return err
+		}
+		baseURL = m.cfg.AdminAppURL
+		templateName = "admin_invite.html"
+		subject = "You're invited to Open HR Admin"
 	default:
 		err := fmt.Errorf("unknown email type: %s", args.Type)
 		m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
@@ -128,7 +141,7 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 	data := struct {
 		EmailArgs
 		AppURL string
-	}{args, m.cfg.AppURL}
+	}{args, baseURL}
 	if err := m.templates.ExecuteTemplate(&body, templateName, data); err != nil {
 		err = fmt.Errorf("execute template %s: %w", templateName, err)
 		m.logger.Error("email template render failed",

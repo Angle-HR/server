@@ -30,9 +30,9 @@ func TestOnboardingSubmit_unknownToken(t *testing.T) {
 	}
 	t.Cleanup(func() { globalMock.Close() })
 
-	lookupSQL, lookupArgs, err := query.LookupUsersRegistryByWaitlistToken(uuid.MustParse(testWaitlistToken))
+	lookupSQL, lookupArgs, err := query.LookupWaitlistRegistryByToken(uuid.MustParse(testWaitlistToken))
 	if err != nil {
-		t.Fatalf("LookupUsersRegistryByWaitlistToken: %v", err)
+		t.Fatalf("LookupWaitlistRegistryByToken: %v", err)
 	}
 	globalMock.ExpectQuery(lookupSQL).WithArgs(lookupArgs...).WillReturnError(pgx.ErrNoRows)
 
@@ -90,9 +90,9 @@ func expectRegistryLookup(
 	}
 	t.Cleanup(func() { globalMock.Close() })
 
-	lookupSQL, lookupArgs, err := query.LookupUsersRegistryByWaitlistToken(token)
+	lookupSQL, lookupArgs, err := query.LookupWaitlistRegistryByToken(token)
 	if err != nil {
-		t.Fatalf("LookupUsersRegistryByWaitlistToken: %v", err)
+		t.Fatalf("LookupWaitlistRegistryByToken: %v", err)
 	}
 	globalMock.ExpectQuery(lookupSQL).WithArgs(lookupArgs...).WillReturnRows(
 		pgxmock.NewRows([]string{"email", "region"}).AddRow(email, reg),

@@ -1,20 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+data:
+  01-init-databases.sql: |
+    CREATE DATABASE anglehr_uk OWNER anglehr;
+    CREATE DATABASE anglehr_us OWNER anglehr;
+    CREATE DATABASE anglehr_africa OWNER anglehr;
+    CREATE DATABASE anglehr_eu OWNER anglehr;
+    CREATE DATABASE anglehr_asia OWNER anglehr;
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: postgres-asia
+  name: postgres
   labels:
-    app.kubernetes.io/name: postgres-asia
+    app.kubernetes.io/name: postgres
     app.kubernetes.io/component: database
 spec:
-  serviceName: postgres-asia
+  serviceName: postgres
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: postgres-asia
+      app.kubernetes.io/name: postgres
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: postgres-asia
+        app.kubernetes.io/name: postgres
         app.kubernetes.io/component: database
     spec:
       containers:
@@ -27,15 +42,18 @@ spec:
             - name: POSTGRES_USER
               value: anglehr
             - name: POSTGRES_DB
-              value: anglehr_asia
+              value: anglehr_global
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: anglehr-secrets
-                  key: POSTGRES_PASSWORD_ASIA
+                  key: POSTGRES_PASSWORD
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
           readinessProbe:
             exec:
               command:
@@ -43,7 +61,7 @@ spec:
                 - -U
                 - anglehr
                 - -d
-                - anglehr_asia
+                - anglehr_global
             initialDelaySeconds: 5
             periodSeconds: 5
           livenessProbe:
@@ -53,9 +71,13 @@ spec:
                 - -U
                 - anglehr
                 - -d
-                - anglehr_asia
+                - anglehr_global
             initialDelaySeconds: 15
             periodSeconds: 10
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-init
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -64,19 +86,19 @@ spec:
           - ReadWriteOnce
         resources:
           requests:
-            storage: 1Gi
+            storage: 5Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: postgres-asia
+  name: postgres
   labels:
-    app.kubernetes.io/name: postgres-asia
+    app.kubernetes.io/name: postgres
     app.kubernetes.io/component: database
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: postgres-asia
+    app.kubernetes.io/name: postgres
   ports:
     - name: postgres
       port: 5432

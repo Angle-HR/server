@@ -271,7 +271,7 @@ func LookupAccountAddressByUser(userID uuid.UUID) (string, []any, error) {
 
 // LookupUsersRegistryByEmail returns SQL to resolve registry row by email.
 func LookupUsersRegistryByEmail(email string) (string, []any, error) {
-	return mustSQL(postgres.Select("id", "email", "region", "user_id", "waitlist_token").
+	return mustSQL(postgres.Select("id", "email", "region", "user_id").
 		From("users_registry").
 		Where("email", "=", email).
 		ToSQL())

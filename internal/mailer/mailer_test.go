@@ -2,6 +2,8 @@ package mailer
 
 import (
 	"bytes"
+	"context"
+	"net/smtp"
 	"testing"
 )
 
@@ -35,7 +37,7 @@ func TestTemplatesRendering(t *testing.T) {
 		}
 
 		content := buf.String()
-		wantHref := `href="https://tryopenhr.com/survey"`
+		wantHref := `href="https://app.anglehr.com/survey?token=abc123"`
 		if !bytes.Contains(buf.Bytes(), []byte(wantHref)) {
 			t.Errorf("expected rendered content to contain %q, got: %s", wantHref, content)
 		}
@@ -90,6 +92,54 @@ func TestEmailVerificationTemplate(t *testing.T) {
 	}
 	if !bytes.Contains(buf.Bytes(), []byte("224879")) {
 		t.Fatalf("expected code in template: %s", buf.String())
+	}
+}
+
+func TestAdminInviteTemplate(t *testing.T) {
+	m, err := New(Config{AdminAppURL: "https://admin.example.com"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	args := EmailArgs{
+		Type:             TypeAdminInvite,
+		Recipient:        "ops@example.com",
+		FullName:         "Ops User",
+		Token:            "invite-token",
+		ExpiresInSeconds: 259200,
+	}
+	var buf bytes.Buffer
+	data := struct {
+		EmailArgs
+		AppURL string
+	}{args, m.cfg.AdminAppURL}
+	if err := m.templates.ExecuteTemplate(&buf, "admin_invite.html", data); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !bytes.Contains(buf.Bytes(), []byte("https://admin.example.com/admin/accept-invite?token=invite-token")) {
+		t.Fatalf("expected invite link, got: %s", buf.String())
+	}
+	if !bytes.Contains(buf.Bytes(), []byte("Ops User")) {
+		t.Fatalf("expected name, got: %s", buf.String())
+	}
+}
+
+func TestAdminInviteRequiresAdminAppURL(t *testing.T) {
+	m, err := New(Config{AppURL: "https://app.example.com"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	SetSendMailForTesting(m, func(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
+		t.Fatal("sendMail should not be called")
+		return nil
+	})
+	err = m.Send(context.Background(), EmailArgs{
+		Type:      TypeAdminInvite,
+		Recipient: "ops@example.com",
+		Token:     "tok",
+	})
+	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("ADMIN_APP_URL")) {
+		t.Fatalf("expected ADMIN_APP_URL error, got %v", err)
 	}
 }
 

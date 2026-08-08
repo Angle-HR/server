@@ -66,7 +66,7 @@ type signupRequest struct {
 // handle godoc
 //
 //	@Summary		Join waitlist
-//	@Description	Registers a user for the regional waitlist and global users registry.
+//	@Description	Registers a signup for the regional waitlist and global waitlist registry.
 //	@Tags			waitlist/signup
 //	@Accept			json
 //	@Produce		json
@@ -193,18 +193,18 @@ func (h *WaitlistHandler) signup(
 		return uuid.Nil, fmt.Errorf("insert regional waitlist: %w", scanErr)
 	}
 
-	registrySQL, registryArgs, err := query.InsertUsersRegistry(
+	registrySQL, registryArgs, err := query.InsertWaitlistRegistry(
 		email,
 		string(country.Region),
 		regionSourceExplicit,
 		waitlistToken,
 	)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("build users registry insert: %w", err)
+		return uuid.Nil, fmt.Errorf("build waitlist registry insert: %w", err)
 	}
 
 	if _, err := gtx.Exec(ctx, registrySQL, registryArgs...); err != nil {
-		return uuid.Nil, fmt.Errorf("insert users registry: %w", err)
+		return uuid.Nil, fmt.Errorf("insert waitlist registry: %w", err)
 	}
 
 	if h.Enqueuer != nil {

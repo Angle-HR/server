@@ -3,6 +3,7 @@ package response
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5/middleware"
@@ -51,10 +52,16 @@ func SuccessWithMeta(w http.ResponseWriter, r *http.Request, status int, data an
 }
 
 // Error writes a JSON error response for err.
+// Unexpected server failures (HTTP 5xx) are logged with the underlying error.
 func Error(w http.ResponseWriter, r *http.Request, err error) {
+	status := apperror.HTTPStatus(err)
 	code, message := apperror.Public(err)
 
-	write(w, apperror.HTTPStatus(err), Envelope{
+	if status >= http.StatusInternalServerError {
+		logInternalError(r, err, status, code)
+	}
+
+	write(w, status, Envelope{
 		Error: &ErrorBody{
 			Code:    code,
 			Message: message,
@@ -64,11 +71,28 @@ func Error(w http.ResponseWriter, r *http.Request, err error) {
 	})
 }
 
+func logInternalError(r *http.Request, err error, status int, code string) {
+	attrs := []any{
+		"err", err,
+		"code", code,
+		"status", status,
+	}
+	if r != nil {
+		attrs = append(attrs,
+			"method", r.Method,
+			"path", r.URL.Path,
+			"request_id", middleware.GetReqID(r.Context()),
+		)
+	}
+	slog.Error("internal error", attrs...)
+}
+
 func write(w http.ResponseWriter, status int, envelope Envelope) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 
 	if err := json.NewEncoder(w).Encode(envelope); err != nil {
+		slog.Error("encode response", "err", err, "status", status)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
 }

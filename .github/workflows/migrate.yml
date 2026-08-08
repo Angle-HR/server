@@ -1,13 +1,16 @@
-# Runs database migrations on push to staging and production.
+# Runs database migrations on push to staging and production,
+# or manually from the Actions tab (Run workflow).
 #
 # GitHub Environment setup (Settings → Environments):
 #
 #   staging     — used when pushing to the staging branch
 #   production  — used when pushing to the production branch
 #
-# Each environment needs these secrets (same names, different DSNs per env):
-#   ANGLEHR_UK_POSTGRES_DSN, ANGLEHR_US_POSTGRES_DSN, ANGLEHR_AFRICA_POSTGRES_DSN,
-#   ANGLEHR_EU_POSTGRES_DSN, ANGLEHR_ASIA_POSTGRES_DSN, DB_URL_GLOBAL
+# Each environment needs one secret (same name, different host/creds per env):
+#   POSTGRES_DSN — base Postgres URL without a database name, e.g.
+#     postgres://postgres:SECRET@db.example.com:5432?sslmode=require
+# The workflow builds one DSN per db by appending /openhr_<region> for each
+# entry in REGIONS (uk|us|africa|eu|asia|global).
 #
 # Optional: enable Required reviewers on production; restrict each environment
 # to its deployment branch (staging → staging, production → production).
@@ -15,6 +18,15 @@
 name: Database Migrations
 
 on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
   push:
     branches:
       - production
@@ -23,27 +35,64 @@ on:
       - "db/migrations/**/*.sql"
 
 concurrency:
-  group: migrate-${{ github.ref_name }}
+  group: migrate-${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   migrate:
-    name: Migrate (${{ github.ref_name }})
+    name: Migrate (${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }})
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'production' && 'production' || 'staging' }}
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_name == 'production' && 'production' || 'staging') }}
+    env:
+      # Database name suffixes on the shared Postgres host (openhr_<region>).
+      REGIONS: uk us africa eu asia global
+      TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_name == 'production' && 'production' || 'staging') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Manual runs use the selected environment's branch so migrations match that deploy.
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref }}
 
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install goose
+        run: |
+          curl -fsSL -o /tmp/goose \
+            https://github.com/pressly/goose/releases/download/v3.24.1/goose_linux_x86_64
+          sudo install -m 0755 /tmp/goose /usr/local/bin/goose
+          goose --version
 
       - name: Run all migrations
         env:
-          ANGLEHR_UK_POSTGRES_DSN: ${{ secrets.ANGLEHR_UK_POSTGRES_DSN }}
-          ANGLEHR_US_POSTGRES_DSN: ${{ secrets.ANGLEHR_US_POSTGRES_DSN }}
-          ANGLEHR_AFRICA_POSTGRES_DSN: ${{ secrets.ANGLEHR_AFRICA_POSTGRES_DSN }}
-          ANGLEHR_EU_POSTGRES_DSN: ${{ secrets.ANGLEHR_EU_POSTGRES_DSN }}
-          ANGLEHR_ASIA_POSTGRES_DSN: ${{ secrets.ANGLEHR_ASIA_POSTGRES_DSN }}
-          DB_URL_GLOBAL: ${{ secrets.DB_URL_GLOBAL }}
+          POSTGRES_DSN: ${{ secrets.POSTGRES_DSN }}
           MIGRATE_COMPARE_REF: ${{ github.event.before }}
-        run: bash db/migrations/migrate-all.sh up
+          # Manual runs always migrate; push runs still skip when no SQL changed.
+          FORCE_MIGRATE: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${POSTGRES_DSN:-}" ]]; then
+            echo "POSTGRES_DSN secret is required" >&2
+            exit 1
+          fi
+
+          # Insert /dbname before any query string on the base URL.
+          dsn_for() {
+            local db="openhr_$1"
+            if [[ "$POSTGRES_DSN" == *"?"* ]]; then
+              local base="${POSTGRES_DSN%%\?*}"
+              local query="${POSTGRES_DSN#*\?}"
+              echo "${base%/}/${db}?${query}"
+            else
+              echo "${POSTGRES_DSN%/}/${db}"
+            fi
+          }
+
+          for region in ${REGIONS}; do
+            if [[ "$region" == "global" ]]; then
+              export DB_URL_GLOBAL="$(dsn_for global)"
+              continue
+            fi
+            suffix="$(printf '%s' "$region" | tr '[:lower:]' '[:upper:]')"
+            export "ANGLEHR_${suffix}_POSTGRES_DSN=$(dsn_for "$region")"
+          done
+
+          bash db/migrations/migrate-all.sh up

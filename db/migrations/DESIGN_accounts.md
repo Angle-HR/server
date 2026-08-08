@@ -7,13 +7,15 @@ Design document for product onboarding persistence. Migrations are implemented a
 ```
 ┌─────────────────────────────────────┐
 │  Global Postgres (DB_URL_GLOBAL)    │
-│  users_registry (+ user_id column)  │
+│  auth.users_registry (product)      │
+│  waitlist.registry (waitlist only)  │
 │  business_types                     │
 │  onboarding_industries              │
 │  company_roles                      │
-│  countries (existing)               │
+│  waitlist.countries (shared)        │
 └──────────────┬──────────────────────┘
-               │ email + user_id + region
+               │ product: email + user_id + region
+               │ waitlist: email + waitlist_token + region
                ▼
 ┌─────────────────────────────────────┐
 │  Regional Postgres (×5 regions)     │
@@ -21,11 +23,11 @@ Design document for product onboarding persistence. Migrations are implemented a
 │  accounts.organizations             │
 │  accounts.addresses                 │
 │  accounts.onboarding_progress       │
-│  waitlist.* (existing, unchanged)   │
+│  waitlist.waitlist (+ junctions)    │
 └─────────────────────────────────────┘
 ```
 
-Password hashes and profile data live in the **regional** database for data residency. The global registry holds email uniqueness and region routing only.
+Password hashes and profile data live in the **regional** database for data residency. The global product registry (`auth.users_registry`) holds email uniqueness and region routing for accounts. Waitlist signups use a separate global table (`waitlist.registry`) for token/region routing. The same email may exist independently in both registries; there is no automatic link.
 
 ## Global registry changes
 
@@ -39,9 +41,8 @@ CREATE INDEX users_registry_user_id_idx ON users_registry (user_id)
     WHERE user_id IS NOT NULL;
 ```
 
-- `waitlist_token` continues to serve waitlist signups.
 - `user_id` links to `accounts.users.id` in the user's regional database.
-- One email row may eventually hold both `waitlist_token` and `user_id` if a waitlist user later creates a product account.
+- Waitlist signups are stored in `waitlist.registry` (see `000006_waitlist_registry.sql`), not on this table.
 
 ### business_types
 

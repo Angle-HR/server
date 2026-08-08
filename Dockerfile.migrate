@@ -1,6 +1,17 @@
-FROM postgres:16-alpine
+FROM alpine:3.21
 
-RUN apk add --no-cache bash
+ARG GOOSE_VERSION=v3.24.1
+ARG TARGETARCH
+
+RUN apk add --no-cache bash ca-certificates curl \
+	&& case "$TARGETARCH" in \
+		amd64) GOOSE_ARCH=x86_64 ;; \
+		arm64) GOOSE_ARCH=arm64 ;; \
+		*) echo "unsupported arch: $TARGETARCH" >&2; exit 1 ;; \
+	esac \
+	&& curl -fsSL -o /usr/local/bin/goose \
+		"https://github.com/pressly/goose/releases/download/${GOOSE_VERSION}/goose_linux_${GOOSE_ARCH}" \
+	&& chmod +x /usr/local/bin/goose
 
 COPY db/migrations /migrations
 

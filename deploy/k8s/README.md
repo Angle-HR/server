@@ -4,8 +4,8 @@ Kustomize manifests for running Angle HR on Kubernetes. Two overlays:
 
 | Overlay | Purpose | Data layer |
 |---------|---------|------------|
-| [`overlays/dev`](overlays/dev) | Local development (kind/minikube) | In-cluster Postgres (5) + Redis + Cloudflare R2, mirroring [`docker-compose.yml`](../../docker-compose.yml) |
-| [`overlays/prod`](overlays/prod) | Production | Managed PostgreSQL + Cloudflare R2 |
+| [`overlays/dev`](overlays/dev) | Local development (kind/minikube) | In-cluster Postgres (one instance, six databases) + Redis + Cloudflare R2, mirroring [`docker-compose.yml`](../../docker-compose.yml) |
+| [`overlays/prod`](overlays/prod) | Production | Managed PostgreSQL (one instance, six databases) + Cloudflare R2 |
 
 ## Layout
 
@@ -30,7 +30,7 @@ deploy/scripts/
   - **Docker Desktop Kubernetes** — enable in Settings → Kubernetes, then `DEV_CLUSTER=docker-desktop bash deploy/scripts/dev-up.sh`
 - `.env` at repo root (copy from [`.env.example`](../../.env.example))
 
-Minimum cluster resources: ~2–4 GB RAM for the full dev stack (5 Postgres StatefulSets + app tier).
+Minimum cluster resources: ~2–4 GB RAM for the full dev stack (one Postgres StatefulSet + app tier).
 
 ## Quick start (local)
 
@@ -47,7 +47,7 @@ The script will:
 2. Install the [Kubernetes Dashboard](https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/) at `http://dashboard.anglehr.local`
 3. Build and load `server`, `email-worker`, `upload-worker`, and `migrate` images tagged `dev`
 3. Create the `anglehr-secrets` Secret from `.env`
-4. Deploy Postgres StatefulSets
+4. Deploy the Postgres StatefulSet (six databases on one instance)
 5. Run the `migrate` Job
 6. Deploy server, email-worker, upload-worker, fluvio-ui, and Ingress
 
@@ -94,18 +94,12 @@ See [`overlays/dev/secrets.example.yaml`](overlays/dev/secrets.example.yaml) for
 
 ## Service naming (compose → Kubernetes)
 
-Docker Compose hostnames map to Kubernetes Services (underscores become hyphens):
+| Compose | Kubernetes Service | Databases |
+|---------|-------------------|-----------|
+| `postgres` | `postgres:5432` | `anglehr_uk`, `anglehr_us`, `anglehr_africa`, `anglehr_eu`, `anglehr_asia`, `anglehr_global` |
+| `redis` | `redis:6379` | — |
 
-| Compose | Kubernetes Service |
-|---------|-------------------|
-| `postgres_uk` | `postgres-uk:5432` |
-| `postgres_us` | `postgres-us:5432` |
-| `postgres_africa` | `postgres-africa:5432` |
-| `postgres_eu` | `postgres-eu:5432` |
-| `postgres_asia` | `postgres-asia:5432` |
-| `postgres_global` | `postgres-global:5432` |
-| `redis` | `redis:6379` |
-`create-dev-secret.sh` builds DSNs using these internal hostnames automatically. R2 credentials are passed through from `.env` (see [`.env.example`](../../.env.example)).
+`create-dev-secret.sh` builds DSNs against `postgres:5432` with the matching `dbname`. R2 credentials are passed through from `.env` (see [`.env.example`](../../.env.example)).
 
 ## Container images
 
@@ -137,7 +131,7 @@ The prod overlay deploys **only** the application tier (server, email-worker, up
 
 Outside this repo (Terraform, cloud console, etc.):
 
-- PostgreSQL per region (UK, US, Africa, EU, Asia) plus a global registry database
+- One PostgreSQL instance with databases `anglehr_uk`, `anglehr_us`, `anglehr_africa`, `anglehr_eu`, `anglehr_asia`, and `anglehr_global`
 - Cloudflare R2 bucket names: `anglehr-uk`, `anglehr-us`, `anglehr-africa`, `anglehr-eu`, `anglehr-asia`
 - SMTP relay
 - Ingress controller + [cert-manager](https://cert-manager.io/) (for TLS annotations in prod Ingress)
@@ -146,11 +140,11 @@ Outside this repo (Terraform, cloud console, etc.):
 
 Use [`overlays/prod/secrets.example.yaml`](overlays/prod/secrets.example.yaml) as a reference. Required keys match what the Go app reads from the environment (see [`.env.example`](../../.env.example)).
 
-**PostgreSQL DSNs** — use `sslmode=require`:
+**PostgreSQL DSNs** — same host, different `dbname`, with `sslmode=require`:
 
 ```
-DB_URL_GLOBAL=postgres://user:pass@global-host:5432/anglehr_global?sslmode=require
-ANGLEHR_UK_POSTGRES_DSN=postgres://user:pass@uk-host:5432/anglehr_uk?sslmode=require
+DB_URL_GLOBAL=postgres://user:pass@db.example.com:5432/anglehr_global?sslmode=require
+ANGLEHR_UK_POSTGRES_DSN=postgres://user:pass@db.example.com:5432/anglehr_uk?sslmode=require
 ```
 
 **Redis** — managed instance URL (required by the server):
@@ -200,7 +194,7 @@ Pin image tags in [`overlays/prod/kustomization.yaml`](overlays/prod/kustomizati
 
 ### 5. Database migrations
 
-Production SQL migrations run via the existing GitHub Actions workflow ([`.github/workflows/migrate.yml`](../../.github/workflows/migrate.yml)) using `DB_URL_*` secrets in the `staging` / `production` environments — not via an in-cluster Job.
+Production SQL migrations run via the existing GitHub Actions workflow ([`.github/workflows/migrate.yml`](../../.github/workflows/migrate.yml)) using `ANGLEHR_*_POSTGRES_DSN` and `DB_URL_GLOBAL` secrets in the `staging` / `production` environments — not via an in-cluster Job.
 
 ## Fluvio UI note
 
@@ -243,7 +237,7 @@ Or manually: `kind delete cluster --name anglehr-dev` then run `dev-up.sh` again
 
 **Pods stuck on `CreateContainerConfigError`** — the `anglehr-secrets` Secret is missing or incomplete. Run `create-dev-secret.sh` or verify prod secret keys.
 
-**Migrate Job fails** — check logs: `kubectl logs job/migrate -n anglehr`. Ensure all Postgres pods are Ready and DSN passwords match the Secret.
+**Migrate Job fails** — check logs: `kubectl logs job/migrate -n anglehr`. Ensure the Postgres pod is Ready, all six databases exist, and DSN passwords match the Secret.
 
 **Ingress returns 404** — confirm ingress-nginx is running and `/etc/hosts` entries match [`overlays/dev/ingress.yaml`](overlays/dev/ingress.yaml).
 

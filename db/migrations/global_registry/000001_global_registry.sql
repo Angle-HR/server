@@ -1,3 +1,5 @@
+-- +goose Up
+-- +goose StatementBegin
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE OR REPLACE FUNCTION set_updated_at()
@@ -8,7 +10,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TABLE users_registry (
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS waitlist;
+CREATE SCHEMA IF NOT EXISTS accounts;
+CREATE SCHEMA IF NOT EXISTS fluvio;
+
+CREATE TABLE auth.users_registry (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT NOT NULL UNIQUE,
     waitlist_token UUID UNIQUE,
@@ -22,14 +29,14 @@ CREATE TABLE users_registry (
         CHECK (region_source IN ('explicit', 'inferred', 'jwt', 'subdomain', 'db', 'ip'))
 );
 
-CREATE INDEX users_registry_region_idx ON users_registry (region);
+CREATE INDEX users_registry_region_idx ON auth.users_registry (region);
 
 CREATE TRIGGER users_registry_set_updated_at
-    BEFORE UPDATE ON users_registry
+    BEFORE UPDATE ON auth.users_registry
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 
-CREATE TABLE countries (
+CREATE TABLE waitlist.countries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
@@ -43,30 +50,32 @@ CREATE TABLE countries (
         CHECK (region IN ('uk', 'us', 'africa', 'eu', 'asia'))
 );
 
-CREATE INDEX countries_region_idx ON countries (region);
-CREATE INDEX countries_active_sort_idx ON countries (sort_order)
+CREATE INDEX countries_region_idx ON waitlist.countries (region);
+CREATE INDEX countries_active_sort_idx ON waitlist.countries (sort_order)
     WHERE is_active = TRUE;
 
 CREATE TRIGGER countries_set_updated_at
-    BEFORE UPDATE ON countries
+    BEFORE UPDATE ON waitlist.countries
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 
-INSERT INTO countries (id, name, slug, region, icon_key, sort_order) VALUES
+INSERT INTO waitlist.countries (id, name, slug, region, icon_key, sort_order) VALUES
     ('b2c3d4e5-f6a7-4890-b123-456789abcdef', 'European Union', 'european-union', 'eu', 'flag-eu', 1),
     ('a7b8c9d0-e1f2-4345-a678-9abcdef01234', 'Germany', 'germany', 'eu', 'flag-de', 2),
     ('b8c9d0e1-f2a3-4456-b789-abcdef012345', 'India', 'india', 'asia', 'flag-in', 3),
     ('e5f6a7b8-c9d0-4123-e456-789abcdef012', 'Kenya', 'kenya', 'africa', 'flag-ke', 4),
     ('d4e5f6a7-b8c9-4012-d345-6789abcdef01', 'Nigeria', 'nigeria', 'africa', 'flag-ng', 5),
+<<<<<<< HEAD:db/migrations/global_registry/000001_global_registry.up.sql
     ('f6a7b8c9-d0e1-4234-f567-89abcdef0123', 'South Africa', 'south-africa', 'africa', 'flag-za', 6)
+=======
+    ('f6a7b8c9-d0e1-4234-f567-89abcdef0123', 'South Africa', 'south-africa', 'africa', 'flag-za', 6),
+>>>>>>> 01c841e4f63cc434b516f62c4f4cfe6ade14aad1:db/migrations/global_registry/000001_global_registry.sql
     ('a1b2c3d4-e5f6-4789-a012-3456789abcde', 'United Kingdom', 'united-kingdom', 'uk', 'flag-uk', 7),
     ('c3d4e5f6-a7b8-4901-c234-56789abcdef0', 'United States', 'united-states', 'us', 'flag-us', 8);
 
+UPDATE waitlist.countries SET is_active = FALSE WHERE slug = 'south-africa';
 
-
-UPDATE countries SET is_active = FALSE WHERE slug = 'south-africa';
-
-CREATE TABLE tenant_subdomains (
+CREATE TABLE auth.tenant_subdomains (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     subdomain TEXT NOT NULL UNIQUE,
     region TEXT NOT NULL,
@@ -77,12 +86,12 @@ CREATE TABLE tenant_subdomains (
         CHECK (region IN ('uk', 'us', 'africa', 'eu', 'asia'))
 );
 
-CREATE INDEX tenant_subdomains_subdomain_idx ON tenant_subdomains (subdomain);
+CREATE INDEX tenant_subdomains_subdomain_idx ON auth.tenant_subdomains (subdomain);
 
-CREATE INDEX users_registry_waitlist_token_idx ON users_registry (waitlist_token)
+CREATE INDEX users_registry_waitlist_token_idx ON auth.users_registry (waitlist_token)
     WHERE waitlist_token IS NOT NULL;
 
-CREATE TABLE industries (
+CREATE TABLE waitlist.industries (
     id UUID PRIMARY KEY,
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
@@ -93,15 +102,15 @@ CREATE TABLE industries (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX industries_active_sort_idx ON industries (sort_order)
+CREATE INDEX industries_active_sort_idx ON waitlist.industries (sort_order)
     WHERE is_active = TRUE;
 
 CREATE TRIGGER industries_set_updated_at
-    BEFORE UPDATE ON industries
+    BEFORE UPDATE ON waitlist.industries
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 
-CREATE TABLE hiring_tools (
+CREATE TABLE waitlist.hiring_tools (
     id UUID PRIMARY KEY,
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
@@ -112,15 +121,15 @@ CREATE TABLE hiring_tools (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX hiring_tools_active_sort_idx ON hiring_tools (sort_order)
+CREATE INDEX hiring_tools_active_sort_idx ON waitlist.hiring_tools (sort_order)
     WHERE is_active = TRUE;
 
 CREATE TRIGGER hiring_tools_set_updated_at
-    BEFORE UPDATE ON hiring_tools
+    BEFORE UPDATE ON waitlist.hiring_tools
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 
-CREATE TABLE hiring_frustrations (
+CREATE TABLE waitlist.hiring_frustrations (
     id UUID PRIMARY KEY,
     description TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
@@ -131,15 +140,15 @@ CREATE TABLE hiring_frustrations (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX hiring_frustrations_active_sort_idx ON hiring_frustrations (sort_order)
+CREATE INDEX hiring_frustrations_active_sort_idx ON waitlist.hiring_frustrations (sort_order)
     WHERE is_active = TRUE;
 
 CREATE TRIGGER hiring_frustrations_set_updated_at
-    BEFORE UPDATE ON hiring_frustrations
+    BEFORE UPDATE ON waitlist.hiring_frustrations
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 
-CREATE TABLE roles (
+CREATE TABLE waitlist.roles (
     id UUID PRIMARY KEY,
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
@@ -150,15 +159,15 @@ CREATE TABLE roles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX roles_active_sort_idx ON roles (sort_order)
+CREATE INDEX roles_active_sort_idx ON waitlist.roles (sort_order)
     WHERE is_active = TRUE;
 
 CREATE TRIGGER roles_set_updated_at
-    BEFORE UPDATE ON roles
+    BEFORE UPDATE ON waitlist.roles
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 
-CREATE TABLE team_sizes (
+CREATE TABLE waitlist.team_sizes (
     id UUID PRIMARY KEY,
     label TEXT NOT NULL,
     min_size INTEGER,
@@ -171,14 +180,14 @@ CREATE TABLE team_sizes (
     )
 );
 
-CREATE INDEX team_sizes_sort_idx ON team_sizes (sort_order);
+CREATE INDEX team_sizes_sort_idx ON waitlist.team_sizes (sort_order);
 
 CREATE TRIGGER team_sizes_set_updated_at
-    BEFORE UPDATE ON team_sizes
+    BEFORE UPDATE ON waitlist.team_sizes
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 
-INSERT INTO industries (id, name, slug, emoji, sort_order) VALUES
+INSERT INTO waitlist.industries (id, name, slug, emoji, sort_order) VALUES
     ('10000000-0000-4000-8000-000000000001', 'Tech', 'tech', E'⌨️', 1),
     ('10000000-0000-4000-8000-000000000002', 'Energy', 'energy', E'♻️', 2),
     ('10000000-0000-4000-8000-000000000003', 'Green', 'green', E'🌴', 3),
@@ -190,7 +199,7 @@ INSERT INTO industries (id, name, slug, emoji, sort_order) VALUES
     ('10000000-0000-4000-8000-000000000009', 'Hardware', 'hardware', E'🛠️', 9),
     ('10000000-0000-4000-8000-00000000000a', 'Others', 'others', NULL, 10);
 
-INSERT INTO hiring_tools (id, name, slug, icon_url, sort_order) VALUES
+INSERT INTO waitlist.hiring_tools (id, name, slug, icon_url, sort_order) VALUES
     ('20000000-0000-4000-8000-000000000001', 'Notion', 'notion', 'https://cdn.example.com/waitlist/icons/placeholder.svg', 1),
     ('20000000-0000-4000-8000-000000000002', 'Google Forms', 'google-forms', 'https://cdn.example.com/waitlist/icons/placeholder.svg', 2),
     ('20000000-0000-4000-8000-000000000003', 'Excel', 'excel', 'https://cdn.example.com/waitlist/icons/placeholder.svg', 3),
@@ -205,7 +214,7 @@ INSERT INTO hiring_tools (id, name, slug, icon_url, sort_order) VALUES
     ('20000000-0000-4000-8000-00000000000c', 'Other ATS tools', 'other-ats-tools', 'https://cdn.example.com/waitlist/icons/placeholder.svg', 12),
     ('20000000-0000-4000-8000-00000000000d', 'Others', 'others', 'https://cdn.example.com/waitlist/icons/placeholder.svg', 13);
 
-INSERT INTO hiring_frustrations (id, description, slug, emoji, sort_order) VALUES
+INSERT INTO waitlist.hiring_frustrations (id, description, slug, emoji, sort_order) VALUES
     ('30000000-0000-4000-8000-000000000001', 'Finding the right candidates / Not knowing where to post', 'finding-candidates', E'🔍', 1),
     ('30000000-0000-4000-8000-000000000002', 'Tracking and Managing candidates across different tools', 'tracking-candidates', E'📋', 2),
     ('30000000-0000-4000-8000-000000000003', 'No clear hiring pipeline or stages', 'no-pipeline', E'🔄', 3),
@@ -214,7 +223,7 @@ INSERT INTO hiring_frustrations (id, description, slug, emoji, sort_order) VALUE
     ('30000000-0000-4000-8000-000000000006', 'Manual onboarding and off-boarding process', 'manual-onboarding', E'📦', 6),
     ('30000000-0000-4000-8000-000000000007', 'Others', 'others', NULL, 7);
 
-INSERT INTO roles (id, name, slug, emoji, sort_order) VALUES
+INSERT INTO waitlist.roles (id, name, slug, emoji, sort_order) VALUES
     ('40000000-0000-4000-8000-000000000001', 'Founder', 'founder', E'🤴', 1),
     ('40000000-0000-4000-8000-000000000002', 'HR / People', 'hr-people', E'👥', 2),
     ('40000000-0000-4000-8000-000000000003', 'Engineer', 'engineer', E'👨‍💻', 3),
@@ -223,8 +232,37 @@ INSERT INTO roles (id, name, slug, emoji, sort_order) VALUES
     ('40000000-0000-4000-8000-000000000006', 'Operations', 'operations', E'⚙️', 6),
     ('40000000-0000-4000-8000-000000000007', 'Others', 'others', NULL, 7);
 
-INSERT INTO team_sizes (id, label, min_size, max_size, sort_order) VALUES
+INSERT INTO waitlist.team_sizes (id, label, min_size, max_size, sort_order) VALUES
     ('50000000-0000-4000-8000-000000000001', 'Just me', 1, 1, 1),
     ('50000000-0000-4000-8000-000000000002', '2-10', 2, 10, 2),
     ('50000000-0000-4000-8000-000000000003', '10-20', 10, 20, 3),
     ('50000000-0000-4000-8000-000000000004', '20+', 21, NULL, 4);
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+DROP TRIGGER IF EXISTS team_sizes_set_updated_at ON waitlist.team_sizes;
+DROP TRIGGER IF EXISTS roles_set_updated_at ON waitlist.roles;
+DROP TRIGGER IF EXISTS hiring_frustrations_set_updated_at ON waitlist.hiring_frustrations;
+DROP TRIGGER IF EXISTS hiring_tools_set_updated_at ON waitlist.hiring_tools;
+DROP TRIGGER IF EXISTS industries_set_updated_at ON waitlist.industries;
+DROP TRIGGER IF EXISTS countries_set_updated_at ON waitlist.countries;
+DROP TRIGGER IF EXISTS users_registry_set_updated_at ON auth.users_registry;
+
+DROP TABLE IF EXISTS waitlist.team_sizes;
+DROP TABLE IF EXISTS waitlist.roles;
+DROP TABLE IF EXISTS waitlist.hiring_frustrations;
+DROP TABLE IF EXISTS waitlist.hiring_tools;
+DROP TABLE IF EXISTS waitlist.industries;
+DROP TABLE IF EXISTS auth.tenant_subdomains;
+DROP TABLE IF EXISTS waitlist.countries;
+DROP TABLE IF EXISTS auth.users_registry;
+
+DROP SCHEMA IF EXISTS fluvio;
+DROP SCHEMA IF EXISTS accounts;
+DROP SCHEMA IF EXISTS waitlist;
+DROP SCHEMA IF EXISTS auth;
+
+DROP FUNCTION IF EXISTS set_updated_at();
+DROP EXTENSION IF EXISTS pgcrypto;
+-- +goose StatementEnd

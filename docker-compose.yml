@@ -1,115 +1,16 @@
 services:
-  # ========== United Kingdom (uk) ==========
-  postgres_uk:
+  # ========== PostgreSQL (one instance, six databases) ==========
+  postgres:
     image: postgres:16-alpine
     ports:
-      - "15432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_USER: anglehr
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_UK}
-      POSTGRES_DB: anglehr_uk
-    volumes:
-      - postgres_uk_data:/var/lib/postgresql/data
-    networks:
-      - anglehr_net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U anglehr -d anglehr_uk"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # ========== United States (us) ==========
-  postgres_us:
-    image: postgres:16-alpine
-    ports:
-      - "5433:5432"
-    environment:
-      POSTGRES_USER: anglehr
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_US}
-      POSTGRES_DB: anglehr_us
-    volumes:
-      - postgres_us_data:/var/lib/postgresql/data
-    networks:
-      - anglehr_net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U anglehr -d anglehr_us"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # ========== Africa (africa) ==========
-  postgres_africa:
-    image: postgres:16-alpine
-    ports:
-      - "5434:5432"
-    environment:
-      POSTGRES_USER: anglehr
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_AFRICA}
-      POSTGRES_DB: anglehr_africa
-    volumes:
-      - postgres_africa_data:/var/lib/postgresql/data
-    networks:
-      - anglehr_net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U anglehr -d anglehr_africa"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # ========== European Union (eu) ==========
-  postgres_eu:
-    image: postgres:16-alpine
-    ports:
-      - "5435:5432"
-    environment:
-      POSTGRES_USER: anglehr
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_EU}
-      POSTGRES_DB: anglehr_eu
-    volumes:
-      - postgres_eu_data:/var/lib/postgresql/data
-    networks:
-      - anglehr_net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U anglehr -d anglehr_eu"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # ========== Asia (asia) ==========
-  postgres_asia:
-    image: postgres:16-alpine
-    ports:
-      - "5437:5432"
-    environment:
-      POSTGRES_USER: anglehr
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_ASIA}
-      POSTGRES_DB: anglehr_asia
-    volumes:
-      - postgres_asia_data:/var/lib/postgresql/data
-    networks:
-      - anglehr_net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U anglehr -d anglehr_asia"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # ========== Global registry (routing metadata) ==========
-  postgres_global:
-    image: postgres:16-alpine
-    ports:
-      - "5436:5432"
-    environment:
-      POSTGRES_USER: anglehr
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_GLOBAL}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
       POSTGRES_DB: anglehr_global
     volumes:
-      - postgres_global_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/postgres/init-databases.sql:/docker-entrypoint-initdb.d/01-init-databases.sql:ro
     networks:
       - anglehr_net
     healthcheck:
@@ -133,30 +34,62 @@ services:
       retries: 5
     restart: unless-stopped
 
-  migrate:
-    image: postgres:16-alpine
-    volumes:
-      - ./db/migrations:/migrations:ro
-    entrypoint: ["/bin/bash", "/migrations/migrate-all.sh", "up"]
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     environment:
-      ANGLEHR_UK_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres_uk:5432/anglehr_uk?sslmode=disable
-      ANGLEHR_US_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_US}@postgres_us:5432/anglehr_us?sslmode=disable
-      ANGLEHR_AFRICA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_AFRICA}@postgres_africa:5432/anglehr_africa?sslmode=disable
-      ANGLEHR_EU_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres_eu:5432/anglehr_eu?sslmode=disable
-      ANGLEHR_ASIA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_ASIA}@postgres_asia:5432/anglehr_asia?sslmode=disable
-      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio-setup:
+    image: minio/mc:latest
     depends_on:
-      postgres_uk:
+      minio:
         condition: service_healthy
-      postgres_us:
-        condition: service_healthy
-      postgres_africa:
-        condition: service_healthy
-      postgres_eu:
-        condition: service_healthy
-      postgres_asia:
-        condition: service_healthy
-      postgres_global:
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing local/anglehr-uk
+        mc mb --ignore-existing local/anglehr-us
+        mc mb --ignore-existing local/anglehr-africa
+        mc mb --ignore-existing local/anglehr-eu
+        mc mb --ignore-existing local/anglehr-asia
+    networks:
+      - anglehr_net
+    restart: "no"
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    environment:
+      ANGLEHR_UK_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_uk?sslmode=disable
+      ANGLEHR_US_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_us?sslmode=disable
+      ANGLEHR_AFRICA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_africa?sslmode=disable
+      ANGLEHR_EU_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_eu?sslmode=disable
+      ANGLEHR_ASIA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_asia?sslmode=disable
+      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_global?sslmode=disable
+      FORCE_MIGRATE: "1"
+    depends_on:
+      postgres:
         condition: service_healthy
     networks:
       - anglehr_net
@@ -172,44 +105,40 @@ services:
     environment:
       SERVER_PORT: "8080"
       APP_ENV: ${APP_ENV:-development}
-      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-https://testserverlocal.tryopenhr.com}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://*.tryopenhr.com}
       FLUVIO_UI_ORIGIN: ${FLUVIO_UI_ORIGIN:-http://localhost:5173}
       JWT_SECRET: ${JWT_SECRET:-dev-insecure-jwt-secret-change-me}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-3600}
       JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-604800}
       AUTH_DEFAULT_REGION: ${AUTH_DEFAULT_REGION:-uk}
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-admin@anglehr.local}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-changeme123}
+      ADMIN_BOOTSTRAP_NAME: ${ADMIN_BOOTSTRAP_NAME:-Bootstrap Admin}
       REDIS_URL: redis://redis:6379/${REDIS_DB:-0}
-      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
-      R2_ACCESS_KEY: ${R2_ACCESS_KEY}
-      R2_SECRET_KEY: ${R2_SECRET_KEY}
-      R2_ENDPOINT: ${R2_ENDPOINT}
-      ANGLEHR_UK_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres_uk:5432/anglehr_uk?sslmode=disable
-      ANGLEHR_UK_R2_BUCKET: ${ANGLEHR_UK_R2_BUCKET}
-      ANGLEHR_US_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_US}@postgres_us:5432/anglehr_us?sslmode=disable
-      ANGLEHR_US_R2_BUCKET: ${ANGLEHR_US_R2_BUCKET}
-      ANGLEHR_AFRICA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_AFRICA}@postgres_africa:5432/anglehr_africa?sslmode=disable
-      ANGLEHR_AFRICA_R2_BUCKET: ${ANGLEHR_AFRICA_R2_BUCKET}
-      ANGLEHR_EU_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres_eu:5432/anglehr_eu?sslmode=disable
-      ANGLEHR_EU_R2_BUCKET: ${ANGLEHR_EU_R2_BUCKET}
-      ANGLEHR_ASIA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD_ASIA}@postgres_asia:5432/anglehr_asia?sslmode=disable
-      ANGLEHR_ASIA_R2_BUCKET: ${ANGLEHR_ASIA_R2_BUCKET}
+      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_global?sslmode=disable
+      R2_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      R2_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      R2_ENDPOINT: http://minio:9000
+      ANGLEHR_UK_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_uk?sslmode=disable
+      ANGLEHR_UK_R2_BUCKET: ${ANGLEHR_UK_R2_BUCKET:-anglehr-uk}
+      ANGLEHR_US_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_us?sslmode=disable
+      ANGLEHR_US_R2_BUCKET: ${ANGLEHR_US_R2_BUCKET:-anglehr-us}
+      ANGLEHR_AFRICA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_africa?sslmode=disable
+      ANGLEHR_AFRICA_R2_BUCKET: ${ANGLEHR_AFRICA_R2_BUCKET:-anglehr-africa}
+      ANGLEHR_EU_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_eu?sslmode=disable
+      ANGLEHR_EU_R2_BUCKET: ${ANGLEHR_EU_R2_BUCKET:-anglehr-eu}
+      ANGLEHR_ASIA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_asia?sslmode=disable
+      ANGLEHR_ASIA_R2_BUCKET: ${ANGLEHR_ASIA_R2_BUCKET:-anglehr-asia}
     depends_on:
-      postgres_uk:
-        condition: service_healthy
-      postgres_us:
-        condition: service_healthy
-      postgres_africa:
-        condition: service_healthy
-      postgres_eu:
-        condition: service_healthy
-      postgres_asia:
-        condition: service_healthy
-      postgres_global:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       migrate:
+        condition: service_completed_successfully
+      minio-setup:
         condition: service_completed_successfully
     networks:
       - anglehr_net
@@ -221,6 +150,16 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    platform: linux/amd64
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_UI_PORT:-8025}:8025"
+    networks:
+      - anglehr_net
+    restart: unless-stopped
+
   email-worker:
     build:
       context: .
@@ -228,39 +167,26 @@ services:
       target: email-worker
     environment:
       APP_ENV: ${APP_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
       REDIS_URL: redis://redis:6379/${REDIS_DB:-0}
-      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_FROM: ${SMTP_FROM}
-      SMTP_FROM_NAME: ${SMTP_FROM_NAME}
-      APP_URL: ${APP_URL}
+      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_global?sslmode=disable
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@anglehr.local}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Angle HR}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      ADMIN_APP_URL: ${ADMIN_APP_URL:-https://testadminlocal.tryopenhr.com}
     depends_on:
-      postgres_global:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    networks:
-      - anglehr_net
-    restart: unless-stopped
-
-  upload-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: upload-worker
-    environment:
-      APP_ENV: ${APP_ENV:-development}
-      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres_global:5432/anglehr_global?sslmode=disable
-    depends_on:
-      postgres_global:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
+      mailhog:
+        condition: service_started
     networks:
       - anglehr_net
     restart: unless-stopped
@@ -276,7 +202,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     ports:
-      - "5173:80"
+      - "${FLUVIO_UI_PORT:-5173}:80"
     networks:
       - anglehr_net
 
@@ -285,9 +211,5 @@ networks:
     name: anglehr_net
 
 volumes:
-  postgres_uk_data:
-  postgres_us_data:
-  postgres_africa_data:
-  postgres_eu_data:
-  postgres_asia_data:
-  postgres_global_data:
+  postgres_data:
+  minio_data:

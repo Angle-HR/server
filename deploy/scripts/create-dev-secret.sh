@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Creates or updates the anglehr-secrets Secret in the anglehr namespace from a .env file.
-# Builds Kubernetes-internal DSNs from POSTGRES_PASSWORD_* and passes through R2 credentials.
+# Builds Kubernetes-internal DSNs from POSTGRES_PASSWORD (single instance, multiple databases).
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=lib/k8s-local.sh
@@ -28,7 +28,7 @@ source "$ENV_FILE"
 set +a
 
 required=(
-	POSTGRES_PASSWORD_UK POSTGRES_PASSWORD_US POSTGRES_PASSWORD_AFRICA POSTGRES_PASSWORD_EU POSTGRES_PASSWORD_ASIA POSTGRES_PASSWORD_GLOBAL
+	POSTGRES_PASSWORD
 	R2_ACCESS_KEY R2_SECRET_KEY
 	ANGLEHR_UK_R2_BUCKET ANGLEHR_US_R2_BUCKET ANGLEHR_AFRICA_R2_BUCKET ANGLEHR_EU_R2_BUCKET ANGLEHR_ASIA_R2_BUCKET
 )
@@ -51,7 +51,11 @@ SMTP_PASSWORD="${SMTP_PASSWORD:-}"
 SMTP_FROM="${SMTP_FROM:-}"
 SMTP_FROM_NAME="${SMTP_FROM_NAME:-}"
 APP_URL="${APP_URL:-http://app.anglehr.local}"
+ADMIN_APP_URL="${ADMIN_APP_URL:-http://admin.anglehr.local}"
 JWT_SECRET="${JWT_SECRET:-dev-insecure-jwt-secret-change-me}"
+ADMIN_BOOTSTRAP_EMAIL="${ADMIN_BOOTSTRAP_EMAIL:-admin@anglehr.local}"
+ADMIN_BOOTSTRAP_PASSWORD="${ADMIN_BOOTSTRAP_PASSWORD:-changeme123}"
+ADMIN_BOOTSTRAP_NAME="${ADMIN_BOOTSTRAP_NAME:-Bootstrap Admin}"
 
 R2_ENDPOINT="${R2_ENDPOINT:-}"
 
@@ -63,32 +67,25 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
 kubectl create secret generic anglehr-secrets \
 	--namespace="$NAMESPACE" \
 	--dry-run=client -o yaml \
-	--from-literal=POSTGRES_PASSWORD_UK="$POSTGRES_PASSWORD_UK" \
-	--from-literal=POSTGRES_PASSWORD_US="$POSTGRES_PASSWORD_US" \
-	--from-literal=POSTGRES_PASSWORD_AFRICA="$POSTGRES_PASSWORD_AFRICA" \
-	--from-literal=POSTGRES_PASSWORD_EU="$POSTGRES_PASSWORD_EU" \
-	--from-literal=POSTGRES_PASSWORD_ASIA="$POSTGRES_PASSWORD_ASIA" \
-	--from-literal=POSTGRES_PASSWORD_GLOBAL="$POSTGRES_PASSWORD_GLOBAL" \
-	--from-literal=DB_URL_UK="postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres-uk:5432/anglehr_uk?sslmode=disable" \
-	--from-literal=DB_URL_US="postgres://anglehr:${POSTGRES_PASSWORD_US}@postgres-us:5432/anglehr_us?sslmode=disable" \
-	--from-literal=DB_URL_AFRICA="postgres://anglehr:${POSTGRES_PASSWORD_AFRICA}@postgres-africa:5432/anglehr_africa?sslmode=disable" \
-	--from-literal=DB_URL_EU="postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres-eu:5432/anglehr_eu?sslmode=disable" \
-	--from-literal=DB_URL_ASIA="postgres://anglehr:${POSTGRES_PASSWORD_ASIA}@postgres-asia:5432/anglehr_asia?sslmode=disable" \
-	--from-literal=DB_URL_GLOBAL="postgres://anglehr:${POSTGRES_PASSWORD_GLOBAL}@postgres-global:5432/anglehr_global?sslmode=disable" \
+	--from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+	--from-literal=DB_URL_GLOBAL="postgres://anglehr:${POSTGRES_PASSWORD}@postgres:5432/anglehr_global?sslmode=disable" \
 	--from-literal=R2_ACCESS_KEY="$R2_ACCESS_KEY" \
 	--from-literal=R2_SECRET_KEY="$R2_SECRET_KEY" \
 	--from-literal=R2_ENDPOINT="$R2_ENDPOINT" \
 	--from-literal=REDIS_URL="$REDIS_URL" \
 	--from-literal=JWT_SECRET="$JWT_SECRET" \
-	--from-literal=ANGLEHR_UK_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_UK}@postgres-uk:5432/anglehr_uk?sslmode=disable" \
+	--from-literal=ADMIN_BOOTSTRAP_EMAIL="$ADMIN_BOOTSTRAP_EMAIL" \
+	--from-literal=ADMIN_BOOTSTRAP_PASSWORD="$ADMIN_BOOTSTRAP_PASSWORD" \
+	--from-literal=ADMIN_BOOTSTRAP_NAME="$ADMIN_BOOTSTRAP_NAME" \
+	--from-literal=ANGLEHR_UK_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD}@postgres:5432/anglehr_uk?sslmode=disable" \
 	--from-literal=ANGLEHR_UK_R2_BUCKET="$ANGLEHR_UK_R2_BUCKET" \
-	--from-literal=ANGLEHR_US_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_US}@postgres-us:5432/anglehr_us?sslmode=disable" \
+	--from-literal=ANGLEHR_US_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD}@postgres:5432/anglehr_us?sslmode=disable" \
 	--from-literal=ANGLEHR_US_R2_BUCKET="$ANGLEHR_US_R2_BUCKET" \
-	--from-literal=ANGLEHR_AFRICA_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_AFRICA}@postgres-africa:5432/anglehr_africa?sslmode=disable" \
+	--from-literal=ANGLEHR_AFRICA_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD}@postgres:5432/anglehr_africa?sslmode=disable" \
 	--from-literal=ANGLEHR_AFRICA_R2_BUCKET="$ANGLEHR_AFRICA_R2_BUCKET" \
-	--from-literal=ANGLEHR_EU_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_EU}@postgres-eu:5432/anglehr_eu?sslmode=disable" \
+	--from-literal=ANGLEHR_EU_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD}@postgres:5432/anglehr_eu?sslmode=disable" \
 	--from-literal=ANGLEHR_EU_R2_BUCKET="$ANGLEHR_EU_R2_BUCKET" \
-	--from-literal=ANGLEHR_ASIA_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD_ASIA}@postgres-asia:5432/anglehr_asia?sslmode=disable" \
+	--from-literal=ANGLEHR_ASIA_POSTGRES_DSN="postgres://anglehr:${POSTGRES_PASSWORD}@postgres:5432/anglehr_asia?sslmode=disable" \
 	--from-literal=ANGLEHR_ASIA_R2_BUCKET="$ANGLEHR_ASIA_R2_BUCKET" \
 	--from-literal=SMTP_HOST="$SMTP_HOST" \
 	--from-literal=SMTP_PORT="$SMTP_PORT" \
@@ -97,6 +94,7 @@ kubectl create secret generic anglehr-secrets \
 	--from-literal=SMTP_FROM="$SMTP_FROM" \
 	--from-literal=SMTP_FROM_NAME="$SMTP_FROM_NAME" \
 	--from-literal=APP_URL="$APP_URL" \
+	--from-literal=ADMIN_APP_URL="$ADMIN_APP_URL" \
 	| kubectl apply -f -
 
 echo "Secret anglehr-secrets applied in namespace $NAMESPACE"

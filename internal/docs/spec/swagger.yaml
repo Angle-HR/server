@@ -2706,7 +2706,7 @@ paths:
                 - waitlist/onboarding
 securityDefinitions:
     BearerAuth:
-        description: Bearer JWT access token
+        description: JWT access token. Send the raw token, or optionally prefix with "Bearer ".
         in: header
         name: Authorization
         type: apiKey

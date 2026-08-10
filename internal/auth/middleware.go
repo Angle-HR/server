@@ -62,11 +62,23 @@ func (m *Middleware) RequireAuth(next http.Handler) http.Handler {
 	})
 }
 
+// bearerToken extracts a JWT from Authorization.
+// Accepts "Bearer <token>" or a bare token value.
 func bearerToken(header string) string {
-	parts := strings.SplitN(header, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+	header = strings.TrimSpace(header)
+	if header == "" || strings.EqualFold(header, "Bearer") {
 		return ""
 	}
 
-	return strings.TrimSpace(parts[1])
+	parts := strings.SplitN(header, " ", 2)
+	if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+		return strings.TrimSpace(parts[1])
+	}
+
+	// Bare JWT (no scheme prefix).
+	if !strings.Contains(header, " ") {
+		return header
+	}
+
+	return ""
 }

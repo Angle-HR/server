@@ -75,6 +75,13 @@ func ListTeamSizes() (string, []any, error) {
 		ToSQL())
 }
 
+// ListWaitlistBusinessTypes returns SQL and args for active waitlist business types.
+// Uses schema-qualified raw SQL to avoid conflicts with accounts.business_types if search_path is broad.
+func ListWaitlistBusinessTypes() (string, []any, error) {
+	return `SELECT id, name, slug FROM waitlist.business_types WHERE is_active = $1 ORDER BY sort_order ASC, name ASC`,
+		[]any{true}, nil
+}
+
 // InsertWaitlistSignup returns SQL and args for a regional waitlist signup row.
 func InsertWaitlistSignup(
 	fullName, email string,

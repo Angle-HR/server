@@ -1521,6 +1521,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/business-types": {
+            "get": {
+                "description": "Returns business type options for onboarding.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "waitlist/reference"
+                ],
+                "summary": "List business types",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.WaitlistBusinessTypeListEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/countries": {
             "get": {
                 "description": "Returns active countries for the waitlist region dropdown.",
@@ -1858,6 +1884,63 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/onboarding/individual": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Saves first name, last name, country of residence, business type, industry type, and number of employees for an individual account.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "onboarding/individual"
+                ],
+                "summary": "Submit individual onboarding",
+                "parameters": [
+                    {
+                        "description": "Individual onboarding payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.IndividualRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.IndividualEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -3046,6 +3129,72 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_handler.IndividualEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.IndividualResponse"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_handler.IndividualRequest": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "type": "string",
+                    "example": "61000000-0000-4000-8000-000000000001"
+                },
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "first_name": {
+                    "type": "string",
+                    "example": "Jerry"
+                },
+                "industry_id": {
+                    "type": "string",
+                    "example": "62000000-0000-4000-8000-000000000001"
+                },
+                "last_name": {
+                    "type": "string",
+                    "example": "Oluwasegun"
+                },
+                "no_of_employees": {
+                    "type": "integer",
+                    "example": 10
+                }
+            }
+        },
+        "internal_handler.IndividualResponse": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "type": "string"
+                },
+                "country_id": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "industry_id": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "no_of_employees": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_handler.Industry": {
             "type": "object",
             "properties": {
@@ -3696,6 +3845,41 @@ const docTemplate = `{
                 },
                 "meta": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_handler.WaitlistBusinessType": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handler.WaitlistBusinessTypeListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.WaitlistBusinessType"
+                    }
+                },
+                "has_more": {
+                    "type": "boolean"
+                },
+                "next_cursor": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string",
+                    "example": "abc123"
                 }
             }
         },

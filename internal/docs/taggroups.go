@@ -19,6 +19,7 @@ var onboardingTagGroup = map[string]any{
 		"onboarding/profile",
 		"onboarding/address",
 		"onboarding/business",
+		"onboarding/individual",
 		"onboarding/session",
 	},
 }
@@ -77,6 +78,11 @@ var apiTagDefinitions = []map[string]any{
 		"name":          "onboarding/business",
 		"description":   "Business compliance step: business type, industry, employee count. Business accounts only.",
 		"x-displayName": "Business",
+	},
+	{
+		"name":          "onboarding/individual",
+		"description":   "Saves first name, last name, country, business type, industry, and number of employees for an individual account.",
+		"x-displayName": "Individual",
 	},
 	{
 		"name":          "onboarding/session",

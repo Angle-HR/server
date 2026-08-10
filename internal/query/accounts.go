@@ -347,3 +347,21 @@ func ValidateEmployeeCount(count int) error {
 
 	return nil
 }
+
+// UpdateIndividualUserBusinessDetails returns SQL to save business type, industry, and
+// employee count directly on the accounts.users row for an individual account.
+// This has no relation to the organizations table.
+func UpdateIndividualUserBusinessDetails(
+	userID uuid.UUID,
+	businessTypeID, industryID uuid.UUID,
+	employeeCount int,
+) (string, []any, error) {
+	return mustSQL(postgres.Update("users").
+		Set("business_type_id", businessTypeID).
+		Set("industry_id", industryID).
+		Set("employee_count", employeeCount).
+		Where("id", "=", userID).
+		WhereNull("deleted_at").
+		Returning("id").
+		ToSQL())
+}

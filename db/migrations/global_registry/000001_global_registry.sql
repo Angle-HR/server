@@ -65,11 +65,7 @@ INSERT INTO waitlist.countries (id, name, slug, region, icon_key, sort_order) VA
     ('b8c9d0e1-f2a3-4456-b789-abcdef012345', 'India', 'india', 'asia', 'flag-in', 3),
     ('e5f6a7b8-c9d0-4123-e456-789abcdef012', 'Kenya', 'kenya', 'africa', 'flag-ke', 4),
     ('d4e5f6a7-b8c9-4012-d345-6789abcdef01', 'Nigeria', 'nigeria', 'africa', 'flag-ng', 5),
-<<<<<<< HEAD:db/migrations/global_registry/000001_global_registry.up.sql
-    ('f6a7b8c9-d0e1-4234-f567-89abcdef0123', 'South Africa', 'south-africa', 'africa', 'flag-za', 6)
-=======
     ('f6a7b8c9-d0e1-4234-f567-89abcdef0123', 'South Africa', 'south-africa', 'africa', 'flag-za', 6),
->>>>>>> 01c841e4f63cc434b516f62c4f4cfe6ade14aad1:db/migrations/global_registry/000001_global_registry.sql
     ('a1b2c3d4-e5f6-4789-a012-3456789abcde', 'United Kingdom', 'united-kingdom', 'uk', 'flag-uk', 7),
     ('c3d4e5f6-a7b8-4901-c234-56789abcdef0', 'United States', 'united-states', 'us', 'flag-us', 8);
 
@@ -167,6 +163,24 @@ CREATE TRIGGER roles_set_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 
+CREATE TABLE waitlist.business_types (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX business_types_active_sort_idx ON waitlist.business_types (sort_order)
+    WHERE is_active = TRUE;
+
+CREATE TRIGGER business_types_set_updated_at
+    BEFORE UPDATE ON waitlist.business_types
+    FOR EACH ROW
+    EXECUTE FUNCTION set_updated_at();
+
 CREATE TABLE waitlist.team_sizes (
     id UUID PRIMARY KEY,
     label TEXT NOT NULL,
@@ -232,6 +246,14 @@ INSERT INTO waitlist.roles (id, name, slug, emoji, sort_order) VALUES
     ('40000000-0000-4000-8000-000000000006', 'Operations', 'operations', E'⚙️', 6),
     ('40000000-0000-4000-8000-000000000007', 'Others', 'others', NULL, 7);
 
+INSERT INTO waitlist.business_types (id, name, slug, sort_order) VALUES
+    ('70000000-0000-4000-8000-000000000001', 'Early-stage startup', 'early-stage-startup', 1),
+    ('70000000-0000-4000-8000-000000000002', 'Small business (1–50 employees)', 'small-business', 2),
+    ('70000000-0000-4000-8000-000000000003', 'Growing company (51–250 employees)', 'growing-company', 3),
+    ('70000000-0000-4000-8000-000000000004', 'Agency / Studio', 'agency-studio', 4),
+    ('70000000-0000-4000-8000-000000000005', 'Nonprofit', 'nonprofit', 5),
+    ('70000000-0000-4000-8000-000000000006', 'Sole Trader', 'sole-trader', 6);
+
 INSERT INTO waitlist.team_sizes (id, label, min_size, max_size, sort_order) VALUES
     ('50000000-0000-4000-8000-000000000001', 'Just me', 1, 1, 1),
     ('50000000-0000-4000-8000-000000000002', '2-10', 2, 10, 2),
@@ -242,6 +264,7 @@ INSERT INTO waitlist.team_sizes (id, label, min_size, max_size, sort_order) VALU
 -- +goose Down
 -- +goose StatementBegin
 DROP TRIGGER IF EXISTS team_sizes_set_updated_at ON waitlist.team_sizes;
+DROP TRIGGER IF EXISTS business_types_set_updated_at ON waitlist.business_types;
 DROP TRIGGER IF EXISTS roles_set_updated_at ON waitlist.roles;
 DROP TRIGGER IF EXISTS hiring_frustrations_set_updated_at ON waitlist.hiring_frustrations;
 DROP TRIGGER IF EXISTS hiring_tools_set_updated_at ON waitlist.hiring_tools;
@@ -250,6 +273,7 @@ DROP TRIGGER IF EXISTS countries_set_updated_at ON waitlist.countries;
 DROP TRIGGER IF EXISTS users_registry_set_updated_at ON auth.users_registry;
 
 DROP TABLE IF EXISTS waitlist.team_sizes;
+DROP TABLE IF EXISTS waitlist.business_types;
 DROP TABLE IF EXISTS waitlist.roles;
 DROP TABLE IF EXISTS waitlist.hiring_frustrations;
 DROP TABLE IF EXISTS waitlist.hiring_tools;
@@ -258,7 +282,6 @@ DROP TABLE IF EXISTS auth.tenant_subdomains;
 DROP TABLE IF EXISTS waitlist.countries;
 DROP TABLE IF EXISTS auth.users_registry;
 
-DROP SCHEMA IF EXISTS fluvio;
 DROP SCHEMA IF EXISTS accounts;
 DROP SCHEMA IF EXISTS waitlist;
 DROP SCHEMA IF EXISTS auth;

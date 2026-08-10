@@ -1,0 +1,14 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.debug
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+      - "${DELVE_PORT:-2345}:2345"
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    healthcheck:
+      disable: true

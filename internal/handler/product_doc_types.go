@@ -285,3 +285,31 @@ type CompanyRoleListEnvelope struct {
 	Data []CompanyRole `json:"data"`
 	Meta *apidoc.Meta  `json:"meta,omitempty"`
 }
+
+// IndividualRequest is the individual onboarding request body.
+type IndividualRequest struct {
+	FirstName      string `json:"first_name"       example:"Jerry"`
+	LastName       string `json:"last_name"        example:"Oluwasegun"`
+	CountryID      string `json:"country_id"       example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
+	BusinessTypeID string `json:"business_type_id" example:"61000000-0000-4000-8000-000000000001"`
+	IndustryID     string `json:"industry_id"      example:"62000000-0000-4000-8000-000000000001"`
+	NoOfEmployees  int    `json:"no_of_employees"  example:"10"`
+}
+
+// IndividualResponse is the individual onboarding response payload.
+type IndividualResponse struct {
+	UserID         string `json:"user_id"`
+	FirstName      string `json:"first_name"`
+	LastName       string `json:"last_name"`
+	CountryID      string `json:"country_id"`
+	BusinessTypeID string `json:"business_type_id"`
+	IndustryID     string `json:"industry_id"`
+	NoOfEmployees  int    `json:"no_of_employees"`
+}
+
+// IndividualEnvelope is a successful individual onboarding response.
+type IndividualEnvelope struct {
+	Data IndividualResponse `json:"data"`
+	Meta *apidoc.Meta   `json:"meta,omitempty"`
+}
+

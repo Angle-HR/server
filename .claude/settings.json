@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -rn \"verifyAddress\\\\|verify-address\\\\|VerifyAddress\" /Users/mac/Documents/server -g '*.go')",
+      "Bash(go build *)",
+      "Bash(go vet *)",
+      "Bash(go test *)"
+    ]
+  }
+}

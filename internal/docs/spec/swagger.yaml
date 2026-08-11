@@ -471,6 +471,61 @@ definitions:
                 example: 550e8400-e29b-41d4-a716-446655440000
                 type: string
         type: object
+    internal_handler.BusinessEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/internal_handler.BusinessResponse'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_handler.BusinessRequest:
+        properties:
+            bin_number:
+                example: BIN-123456789
+                type: string
+            business_registered_address:
+                example: 1 High Street, London, UK
+                type: string
+            business_type_id:
+                example: 61000000-0000-4000-8000-000000000001
+                type: string
+            company_role_id:
+                example: 60000000-0000-4000-8000-000000000001
+                type: string
+            country_id:
+                example: a1b2c3d4-e5f6-4789-a012-3456789abcde
+                type: string
+            industry_id:
+                example: 62000000-0000-4000-8000-000000000001
+                type: string
+            legal_business_name:
+                example: Oped Technologies Ltd
+                type: string
+            legal_full_name:
+                example: Oped Oped
+                type: string
+        type: object
+    internal_handler.BusinessResponse:
+        properties:
+            bin_number:
+                type: string
+            business_registered_address:
+                type: string
+            business_type_id:
+                type: string
+            company_role_id:
+                type: string
+            country_id:
+                type: string
+            industry_id:
+                type: string
+            legal_business_name:
+                type: string
+            legal_full_name:
+                type: string
+            user_id:
+                type: string
+        type: object
     internal_handler.BusinessType:
         properties:
             id:
@@ -2386,6 +2441,41 @@ paths:
             tags:
                 - onboarding/address
     /onboarding/business:
+        post:
+            consumes:
+                - application/json
+            description: Saves legal business name, legal full name, country, company role, BIN number, registered address, business type, and industry type for a business account.
+            parameters:
+                - description: Business onboarding payload
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.BusinessRequest'
+            produces:
+                - application/json
+            responses:
+                "201":
+                    description: Created
+                    schema:
+                        $ref: '#/definitions/internal_handler.BusinessEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "401":
+                    description: Unauthorized
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "500":
+                    description: Internal Server Error
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Submit business onboarding
+            tags:
+                - onboarding/business
         put:
             consumes:
                 - application/json
@@ -2733,7 +2823,7 @@ tags:
     - description: Workspace address (search or manual entry). `POST /onboarding/address/verify` is reserved and returns 501.
       name: onboarding/address
       x-displayName: Address
-    - description: 'Business compliance step: business type, industry, employee count. Business accounts only.'
+    - description: 'Business onboarding and compliance: legal business name, legal full name, country, company role, BIN number, registered address, business type, industry, and employee count. Business accounts only.'
       name: onboarding/business
       x-displayName: Business
     - description: Saves first name, last name, country, business type, industry, and number of employees for an individual account.

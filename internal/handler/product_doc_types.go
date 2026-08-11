@@ -19,9 +19,9 @@ type AuthSignupPatchRequest struct {
 // AuthSignupData is returned after signup or resend.
 type AuthSignupData struct {
 	VerificationSessionID    string `json:"verification_session_id" example:"550e8400-e29b-41d4-a716-446655440000"`
-	Email                  string `json:"email" example:"jerry@example.com"`
-	CodeExpiresInSeconds   int    `json:"code_expires_in_seconds" example:"300"`
-	ResendAvailableInSeconds int  `json:"resend_available_in_seconds" example:"30"`
+	Email                    string `json:"email" example:"jerry@example.com"`
+	CodeExpiresInSeconds     int    `json:"code_expires_in_seconds" example:"300"`
+	ResendAvailableInSeconds int    `json:"resend_available_in_seconds" example:"30"`
 }
 
 // AuthSignupEnvelope is a successful signup response.
@@ -43,10 +43,10 @@ type AuthResendVerificationRequest struct {
 
 // OnboardingProgressSummary is embedded in auth and onboarding responses.
 type OnboardingProgressSummary struct {
-	Status          string   `json:"status" example:"in_progress" enums:"in_progress,completed"`
-	CurrentStep     *string  `json:"current_step,omitempty" example:"profile"`
-	CompletedSteps  []string `json:"completed_steps" example:"verify_email,profile"`
-	NextStep        *string  `json:"next_step,omitempty" example:"address"`
+	Status         string   `json:"status" example:"in_progress" enums:"in_progress,completed"`
+	CurrentStep    *string  `json:"current_step,omitempty" example:"profile"`
+	CompletedSteps []string `json:"completed_steps" example:"verify_email,profile"`
+	NextStep       *string  `json:"next_step,omitempty" example:"address"`
 }
 
 // AuthTokenData is returned after verify-email or login.
@@ -71,10 +71,10 @@ type AuthLoginRequest struct {
 
 // AuthLoginVerificationRequiredDetails is returned in error.details when login succeeds on password but email is unverified.
 type AuthLoginVerificationRequiredDetails struct {
-	VerificationSessionID      string `json:"verification_session_id" example:"550e8400-e29b-41d4-a716-446655440000"`
-	Email                      string `json:"email" example:"jerry@example.com"`
-	CodeExpiresInSeconds       int    `json:"code_expires_in_seconds" example:"300"`
-	ResendAvailableInSeconds   int    `json:"resend_available_in_seconds" example:"30"`
+	VerificationSessionID    string `json:"verification_session_id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Email                    string `json:"email" example:"jerry@example.com"`
+	CodeExpiresInSeconds     int    `json:"code_expires_in_seconds" example:"300"`
+	ResendAvailableInSeconds int    `json:"resend_available_in_seconds" example:"30"`
 }
 
 // AuthRefreshRequest exchanges a refresh token.
@@ -96,26 +96,26 @@ type AuthRefreshEnvelope struct {
 
 // ProductProfileRequest upserts account type and profile fields.
 type ProductProfileRequest struct {
-	AccountType         string  `json:"account_type" example:"business" enums:"individual,business"`
-	FirstName           *string `json:"first_name,omitempty" example:"Jerry"`
-	LastName            *string `json:"last_name,omitempty" example:"Oluwasegun"`
-	CountryID           *string `json:"country_id,omitempty" example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
-	LegalBusinessName   *string `json:"legal_business_name,omitempty" example:"ANGLE"`
-	LegalFullName       *string `json:"legal_full_name,omitempty" example:"Jerry Oluwasegun"`
-	CompanyRoleID       *string `json:"company_role_id,omitempty" example:"60000000-0000-4000-8000-000000000001"`
+	AccountType       string  `json:"account_type" example:"business" enums:"individual,business"`
+	FirstName         *string `json:"first_name,omitempty" example:"Jerry"`
+	LastName          *string `json:"last_name,omitempty" example:"Oluwasegun"`
+	CountryID         *string `json:"country_id,omitempty" example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
+	LegalBusinessName *string `json:"legal_business_name,omitempty" example:"ANGLE"`
+	LegalFullName     *string `json:"legal_full_name,omitempty" example:"Jerry Oluwasegun"`
+	CompanyRoleID     *string `json:"company_role_id,omitempty" example:"60000000-0000-4000-8000-000000000001"`
 }
 
 // ProductProfileData is the profile step response payload.
 type ProductProfileData struct {
-	AccountType         string                    `json:"account_type" example:"business"`
-	FirstName           *string                   `json:"first_name,omitempty"`
-	LastName            *string                   `json:"last_name,omitempty"`
-	CountryID           *string                   `json:"country_id,omitempty"`
-	LegalBusinessName   *string                   `json:"legal_business_name,omitempty"`
-	LegalFullName       *string                   `json:"legal_full_name,omitempty"`
-	CompanyRoleID       *string                   `json:"company_role_id,omitempty"`
-	Region              string                    `json:"region" example:"uk"`
-	Onboarding          OnboardingProgressSummary `json:"onboarding"`
+	AccountType       string                    `json:"account_type" example:"business"`
+	FirstName         *string                   `json:"first_name,omitempty"`
+	LastName          *string                   `json:"last_name,omitempty"`
+	CountryID         *string                   `json:"country_id,omitempty"`
+	LegalBusinessName *string                   `json:"legal_business_name,omitempty"`
+	LegalFullName     *string                   `json:"legal_full_name,omitempty"`
+	CompanyRoleID     *string                   `json:"company_role_id,omitempty"`
+	Region            string                    `json:"region" example:"uk"`
+	Onboarding        OnboardingProgressSummary `json:"onboarding"`
 }
 
 // ProductProfileEnvelope is a successful profile upsert response.
@@ -126,14 +126,14 @@ type ProductProfileEnvelope struct {
 
 // ProductAddressRequest upserts workspace address.
 type ProductAddressRequest struct {
-	CountryID         string  `json:"country_id" example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
-	EntryMode         string  `json:"entry_mode" example:"manual" enums:"search,manual"`
-	Line1             string  `json:"line_1" example:"10 Downing Street"`
-	Line2             *string `json:"line_2,omitempty"`
-	City              string  `json:"city" example:"London"`
-	StateOrCounty     string  `json:"state_or_county" example:"Greater London"`
-	PostCode          string  `json:"post_code" example:"SW1A 2AA"`
-	FormattedAddress  *string `json:"formatted_address,omitempty"`
+	CountryID        string  `json:"country_id" example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
+	EntryMode        string  `json:"entry_mode" example:"manual" enums:"search,manual"`
+	Line1            string  `json:"line_1" example:"10 Downing Street"`
+	Line2            *string `json:"line_2,omitempty"`
+	City             string  `json:"city" example:"London"`
+	StateOrCounty    string  `json:"state_or_county" example:"Greater London"`
+	PostCode         string  `json:"post_code" example:"SW1A 2AA"`
+	FormattedAddress *string `json:"formatted_address,omitempty"`
 }
 
 // ProductAddressData is the address step response payload.
@@ -154,6 +154,24 @@ type ProductAddressData struct {
 type ProductAddressEnvelope struct {
 	Data ProductAddressData `json:"data"`
 	Meta *apidoc.Meta       `json:"meta,omitempty"`
+}
+
+// VerifyAddressResponse is the reserved response payload for third-party
+// address verification, once a provider is integrated.
+type VerifyAddressResponse struct {
+	CountryID          string  `json:"country_id" example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
+	Line1              string  `json:"line_1" example:"10 Downing Street"`
+	Line2              *string `json:"line_2,omitempty"`
+	City               string  `json:"city" example:"London"`
+	StateOrCounty      string  `json:"state_or_county" example:"Greater London"`
+	PostCode           string  `json:"post_code" example:"SW1A 2AA"`
+	VerificationStatus string  `json:"verification_status" example:"verified" enums:"verified,failed,unverified"`
+}
+
+// VerifyAddressEnvelope is a successful address verification response.
+type VerifyAddressEnvelope struct {
+	Data VerifyAddressResponse `json:"data"`
+	Meta *apidoc.Meta          `json:"meta,omitempty"`
 }
 
 // ProductBusinessRequest upserts business compliance fields.
@@ -198,7 +216,7 @@ type ProductAddressState struct {
 	StateOrCounty      string  `json:"state_or_county"`
 	PostCode           string  `json:"post_code"`
 	FormattedAddress   *string `json:"formatted_address,omitempty"`
-	VerificationStatus string `json:"verification_status"`
+	VerificationStatus string  `json:"verification_status"`
 }
 
 // ProductBusinessState is saved business fields in status response.
@@ -210,14 +228,14 @@ type ProductBusinessState struct {
 
 // ProductOnboardingStatusData is the full onboarding state.
 type ProductOnboardingStatusData struct {
-	Status          string                `json:"status" example:"in_progress" enums:"in_progress,completed"`
-	AccountType     *string               `json:"account_type,omitempty" example:"business"`
-	CurrentStep     *string               `json:"current_step,omitempty" example:"address"`
-	CompletedSteps  []string              `json:"completed_steps"`
-	NextStep        *string               `json:"next_step,omitempty" example:"address"`
-	Profile         *ProductProfileState  `json:"profile,omitempty"`
-	Address         *ProductAddressState  `json:"address,omitempty"`
-	Business        *ProductBusinessState `json:"business,omitempty"`
+	Status         string                `json:"status" example:"in_progress" enums:"in_progress,completed"`
+	AccountType    *string               `json:"account_type,omitempty" example:"business"`
+	CurrentStep    *string               `json:"current_step,omitempty" example:"address"`
+	CompletedSteps []string              `json:"completed_steps"`
+	NextStep       *string               `json:"next_step,omitempty" example:"address"`
+	Profile        *ProductProfileState  `json:"profile,omitempty"`
+	Address        *ProductAddressState  `json:"address,omitempty"`
+	Business       *ProductBusinessState `json:"business,omitempty"`
 }
 
 // ProductOnboardingStatusEnvelope is a successful status response.
@@ -310,6 +328,36 @@ type IndividualResponse struct {
 // IndividualEnvelope is a successful individual onboarding response.
 type IndividualEnvelope struct {
 	Data IndividualResponse `json:"data"`
-	Meta *apidoc.Meta   `json:"meta,omitempty"`
+	Meta *apidoc.Meta       `json:"meta,omitempty"`
 }
 
+// BusinessRequest is the business onboarding request body.
+type BusinessRequest struct {
+	LegalBusinessName         string `json:"legal_business_name"         example:"Oped Technologies Ltd"`
+	LegalFullName             string `json:"legal_full_name"             example:"Oped Oped"`
+	CountryID                 string `json:"country_id"                  example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
+	CompanyRoleID             string `json:"company_role_id"             example:"60000000-0000-4000-8000-000000000001"`
+	BINumber                  string `json:"bin_number"                  example:"BIN-123456789"`
+	BusinessRegisteredAddress string `json:"business_registered_address" example:"1 High Street, London, UK"`
+	BusinessTypeID            string `json:"business_type_id"            example:"61000000-0000-4000-8000-000000000001"`
+	IndustryID                string `json:"industry_id"                 example:"62000000-0000-4000-8000-000000000001"`
+}
+
+// BusinessResponse is the business onboarding response payload.
+type BusinessResponse struct {
+	UserID                    string `json:"user_id"`
+	LegalBusinessName         string `json:"legal_business_name"`
+	LegalFullName             string `json:"legal_full_name"`
+	CountryID                 string `json:"country_id"`
+	CompanyRoleID             string `json:"company_role_id"`
+	BINumber                  string `json:"bin_number"`
+	BusinessRegisteredAddress string `json:"business_registered_address"`
+	BusinessTypeID            string `json:"business_type_id"`
+	IndustryID                string `json:"industry_id"`
+}
+
+// BusinessEnvelope is a successful business onboarding response.
+type BusinessEnvelope struct {
+	Data BusinessResponse `json:"data"`
+	Meta *apidoc.Meta     `json:"meta,omitempty"`
+}

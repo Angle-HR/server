@@ -211,6 +211,35 @@ func UpdateOrganizationBusiness(
 		ToSQL())
 }
 
+// UpdateOrganizationCatalog returns SQL to save business type and industry on the organization row.
+func UpdateOrganizationCatalog(
+	ownerUserID uuid.UUID,
+	businessTypeID, industryID uuid.UUID,
+) (string, []any, error) {
+	return mustSQL(postgres.Update("organizations").
+		Set("business_type_id", businessTypeID).
+		Set("industry_id", industryID).
+		Where("owner_user_id", "=", ownerUserID).
+		Returning("id").
+		ToSQL())
+}
+
+// UpdateOrganizationRegistration returns SQL to save country, BIN number, and
+// registered address on the organization row.
+func UpdateOrganizationRegistration(
+	ownerUserID uuid.UUID,
+	countryID uuid.UUID,
+	binNumber, registeredAddress string,
+) (string, []any, error) {
+	return mustSQL(postgres.Update("organizations").
+		Set("country_id", countryID).
+		Set("bin_number", binNumber).
+		Set("business_registered_address", registeredAddress).
+		Where("owner_user_id", "=", ownerUserID).
+		Returning("id").
+		ToSQL())
+}
+
 // LookupOrganizationByOwner returns SQL to load organization for a user.
 func LookupOrganizationByOwner(ownerUserID uuid.UUID) (string, []any, error) {
 	return mustSQL(postgres.Select(
@@ -254,6 +283,16 @@ func UpsertAccountAddress(
 		DoUpdate("formatted_address", formattedAddress).
 		DoUpdate("verification_status", "unverified").
 		Back().
+		Returning("id").
+		ToSQL())
+}
+
+// UpdateAccountAddressVerificationStatus returns SQL to save the verification
+// result for a user's address.
+func UpdateAccountAddressVerificationStatus(userID uuid.UUID, status string) (string, []any, error) {
+	return mustSQL(postgres.Update("addresses").
+		Set("verification_status", status).
+		Where("user_id", "=", userID).
 		Returning("id").
 		ToSQL())
 }

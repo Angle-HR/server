@@ -76,7 +76,7 @@ var apiTagDefinitions = []map[string]any{
 	},
 	{
 		"name":          "onboarding/business",
-		"description":   "Business compliance step: business type, industry, employee count. Business accounts only.",
+		"description":   "Business onboarding and compliance: legal business name, legal full name, country, company role, BIN number, registered address, business type, industry, and employee count. Business accounts only.",
 		"x-displayName": "Business",
 	},
 	{

@@ -1794,6 +1794,61 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Saves legal business name, legal full name, country, company role, BIN number, registered address, business type, and industry type for a business account.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "onboarding/business"
+                ],
+                "summary": "Submit business onboarding",
+                "parameters": [
+                    {
+                        "description": "Business onboarding payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.BusinessRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.BusinessEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
             }
         },
         "/onboarding/business-types": {
@@ -2952,6 +3007,86 @@ const docTemplate = `{
                 "verification_session_id": {
                     "type": "string",
                     "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "internal_handler.BusinessEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.BusinessResponse"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_handler.BusinessRequest": {
+            "type": "object",
+            "properties": {
+                "bin_number": {
+                    "type": "string",
+                    "example": "BIN-123456789"
+                },
+                "business_registered_address": {
+                    "type": "string",
+                    "example": "1 High Street, London, UK"
+                },
+                "business_type_id": {
+                    "type": "string",
+                    "example": "61000000-0000-4000-8000-000000000001"
+                },
+                "company_role_id": {
+                    "type": "string",
+                    "example": "60000000-0000-4000-8000-000000000001"
+                },
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "industry_id": {
+                    "type": "string",
+                    "example": "62000000-0000-4000-8000-000000000001"
+                },
+                "legal_business_name": {
+                    "type": "string",
+                    "example": "Oped Technologies Ltd"
+                },
+                "legal_full_name": {
+                    "type": "string",
+                    "example": "Oped Oped"
+                }
+            }
+        },
+        "internal_handler.BusinessResponse": {
+            "type": "object",
+            "properties": {
+                "bin_number": {
+                    "type": "string"
+                },
+                "business_registered_address": {
+                    "type": "string"
+                },
+                "business_type_id": {
+                    "type": "string"
+                },
+                "company_role_id": {
+                    "type": "string"
+                },
+                "country_id": {
+                    "type": "string"
+                },
+                "industry_id": {
+                    "type": "string"
+                },
+                "legal_business_name": {
+                    "type": "string"
+                },
+                "legal_full_name": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
                 }
             }
         },

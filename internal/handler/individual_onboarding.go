@@ -3,19 +3,24 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
-	"github.com/Angle-HR/server/internal/apidoc"
-	"github.com/Angle-HR/server/internal/auth"
-	"github.com/Angle-HR/server/internal/dbrouter"
-	"github.com/Angle-HR/server/internal/query"
-	"github.com/Angle-HR/server/pkg/apperror"
-	"github.com/Angle-HR/server/pkg/response"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/Angle-HR/server/internal/apidoc"
+	"github.com/Angle-HR/server/internal/auth"
+	"github.com/Angle-HR/server/internal/dbrouter"
+	"github.com/Angle-HR/server/internal/onboarding"
+	"github.com/Angle-HR/server/internal/query"
+	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/response"
 )
 
 var _ = apidoc.ErrorEnvelope{}
@@ -145,6 +150,33 @@ func (h *IndividualOnboardingHandler) submitIndividualOnboarding(w http.Response
 		return
 	}
 	if _, err := tx.Exec(ctx, bizSQL, bizArgs...); err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
+	// Advance onboarding progress now that the profile step is complete.
+	progressLookupSQL, progressLookupArgs, err := query.LookupOnboardingProgress(userID)
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+	var currentStep string
+	var completedSteps []string
+	if err := tx.QueryRow(ctx, progressLookupSQL, progressLookupArgs...).Scan(&userID, &currentStep, &completedSteps); err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
+		currentStep, completedSteps = onboarding.InitialProgress()
+	}
+	completedSteps = onboarding.AdvanceCompleted(completedSteps, onboarding.StepProfile)
+	currentStep = onboarding.StepProfile
+	progressSQL, progressArgs, err := query.UpsertOnboardingProgress(userID, currentStep, completedSteps)
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+	if _, err := tx.Exec(ctx, progressSQL, progressArgs...); err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}

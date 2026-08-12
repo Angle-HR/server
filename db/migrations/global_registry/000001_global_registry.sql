@@ -163,24 +163,6 @@ CREATE TRIGGER roles_set_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION set_updated_at();
 
-CREATE TABLE waitlist.business_types (
-    id UUID PRIMARY KEY,
-    name TEXT NOT NULL,
-    slug TEXT NOT NULL UNIQUE,
-    sort_order INTEGER NOT NULL DEFAULT 0,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX business_types_active_sort_idx ON waitlist.business_types (sort_order)
-    WHERE is_active = TRUE;
-
-CREATE TRIGGER business_types_set_updated_at
-    BEFORE UPDATE ON waitlist.business_types
-    FOR EACH ROW
-    EXECUTE FUNCTION set_updated_at();
-
 CREATE TABLE waitlist.team_sizes (
     id UUID PRIMARY KEY,
     label TEXT NOT NULL,
@@ -246,14 +228,6 @@ INSERT INTO waitlist.roles (id, name, slug, emoji, sort_order) VALUES
     ('40000000-0000-4000-8000-000000000006', 'Operations', 'operations', E'⚙️', 6),
     ('40000000-0000-4000-8000-000000000007', 'Others', 'others', NULL, 7);
 
-INSERT INTO waitlist.business_types (id, name, slug, sort_order) VALUES
-    ('70000000-0000-4000-8000-000000000001', 'Early-stage startup', 'early-stage-startup', 1),
-    ('70000000-0000-4000-8000-000000000002', 'Small business (1–50 employees)', 'small-business', 2),
-    ('70000000-0000-4000-8000-000000000003', 'Growing company (51–250 employees)', 'growing-company', 3),
-    ('70000000-0000-4000-8000-000000000004', 'Agency / Studio', 'agency-studio', 4),
-    ('70000000-0000-4000-8000-000000000005', 'Nonprofit', 'nonprofit', 5),
-    ('70000000-0000-4000-8000-000000000006', 'Sole Trader', 'sole-trader', 6);
-
 INSERT INTO waitlist.team_sizes (id, label, min_size, max_size, sort_order) VALUES
     ('50000000-0000-4000-8000-000000000001', 'Just me', 1, 1, 1),
     ('50000000-0000-4000-8000-000000000002', '2-10', 2, 10, 2),
@@ -264,7 +238,6 @@ INSERT INTO waitlist.team_sizes (id, label, min_size, max_size, sort_order) VALU
 -- +goose Down
 -- +goose StatementBegin
 DROP TRIGGER IF EXISTS team_sizes_set_updated_at ON waitlist.team_sizes;
-DROP TRIGGER IF EXISTS business_types_set_updated_at ON waitlist.business_types;
 DROP TRIGGER IF EXISTS roles_set_updated_at ON waitlist.roles;
 DROP TRIGGER IF EXISTS hiring_frustrations_set_updated_at ON waitlist.hiring_frustrations;
 DROP TRIGGER IF EXISTS hiring_tools_set_updated_at ON waitlist.hiring_tools;
@@ -273,7 +246,6 @@ DROP TRIGGER IF EXISTS countries_set_updated_at ON waitlist.countries;
 DROP TRIGGER IF EXISTS users_registry_set_updated_at ON auth.users_registry;
 
 DROP TABLE IF EXISTS waitlist.team_sizes;
-DROP TABLE IF EXISTS waitlist.business_types;
 DROP TABLE IF EXISTS waitlist.roles;
 DROP TABLE IF EXISTS waitlist.hiring_frustrations;
 DROP TABLE IF EXISTS waitlist.hiring_tools;

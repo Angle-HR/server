@@ -6,6 +6,7 @@ const (
 	StepVerifyEmail = "verify_email"
 	StepProfile     = "profile"
 	StepAddress     = "address"
+	StepOnboarding  = "onboarding"
 	StepBusiness    = "business"
 	StepComplete    = "complete"
 )

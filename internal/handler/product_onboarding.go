@@ -72,17 +72,3 @@ func (h *ProductOnboardingHandler) listCompanyRoles(w http.ResponseWriter, r *ht
 		return h.loadCompanyRoles(ctx)
 	})
 }
-
-// verifyAddress godoc
-//
-//	@Summary		Verify address
-//	@Description	Reserved for third-party address verification. Returns 501 until a provider is integrated.
-//	@Tags			onboarding/address
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Failure		401	{object}	apidoc.ErrorEnvelope
-//	@Failure		501	{object}	apidoc.ErrorEnvelope
-//	@Router			/onboarding/address/verify [post]
-func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.Request) {
-	notImplemented(w, r)
-}

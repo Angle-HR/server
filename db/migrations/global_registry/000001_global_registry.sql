@@ -254,7 +254,6 @@ DROP TABLE IF EXISTS auth.tenant_subdomains;
 DROP TABLE IF EXISTS waitlist.countries;
 DROP TABLE IF EXISTS auth.users_registry;
 
-DROP SCHEMA IF EXISTS fluvio;
 DROP SCHEMA IF EXISTS accounts;
 DROP SCHEMA IF EXISTS waitlist;
 DROP SCHEMA IF EXISTS auth;

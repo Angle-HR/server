@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -21,6 +22,7 @@ func NewMiddleware(tokens *TokenService) *Middleware {
 // RequireAuth rejects requests without a valid access token.
 func (m *Middleware) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		slog.Info("auth check", "method", r.Method, "url", r.URL.Path)
 		if m == nil || m.Tokens == nil {
 			response.Error(w, r, apperror.ErrUnauthorized)
 			return
@@ -60,11 +62,23 @@ func (m *Middleware) RequireAuth(next http.Handler) http.Handler {
 	})
 }
 
+// bearerToken extracts a JWT from Authorization.
+// Accepts "Bearer <token>" or a bare token value.
 func bearerToken(header string) string {
-	parts := strings.SplitN(header, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+	header = strings.TrimSpace(header)
+	if header == "" || strings.EqualFold(header, "Bearer") {
 		return ""
 	}
 
-	return strings.TrimSpace(parts[1])
+	parts := strings.SplitN(header, " ", 2)
+	if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+		return strings.TrimSpace(parts[1])
+	}
+
+	// Bare JWT (no scheme prefix).
+	if !strings.Contains(header, " ") {
+		return header
+	}
+
+	return ""
 }

@@ -1,0 +1,14 @@
+
+
+POST  http://localhost:8080/api/v1/onboarding/individual
+
+content-type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyZWdpb24iOiJ1ayIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJzdWIiOiJjMDMxZTEyOC00OWExLTQ3ZTItODQ2MS0yYTExOTZlYjg5ZGYiLCJleHAiOjE3ODYyMTMzNDUsImlhdCI6MTc4NjIwOTc0NX0.USPRCIe0Z7o71RmgvCRQjefOLkSN2mdMaKG9bsvvZ5I
+{
+  "business_type_id": "61000000-0000-4000-8000-000000000001",
+  "country_id": "a1b2c3d4-e5f6-4789-a012-3456789abcde",
+  "first_name": "Oped",
+  "industry_id": "62000000-0000-4000-8000-000000000001",
+  "last_name": "Oped",
+  "no_of_employees": 10
+}

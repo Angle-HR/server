@@ -101,17 +101,22 @@ func (res *RegionResolver) parseJWT(r *http.Request) *jwtClaims {
 		return nil
 	}
 
-	authHeader := r.Header.Get("Authorization")
+	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
 	if authHeader == "" {
 		return nil
 	}
 
+	tokenStr := authHeader
 	parts := strings.SplitN(authHeader, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || strings.TrimSpace(parts[1]) == "" {
+	if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+		tokenStr = strings.TrimSpace(parts[1])
+	} else if strings.Contains(authHeader, " ") {
+		return nil
+	}
+	if tokenStr == "" {
 		return nil
 	}
 
-	tokenStr := strings.TrimSpace(parts[1])
 	claims := &jwtClaims{}
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (any, error) {
 		if token.Method != jwt.SigningMethodHS256 {

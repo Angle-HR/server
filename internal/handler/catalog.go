@@ -34,6 +34,20 @@ func (h *CatalogHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/hiring-frustrations", h.listHiringFrustrations)
 	r.Get("/roles", h.listRoles)
 	r.Get("/team-sizes", h.listTeamSizes)
+	r.Get("/business-types", h.listBusinessTypes)
+}
+
+// WaitlistBusinessType is an active business type option.
+type WaitlistBusinessType struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+	Slug string    `json:"slug"`
+}
+
+// WaitlistBusinessTypeListEnvelope wraps a list of WaitlistBusinessType options.
+type WaitlistBusinessTypeListEnvelope struct {
+	apidoc.Meta
+	Data []WaitlistBusinessType `json:"data"`
 }
 
 // Industry is an active industry option.
@@ -148,6 +162,21 @@ func (h *CatalogHandler) listRoles(w http.ResponseWriter, r *http.Request) {
 func (h *CatalogHandler) listTeamSizes(w http.ResponseWriter, r *http.Request) {
 	h.writeList(w, r, func(ctx context.Context) (any, error) {
 		return h.loadTeamSizes(ctx)
+	})
+}
+
+// listBusinessTypes godoc
+//
+//	@Summary		List business types
+//	@Description	Returns business type options for onboarding.
+//	@Tags			waitlist/reference
+//	@Produce		json
+//	@Success		200	{object}	handler.WaitlistBusinessTypeListEnvelope
+//	@Failure		500	{object}	apidoc.ErrorEnvelope
+//	@Router			/business-types [get]
+func (h *CatalogHandler) listBusinessTypes(w http.ResponseWriter, r *http.Request) {
+	h.writeList(w, r, func(ctx context.Context) (any, error) {
+		return h.loadBusinessTypes(ctx)
 	})
 }
 
@@ -278,6 +307,31 @@ func (h *CatalogHandler) loadTeamSizes(ctx context.Context) ([]TeamSize, error) 
 	for rows.Next() {
 		var item TeamSize
 		if err := rows.Scan(&item.ID, &item.Label, &item.MinSize, &item.MaxSize); err != nil {
+			return nil, err
+		}
+
+		items = append(items, item)
+	}
+
+	return items, rows.Err()
+}
+
+func (h *CatalogHandler) loadBusinessTypes(ctx context.Context) ([]WaitlistBusinessType, error) {
+	sql, args, err := query.ListWaitlistBusinessTypes()
+	if err != nil {
+		return nil, fmt.Errorf("build list business types: %w", err)
+	}
+
+	rows, err := h.GlobalDB.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]WaitlistBusinessType, 0, 8)
+	for rows.Next() {
+		var item WaitlistBusinessType
+		if err := rows.Scan(&item.ID, &item.Name, &item.Slug); err != nil {
 			return nil, err
 		}
 

@@ -105,6 +105,8 @@ func Run() error {
 	onboardingHandler := handler.NewOnboardingHandler(dbRouter, globalPool, fluvioClient)
 	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, cfg.AuthDefaultRegion)
 	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient)
+	individualOnboardingHandler := handler.NewIndividualOnboardingHandler(dbRouter, globalPool)
+	businessOnboardingHandler := handler.NewBusinessOnboardingHandler(dbRouter, globalPool)
 	adminHandler := handler.NewAdminHandler(adminStore, dbRouter, globalPool, tokenService, fluvioClient, fluvioClient)
 
 	router := chi.NewRouter()
@@ -148,6 +150,8 @@ func Run() error {
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.RequireAuth)
 			productOnboardingHandler.RegisterProtectedRoutes(r)
+			individualOnboardingHandler.RegisterProtectedRoutes(r)
+			businessOnboardingHandler.RegisterProtectedRoutes(r)
 		})
 
 		r.Route("/admin", func(r chi.Router) {

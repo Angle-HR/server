@@ -13,7 +13,7 @@
 //	@securityDefinitions.apikey	BearerAuth
 //	@in							header
 //	@name						Authorization
-//	@description				Bearer JWT access token
+//	@description				JWT access token. Send the raw token, or optionally prefix with "Bearer ".
 //
 // Runtime serving overrides host and schemes from PUBLIC_API_URL (see internal/docs).
 package main

@@ -718,6 +718,86 @@
             },
             "type": "object"
         },
+        "internal_handler.BusinessEnvelope": {
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.BusinessResponse"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.BusinessRequest": {
+            "properties": {
+                "bin_number": {
+                    "example": "BIN-123456789",
+                    "type": "string"
+                },
+                "business_registered_address": {
+                    "example": "1 High Street, London, UK",
+                    "type": "string"
+                },
+                "business_type_id": {
+                    "example": "61000000-0000-4000-8000-000000000001",
+                    "type": "string"
+                },
+                "company_role_id": {
+                    "example": "60000000-0000-4000-8000-000000000001",
+                    "type": "string"
+                },
+                "country_id": {
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde",
+                    "type": "string"
+                },
+                "industry_id": {
+                    "example": "62000000-0000-4000-8000-000000000001",
+                    "type": "string"
+                },
+                "legal_business_name": {
+                    "example": "Oped Technologies Ltd",
+                    "type": "string"
+                },
+                "legal_full_name": {
+                    "example": "Oped Oped",
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.BusinessResponse": {
+            "properties": {
+                "bin_number": {
+                    "type": "string"
+                },
+                "business_registered_address": {
+                    "type": "string"
+                },
+                "business_type_id": {
+                    "type": "string"
+                },
+                "company_role_id": {
+                    "type": "string"
+                },
+                "country_id": {
+                    "type": "string"
+                },
+                "industry_id": {
+                    "type": "string"
+                },
+                "legal_business_name": {
+                    "type": "string"
+                },
+                "legal_full_name": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
         "internal_handler.BusinessType": {
             "properties": {
                 "id": {
@@ -888,6 +968,72 @@
                 },
                 "meta": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.IndividualEnvelope": {
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.IndividualResponse"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.IndividualRequest": {
+            "properties": {
+                "business_type_id": {
+                    "example": "61000000-0000-4000-8000-000000000001",
+                    "type": "string"
+                },
+                "country_id": {
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde",
+                    "type": "string"
+                },
+                "first_name": {
+                    "example": "Jerry",
+                    "type": "string"
+                },
+                "industry_id": {
+                    "example": "62000000-0000-4000-8000-000000000001",
+                    "type": "string"
+                },
+                "last_name": {
+                    "example": "Oluwasegun",
+                    "type": "string"
+                },
+                "no_of_employees": {
+                    "example": 10,
+                    "type": "integer"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.IndividualResponse": {
+            "properties": {
+                "business_type_id": {
+                    "type": "string"
+                },
+                "country_id": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "industry_id": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "no_of_employees": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "string"
                 }
             },
             "type": "object"
@@ -1541,6 +1687,41 @@
                 },
                 "meta": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.WaitlistBusinessType": {
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.WaitlistBusinessTypeListEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.WaitlistBusinessType"
+                    },
+                    "type": "array"
+                },
+                "has_more": {
+                    "type": "boolean"
+                },
+                "next_cursor": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "example": "abc123",
+                    "type": "string"
                 }
             },
             "type": "object"
@@ -3340,6 +3521,32 @@
                 ]
             }
         },
+        "/business-types": {
+            "get": {
+                "description": "Returns business type options for onboarding.",
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.WaitlistBusinessTypeListEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "summary": "List business types",
+                "tags": [
+                    "waitlist/reference"
+                ]
+            }
+        },
         "/countries": {
             "get": {
                 "description": "Returns active countries for the waitlist region dropdown.",
@@ -3533,6 +3740,61 @@
             }
         },
         "/onboarding/business": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "description": "Saves legal business name, legal full name, country, company role, BIN number, registered address, business type, and industry type for a business account.",
+                "parameters": [
+                    {
+                        "description": "Business onboarding payload",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.BusinessRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.BusinessEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Submit business onboarding",
+                "tags": [
+                    "onboarding/business"
+                ]
+            },
             "put": {
                 "consumes": [
                     "application/json"
@@ -3687,6 +3949,63 @@
                 "summary": "Complete onboarding",
                 "tags": [
                     "onboarding/session"
+                ]
+            }
+        },
+        "/onboarding/individual": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "description": "Saves first name, last name, country of residence, business type, industry type, and number of employees for an individual account.",
+                "parameters": [
+                    {
+                        "description": "Individual onboarding payload",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.IndividualRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.IndividualEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Submit individual onboarding",
+                "tags": [
+                    "onboarding/individual"
                 ]
             }
         },
@@ -3975,7 +4294,7 @@
     },
     "securityDefinitions": {
         "BearerAuth": {
-            "description": "Bearer JWT access token",
+            "description": "JWT access token. Send the raw token, or optionally prefix with \"Bearer \".",
             "in": "header",
             "name": "Authorization",
             "type": "apiKey"
@@ -4019,9 +4338,14 @@
             "x-displayName": "Address"
         },
         {
-            "description": "Business compliance step: business type, industry, employee count. Business accounts only.",
+            "description": "Business onboarding and compliance: legal business name, legal full name, country, company role, BIN number, registered address, business type, industry, and employee count. Business accounts only.",
             "name": "onboarding/business",
             "x-displayName": "Business"
+        },
+        {
+            "description": "Saves first name, last name, country, business type, industry, and number of employees for an individual account.",
+            "name": "onboarding/individual",
+            "x-displayName": "Individual"
         },
         {
             "description": "Onboarding progress and completion. Individual: verify_email → profile → address. Business: also requires business step.",
@@ -4086,6 +4410,7 @@
                 "onboarding/profile",
                 "onboarding/address",
                 "onboarding/business",
+                "onboarding/individual",
                 "onboarding/session"
             ]
         },

@@ -15,7 +15,6 @@ import (
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/query"
 	"github.com/Angle-HR/server/internal/region"
-	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
 )
 
@@ -101,37 +100,6 @@ func (h *CountriesHandler) loadCountries(ctx context.Context) ([]Country, error)
 	return countries, nil
 }
 
-func lookupCountry(ctx context.Context, db globalDB, countryID uuid.UUID) (Country, error) {
-	sql, args, err := query.LookupCountryByID(countryID)
-	if err != nil {
-		return Country{}, fmt.Errorf("build lookup country query: %w", err)
-	}
-
-	row := db.QueryRow(ctx, sql, args...)
-
-	country, err := scanCountry(row)
-	if err != nil {
-		if isCountryNotFound(err) {
-			return Country{}, apperror.NewWithDetails(
-				apperror.CodeValidationError,
-				apperror.MsgInvalidCountryID,
-				map[string]any{"field": "country_id"},
-			)
-		}
-
-		return Country{}, err
-	}
-
-	if !region.Valid(country.Region) {
-		return Country{}, apperror.NewWithDetails(
-			apperror.CodeValidationError,
-			apperror.MsgInvalidRegion,
-			map[string]any{"field": "country_id"},
-		)
-	}
-
-	return country, nil
-}
 
 func isCountryNotFound(err error) bool {
 	for err != nil {

@@ -84,14 +84,13 @@ func ListWaitlistBusinessTypes() (string, []any, error) {
 
 // InsertWaitlistSignup returns SQL and args for a regional waitlist signup row.
 func InsertWaitlistSignup(
-	fullName, email string,
-	countryID uuid.UUID,
+	email string,
 	region, regionSource string,
 	metadata []byte,
 ) (string, []any, error) {
 	return mustSQL(postgres.Insert("waitlist").
-		Columns("full_name", "email", "country_id", "region", "region_source", "metadata").
-		Values(fullName, email, countryID, region, regionSource, metadata).
+		Columns("email", "region", "region_source", "metadata").
+		Values(email, region, regionSource, metadata).
 		OnConflict("email").DoNothing().
 		Returning("uuid").
 		ToSQL())

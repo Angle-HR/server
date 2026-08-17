@@ -14,8 +14,9 @@ import (
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/mailer"
-	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/query"
+	"github.com/Angle-HR/server/internal/queue"
+	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
 	"github.com/go-chi/chi/v5"
@@ -27,7 +28,10 @@ import (
 
 var _ = apidoc.ErrorEnvelope{}
 
-const regionSourceExplicit = "explicit"
+const (
+	regionSourceExplicit = "explicit"
+	regionSourceInferred = "inferred"
+)
 
 type jobEnqueuer interface {
 	EnqueueTx(ctx context.Context, tx fluvio.Tx, args fluvio.JobArgs, opts ...fluvio.EnqueueOption) (*fluvio.JobRow, error)
@@ -35,20 +39,22 @@ type jobEnqueuer interface {
 
 // WaitlistHandler handles waitlist signup requests.
 type WaitlistHandler struct {
-	Router   *dbrouter.DBRouter
-	GlobalDB globalDB
-	Enqueuer jobEnqueuer
+	Router        *dbrouter.DBRouter
+	GlobalDB      globalDB
+	Enqueuer      jobEnqueuer
+	DefaultRegion region.Region
 
 	validate *validator.Validate
 }
 
 // NewWaitlistHandler returns a waitlist signup handler.
-func NewWaitlistHandler(router *dbrouter.DBRouter, globalDB globalDB, enqueuer jobEnqueuer) *WaitlistHandler {
+func NewWaitlistHandler(router *dbrouter.DBRouter, globalDB globalDB, enqueuer jobEnqueuer, defaultRegion region.Region) *WaitlistHandler {
 	return &WaitlistHandler{
-		Router:   router,
-		GlobalDB: globalDB,
-		Enqueuer: enqueuer,
-		validate: validator.New(),
+		Router:        router,
+		GlobalDB:      globalDB,
+		Enqueuer:      enqueuer,
+		DefaultRegion: defaultRegion,
+		validate:      validator.New(),
 	}
 }
 
@@ -58,15 +64,13 @@ func (h *WaitlistHandler) RegisterRoutes(r chi.Router) {
 }
 
 type signupRequest struct {
-	FullName  string `json:"full_name" validate:"required,max=120"`
-	Email     string `json:"email" validate:"required,email,max=254"`
-	CountryID string `json:"country_id" validate:"required,uuid"`
+	Email string `json:"email" validate:"required,email,max=254"`
 }
 
 // handle godoc
 //
 //	@Summary		Join waitlist
-//	@Description	Registers a signup for the regional waitlist and global waitlist registry.
+//	@Description	Collects an email for the waitlist and writes regional plus global registry rows.
 //	@Tags			waitlist/signup
 //	@Accept			json
 //	@Produce		json
@@ -90,30 +94,7 @@ func (h *WaitlistHandler) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	countryID, err := uuid.Parse(req.CountryID)
-	if err != nil {
-		response.Error(w, r, apperror.NewWithDetails(
-			apperror.CodeValidationError,
-			apperror.MsgInvalidCountryID,
-			map[string]any{"field": "country_id"},
-		))
-		return
-	}
-
-	country, err := lookupCountry(r.Context(), h.GlobalDB, countryID)
-	if err != nil {
-		var appErr *apperror.AppError
-		if errors.As(err, &appErr) {
-			response.Error(w, r, err)
-			return
-		}
-
-		response.Error(w, r, fmt.Errorf("lookup country: %w", err))
-		return
-	}
-
-	waitlistToken, err := h.signup(r.Context(), country, req.FullName, req.Email)
-	if err != nil {
+	if err := h.signup(r.Context(), req.Email); err != nil {
 		if errors.Is(err, apperror.ErrConflict) {
 			response.Error(w, r, err)
 			return
@@ -131,41 +112,34 @@ func (h *WaitlistHandler) handle(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("waitlist signup",
 		"email", maskEmail(req.Email),
-		"region", country.Region,
-		"country_id", country.ID,
+		"region", h.DefaultRegion,
 	)
 
 	response.Success(w, r, http.StatusCreated, map[string]string{
 		"message": "You're on the list!",
-		"region":  string(country.Region),
-		"token":   waitlistToken.String(),
+		"region":  string(h.DefaultRegion),
 	})
 }
 
 func (r *signupRequest) trim() {
-	r.FullName = strings.TrimSpace(r.FullName)
 	r.Email = strings.TrimSpace(r.Email)
-	r.CountryID = strings.TrimSpace(r.CountryID)
 }
 
-func (h *WaitlistHandler) signup(
-	ctx context.Context,
-	country Country,
-	fullName, email string) (uuid.UUID, error) {
-	pool, err := h.Router.DB(country.Region)
+func (h *WaitlistHandler) signup(ctx context.Context, email string) error {
+	pool, err := h.Router.DB(h.DefaultRegion)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("regional pool: %w", err)
+		return fmt.Errorf("regional pool: %w", err)
 	}
 
 	tx, err := pool.Begin(ctx)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("begin waitlist transaction: %w", err)
+		return fmt.Errorf("begin waitlist transaction: %w", err)
 	}
 	defer rollbackWaitlistTx(ctx, tx)
 
 	gtx, err := h.GlobalDB.Begin(ctx)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("begin global transaction: %w", err)
+		return fmt.Errorf("begin global transaction: %w", err)
 	}
 	defer func() {
 		_ = gtx.Rollback(ctx)
@@ -173,61 +147,57 @@ func (h *WaitlistHandler) signup(
 
 	var waitlistToken uuid.UUID
 	insertSQL, insertArgs, err := query.InsertWaitlistSignup(
-		fullName,
 		email,
-		country.ID,
-		string(country.Region),
-		regionSourceExplicit,
+		string(h.DefaultRegion),
+		regionSourceInferred,
 		[]byte("{}"),
 	)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("build waitlist insert: %w", err)
+		return fmt.Errorf("build waitlist insert: %w", err)
 	}
 
 	scanErr := tx.QueryRow(ctx, insertSQL, insertArgs...).Scan(&waitlistToken)
 	if scanErr != nil {
 		if isDuplicateWaitlistSignup(scanErr) {
-			return uuid.Nil, apperror.ErrConflict
+			return apperror.ErrConflict
 		}
 
-		return uuid.Nil, fmt.Errorf("insert regional waitlist: %w", scanErr)
+		return fmt.Errorf("insert regional waitlist: %w", scanErr)
 	}
 
 	registrySQL, registryArgs, err := query.InsertWaitlistRegistry(
 		email,
-		string(country.Region),
-		regionSourceExplicit,
+		string(h.DefaultRegion),
+		regionSourceInferred,
 		waitlistToken,
 	)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("build waitlist registry insert: %w", err)
+		return fmt.Errorf("build waitlist registry insert: %w", err)
 	}
 
 	if _, err := gtx.Exec(ctx, registrySQL, registryArgs...); err != nil {
-		return uuid.Nil, fmt.Errorf("insert waitlist registry: %w", err)
+		return fmt.Errorf("insert waitlist registry: %w", err)
 	}
 
 	if h.Enqueuer != nil {
 		_, err = h.Enqueuer.EnqueueTx(ctx, gtx, mailer.EmailArgs{
 			Type:      "waitlist_confirmation",
 			Recipient: email,
-			FullName:  fullName,
-			Token:     waitlistToken.String(),
 		}, queue.EmailEnqueueOptions()...)
 		if err != nil {
-			return uuid.Nil, fmt.Errorf("enqueue waitlist confirmation email: %w", err)
+			return fmt.Errorf("enqueue waitlist confirmation email: %w", err)
 		}
 	}
 
 	if err := gtx.Commit(ctx); err != nil {
-		return uuid.Nil, fmt.Errorf("commit global transaction: %w", err)
+		return fmt.Errorf("commit global transaction: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return uuid.Nil, fmt.Errorf("commit waitlist transaction: %w", err)
+		return fmt.Errorf("commit waitlist transaction: %w", err)
 	}
 
-	return waitlistToken, nil
+	return nil
 }
 
 func isDuplicateWaitlistSignup(err error) bool {

@@ -94,11 +94,6 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 
 	switch args.Type {
 	case TypeWaitlistConfirmation:
-		if m.cfg.AppURL == "" {
-			err := fmt.Errorf("APP_URL is required for waitlist_confirmation emails")
-			m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
-			return err
-		}
 		templateName = "waitlist_confirmation.html"
 		subject = "You're on the Angle HR waitlist"
 	case TypeMoreInfoAck:

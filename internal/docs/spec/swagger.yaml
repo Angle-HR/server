@@ -604,46 +604,6 @@ definitions:
                 example: united-kingdom
                 type: string
         type: object
-    internal_handler.HiringFrustration:
-        properties:
-            description:
-                type: string
-            emoji:
-                type: string
-            id:
-                type: string
-            slug:
-                type: string
-        type: object
-    internal_handler.HiringFrustrationListEnvelope:
-        properties:
-            data:
-                items:
-                    $ref: '#/definitions/internal_handler.HiringFrustration'
-                type: array
-            meta:
-                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
-        type: object
-    internal_handler.HiringTool:
-        properties:
-            icon_url:
-                type: string
-            id:
-                type: string
-            name:
-                type: string
-            slug:
-                type: string
-        type: object
-    internal_handler.HiringToolListEnvelope:
-        properties:
-            data:
-                items:
-                    $ref: '#/definitions/internal_handler.HiringTool'
-                type: array
-            meta:
-                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
-        type: object
     internal_handler.IndividualEnvelope:
         properties:
             data:
@@ -688,39 +648,6 @@ definitions:
                 type: integer
             user_id:
                 type: string
-        type: object
-    internal_handler.Industry:
-        properties:
-            emoji:
-                type: string
-            id:
-                type: string
-            name:
-                type: string
-            slug:
-                type: string
-        type: object
-    internal_handler.IndustryListEnvelope:
-        properties:
-            data:
-                items:
-                    $ref: '#/definitions/internal_handler.Industry'
-                type: array
-            meta:
-                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
-        type: object
-    internal_handler.OnboardingData:
-        properties:
-            message:
-                example: Thanks for telling us more!
-                type: string
-        type: object
-    internal_handler.OnboardingEnvelope:
-        properties:
-            data:
-                $ref: '#/definitions/internal_handler.OnboardingData'
-            meta:
-                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
         type: object
     internal_handler.OnboardingIndustry:
         properties:
@@ -767,38 +694,6 @@ definitions:
                     - completed
                 example: in_progress
                 type: string
-        type: object
-    internal_handler.OnboardingRequest:
-        properties:
-            frustration_ids:
-                items:
-                    type: string
-                type: array
-            industry_ids:
-                items:
-                    type: string
-                type: array
-            other_frustration:
-                type: string
-            other_industry:
-                type: string
-            other_tool:
-                type: string
-            role_id:
-                type: string
-            team_size_id:
-                type: string
-            token:
-                example: 550e8400-e29b-41d4-a716-446655440000
-                type: string
-            tool_ids:
-                items:
-                    type: string
-                type: array
-            wants_early_access:
-                type: boolean
-            wants_user_testing:
-                type: boolean
         type: object
     internal_handler.ProductAddressData:
         properties:
@@ -1059,26 +954,6 @@ definitions:
                 example: angle
                 type: string
         type: object
-    internal_handler.Role:
-        properties:
-            emoji:
-                type: string
-            id:
-                type: string
-            name:
-                type: string
-            slug:
-                type: string
-        type: object
-    internal_handler.RoleListEnvelope:
-        properties:
-            data:
-                items:
-                    $ref: '#/definitions/internal_handler.Role'
-                type: array
-            meta:
-                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
-        type: object
     internal_handler.SignupData:
         properties:
             message:
@@ -1086,9 +961,6 @@ definitions:
                 type: string
             region:
                 example: uk
-                type: string
-            token:
-                example: 550e8400-e29b-41d4-a716-446655440000
                 type: string
         type: object
     internal_handler.SignupEnvelope:
@@ -1100,57 +972,42 @@ definitions:
         type: object
     internal_handler.SignupRequest:
         properties:
-            country_id:
-                example: a1b2c3d4-e5f6-4789-a012-3456789abcde
-                type: string
             email:
                 example: jerry@example.com
                 type: string
-            full_name:
-                example: Jerry
-                type: string
         type: object
-    internal_handler.TeamSize:
-        properties:
-            id:
-                type: string
-            label:
-                type: string
-            max_size:
-                type: integer
-            min_size:
-                type: integer
-        type: object
-    internal_handler.TeamSizeListEnvelope:
+    internal_handler.VerifyAddressEnvelope:
         properties:
             data:
-                items:
-                    $ref: '#/definitions/internal_handler.TeamSize'
-                type: array
+                $ref: '#/definitions/internal_handler.VerifyAddressResponse'
             meta:
                 $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
         type: object
-    internal_handler.WaitlistBusinessType:
+    internal_handler.VerifyAddressResponse:
         properties:
-            id:
+            city:
+                example: London
                 type: string
-            name:
+            country_id:
+                example: a1b2c3d4-e5f6-4789-a012-3456789abcde
                 type: string
-            slug:
+            line_1:
+                example: 10 Downing Street
                 type: string
-        type: object
-    internal_handler.WaitlistBusinessTypeListEnvelope:
-        properties:
-            data:
-                items:
-                    $ref: '#/definitions/internal_handler.WaitlistBusinessType'
-                type: array
-            has_more:
-                type: boolean
-            next_cursor:
+            line_2:
                 type: string
-            request_id:
-                example: abc123
+            post_code:
+                example: SW1A 2AA
+                type: string
+            state_or_county:
+                example: Greater London
+                type: string
+            verification_status:
+                enum:
+                    - verified
+                    - failed
+                    - unverified
+                example: verified
                 type: string
         type: object
     internal_handler.adminJobView:
@@ -2300,26 +2157,9 @@ paths:
             summary: Verify email
             tags:
                 - auth
-    /business-types:
-        get:
-            description: Returns business type options for onboarding.
-            produces:
-                - application/json
-            responses:
-                "200":
-                    description: OK
-                    schema:
-                        $ref: '#/definitions/internal_handler.WaitlistBusinessTypeListEnvelope'
-                "500":
-                    description: Internal Server Error
-                    schema:
-                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
-            summary: List business types
-            tags:
-                - waitlist/reference
     /countries:
         get:
-            description: Returns active countries for the waitlist region dropdown.
+            description: Returns active countries for product onboarding.
             produces:
                 - application/json
             responses:
@@ -2332,57 +2172,6 @@ paths:
                     schema:
                         $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
             summary: List countries
-            tags:
-                - waitlist/reference
-    /hiring-frustrations:
-        get:
-            description: Returns active hiring frustration options for onboarding.
-            produces:
-                - application/json
-            responses:
-                "200":
-                    description: OK
-                    schema:
-                        $ref: '#/definitions/internal_handler.HiringFrustrationListEnvelope'
-                "500":
-                    description: Internal Server Error
-                    schema:
-                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
-            summary: List hiring frustrations
-            tags:
-                - waitlist/reference
-    /hiring-tools:
-        get:
-            description: Returns active hiring tool options for onboarding.
-            produces:
-                - application/json
-            responses:
-                "200":
-                    description: OK
-                    schema:
-                        $ref: '#/definitions/internal_handler.HiringToolListEnvelope'
-                "500":
-                    description: Internal Server Error
-                    schema:
-                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
-            summary: List hiring tools
-            tags:
-                - waitlist/reference
-    /industries:
-        get:
-            description: Returns active industry options for onboarding.
-            produces:
-                - application/json
-            responses:
-                "200":
-                    description: OK
-                    schema:
-                        $ref: '#/definitions/internal_handler.IndustryListEnvelope'
-                "500":
-                    description: Internal Server Error
-                    schema:
-                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
-            summary: List industries
             tags:
                 - waitlist/reference
     /onboarding/address:
@@ -2423,12 +2212,24 @@ paths:
                 - onboarding/address
     /onboarding/address/verify:
         post:
-            description: Reserved for third-party address verification. Returns 501 until a provider is integrated.
+            description: Verifies the saved workspace address against a third-party provider. Returns 501 until a provider is integrated (see ProductOnboardingHandler.AddressProvider).
             produces:
                 - application/json
             responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.VerifyAddressEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
                 "401":
                     description: Unauthorized
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "500":
+                    description: Internal Server Error
                     schema:
                         $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
                 "501":
@@ -2688,45 +2489,11 @@ paths:
             summary: Get onboarding status
             tags:
                 - onboarding/session
-    /roles:
-        get:
-            description: Returns active role options for onboarding.
-            produces:
-                - application/json
-            responses:
-                "200":
-                    description: OK
-                    schema:
-                        $ref: '#/definitions/internal_handler.RoleListEnvelope'
-                "500":
-                    description: Internal Server Error
-                    schema:
-                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
-            summary: List roles
-            tags:
-                - waitlist/reference
-    /team-sizes:
-        get:
-            description: Returns team size band options for onboarding.
-            produces:
-                - application/json
-            responses:
-                "200":
-                    description: OK
-                    schema:
-                        $ref: '#/definitions/internal_handler.TeamSizeListEnvelope'
-                "500":
-                    description: Internal Server Error
-                    schema:
-                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
-            summary: List team sizes
-            tags:
-                - waitlist/reference
     /waitlist:
         post:
             consumes:
                 - application/json
-            description: Registers a signup for the regional waitlist and global waitlist registry.
+            description: Collects an email for the waitlist and writes regional plus global registry rows.
             parameters:
                 - description: Signup payload
                   in: body
@@ -2756,44 +2523,6 @@ paths:
             summary: Join waitlist
             tags:
                 - waitlist/signup
-    /waitlist/onboarding:
-        post:
-            consumes:
-                - application/json
-            description: Saves the full onboarding form for a waitlist signup token.
-            parameters:
-                - description: Onboarding payload
-                  in: body
-                  name: body
-                  required: true
-                  schema:
-                    $ref: '#/definitions/internal_handler.OnboardingRequest'
-            produces:
-                - application/json
-            responses:
-                "201":
-                    description: Created
-                    schema:
-                        $ref: '#/definitions/internal_handler.OnboardingEnvelope'
-                "400":
-                    description: Bad Request
-                    schema:
-                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
-                "404":
-                    description: Not Found
-                    schema:
-                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
-                "409":
-                    description: Conflict
-                    schema:
-                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
-                "500":
-                    description: Internal Server Error
-                    schema:
-                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
-            summary: Submit waitlist onboarding form
-            tags:
-                - waitlist/onboarding
 securityDefinitions:
     BearerAuth:
         description: JWT access token. Send the raw token, or optionally prefix with "Bearer ".
@@ -2802,15 +2531,12 @@ securityDefinitions:
         type: apiKey
 swagger: "2.0"
 tags:
-    - description: 'Reference data for waitlist forms: countries, industries, hiring tools, roles, and team sizes.'
+    - description: 'Reference data for waitlist and onboarding forms: countries.'
       name: waitlist/reference
       x-displayName: Reference
-    - description: Initial waitlist registration. Creates a regional waitlist entry and global users_registry row.
+    - description: Email-only waitlist registration. Creates a regional waitlist entry and global waitlist.registry row.
       name: waitlist/signup
       x-displayName: Signup
-    - description: Waitlist onboarding form submission after signup (distinct from product onboarding).
-      name: waitlist/onboarding
-      x-displayName: Waitlist onboarding
     - description: Product signup, 6-digit email verification (OTP expires in 300s, resend cooldown 30s), login, and token refresh.
       name: auth
       x-displayName: Auth
@@ -2861,7 +2587,6 @@ x-tagGroups:
       tags:
         - waitlist/reference
         - waitlist/signup
-        - waitlist/onboarding
     - name: Onboarding
       tags:
         - auth

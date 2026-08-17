@@ -100,9 +100,7 @@ func Run() error {
 	adminMiddleware := auth.NewAdminMiddleware(tokenService, adminStore)
 
 	countriesHandler := handler.NewCountriesHandler(globalPool)
-	catalogHandler := handler.NewCatalogHandler(globalPool)
-	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, fluvioClient)
-	onboardingHandler := handler.NewOnboardingHandler(dbRouter, globalPool, fluvioClient)
+	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, fluvioClient, cfg.AuthDefaultRegion)
 	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, cfg.AuthDefaultRegion)
 	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient)
 	individualOnboardingHandler := handler.NewIndividualOnboardingHandler(dbRouter, globalPool)
@@ -142,9 +140,7 @@ func Run() error {
 
 	router.Route("/api/v1", func(r chi.Router) {
 		countriesHandler.RegisterRoutes(r)
-		catalogHandler.RegisterRoutes(r)
 		waitlistHandler.RegisterRoutes(r)
-		onboardingHandler.RegisterRoutes(r)
 		r.Route("/auth", authHandler.RegisterRoutes)
 		productOnboardingHandler.RegisterRoutes(r)
 		r.Group(func(r chi.Router) {

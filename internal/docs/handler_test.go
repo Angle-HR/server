@@ -53,7 +53,6 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 	assertTagGroup(t, groups[0], "Waitlist", []string{
 		"waitlist/reference",
 		"waitlist/signup",
-		"waitlist/onboarding",
 	})
 	assertTagGroup(t, groups[1], "Onboarding", []string{
 		"auth",
@@ -61,6 +60,7 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 		"onboarding/profile",
 		"onboarding/address",
 		"onboarding/business",
+		"onboarding/individual",
 		"onboarding/session",
 	})
 	assertTagGroup(t, groups[2], "Admin", []string{
@@ -81,12 +81,12 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 	wantTagNames := []string{
 		"waitlist/reference",
 		"waitlist/signup",
-		"waitlist/onboarding",
 		"auth",
 		"onboarding/reference",
 		"onboarding/profile",
 		"onboarding/address",
 		"onboarding/business",
+		"onboarding/individual",
 		"onboarding/session",
 		"admin/auth",
 		"admin/waitlist",
@@ -108,14 +108,6 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 		if tagDef["x-displayName"] == nil || tagDef["x-displayName"] == "" {
 			t.Fatalf("tags[%d] x-displayName: missing", i)
 		}
-	}
-
-	waitlistOnboarding, ok := tagDefs[2].(map[string]any)
-	if !ok {
-		t.Fatalf("tags[2]: got %T, want map[string]any", tagDefs[2])
-	}
-	if waitlistOnboarding["x-displayName"] != "Waitlist onboarding" {
-		t.Fatalf("waitlist/onboarding display name: got %v, want Waitlist onboarding", waitlistOnboarding["x-displayName"])
 	}
 }
 

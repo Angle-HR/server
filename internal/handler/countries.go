@@ -56,7 +56,7 @@ func (h *CountriesHandler) RegisterRoutes(r chi.Router) {
 // list godoc
 //
 //	@Summary		List countries
-//	@Description	Returns active countries for the waitlist region dropdown.
+//	@Description	Returns active countries for product onboarding.
 //	@Tags			waitlist/reference
 //	@Produce		json
 //	@Success		200	{object}	handler.CountriesEnvelope

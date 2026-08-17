@@ -48,17 +48,19 @@ func TestLookupCountryByIDSQL(t *testing.T) {
 func TestInsertWaitlistSignupSQL(t *testing.T) {
 	t.Parallel()
 
-	id := uuid.MustParse("a1b2c3d4-e5f6-4789-a012-3456789abcde")
-	sql, args, err := InsertWaitlistSignup("Jerry", "jane@acme.com", id, "uk", "explicit", []byte("{}"))
+	sql, args, err := InsertWaitlistSignup("jane@acme.com", "uk", "inferred", []byte("{}"))
 	if err != nil {
 		t.Fatalf("InsertWaitlistSignup: %v", err)
 	}
 
-	if len(args) != 6 {
+	if len(args) != 4 {
 		t.Fatalf("args: got %v", args)
 	}
 
 	if !strings.Contains(sql, `INSERT INTO "waitlist"`) {
+		t.Fatalf("sql: %q", sql)
+	}
+	if !strings.Contains(sql, `"email", "region", "region_source", "metadata"`) {
 		t.Fatalf("sql: %q", sql)
 	}
 	if !strings.Contains(sql, `ON CONFLICT ("email") DO NOTHING RETURNING "uuid"`) {

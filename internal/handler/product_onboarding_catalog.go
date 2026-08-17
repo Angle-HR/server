@@ -11,6 +11,8 @@ import (
 	"github.com/Angle-HR/server/pkg/response"
 )
 
+const catalogCacheControl = "public, max-age=300"
+
 func (h *ProductOnboardingHandler) writeCatalogList(w http.ResponseWriter, r *http.Request, load func(context.Context) (any, error)) {
 	items, err := load(r.Context())
 	if err != nil {

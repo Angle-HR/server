@@ -398,6 +398,7 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 		},
 	})
 }
+
 // verifyAddress godoc
 //
 //	@Summary		Verify address
@@ -1001,4 +1002,12 @@ func workspaceSlug(email string) string {
 func isUUID(value string) bool {
 	_, err := uuid.Parse(value)
 	return err == nil
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+
+	return *value
 }

@@ -1521,35 +1521,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/business-types": {
-            "get": {
-                "description": "Returns business type options for onboarding.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "waitlist/reference"
-                ],
-                "summary": "List business types",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.WaitlistBusinessTypeListEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
         "/countries": {
             "get": {
-                "description": "Returns active countries for the waitlist region dropdown.",
+                "description": "Returns active countries for product onboarding.",
                 "produces": [
                     "application/json"
                 ],
@@ -1562,84 +1536,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/internal_handler.CountriesEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/hiring-frustrations": {
-            "get": {
-                "description": "Returns active hiring frustration options for onboarding.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "waitlist/reference"
-                ],
-                "summary": "List hiring frustrations",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.HiringFrustrationListEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/hiring-tools": {
-            "get": {
-                "description": "Returns active hiring tool options for onboarding.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "waitlist/reference"
-                ],
-                "summary": "List hiring tools",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.HiringToolListEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/industries": {
-            "get": {
-                "description": "Returns active industry options for onboarding.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "waitlist/reference"
-                ],
-                "summary": "List industries",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.IndustryListEnvelope"
                         }
                     },
                     "500": {
@@ -1715,7 +1611,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Reserved for third-party address verification. Returns 501 until a provider is integrated.",
+                "description": "Verifies the saved workspace address against a third-party provider. Returns 501 until a provider is integrated (see ProductOnboardingHandler.AddressProvider).",
                 "produces": [
                     "application/json"
                 ],
@@ -1724,8 +1620,26 @@ const docTemplate = `{
                 ],
                 "summary": "Verify address",
                 "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.VerifyAddressEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -2129,61 +2043,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/roles": {
-            "get": {
-                "description": "Returns active role options for onboarding.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "waitlist/reference"
-                ],
-                "summary": "List roles",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.RoleListEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/team-sizes": {
-            "get": {
-                "description": "Returns team size band options for onboarding.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "waitlist/reference"
-                ],
-                "summary": "List team sizes",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.TeamSizeListEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
         "/waitlist": {
             "post": {
-                "description": "Registers a signup for the regional waitlist and global waitlist registry.",
+                "description": "Collects an email for the waitlist and writes regional plus global registry rows.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2214,64 +2076,6 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/waitlist/onboarding": {
-            "post": {
-                "description": "Saves the full onboarding form for a waitlist signup token.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "waitlist/onboarding"
-                ],
-                "summary": "Submit waitlist onboarding form",
-                "parameters": [
-                    {
-                        "description": "Onboarding payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.OnboardingRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.OnboardingEnvelope"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -3202,68 +3006,6 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_handler.HiringFrustration": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "emoji": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.HiringFrustrationListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.HiringFrustration"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.HiringTool": {
-            "type": "object",
-            "properties": {
-                "icon_url": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.HiringToolListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.HiringTool"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
         "internal_handler.IndividualEnvelope": {
             "type": "object",
             "properties": {
@@ -3330,57 +3072,6 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_handler.Industry": {
-            "type": "object",
-            "properties": {
-                "emoji": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.IndustryListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.Industry"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.OnboardingData": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "example": "Thanks for telling us more!"
-                }
-            }
-        },
-        "internal_handler.OnboardingEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.OnboardingData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
         "internal_handler.OnboardingIndustry": {
             "type": "object",
             "properties": {
@@ -3444,54 +3135,6 @@ const docTemplate = `{
                         "completed"
                     ],
                     "example": "in_progress"
-                }
-            }
-        },
-        "internal_handler.OnboardingRequest": {
-            "type": "object",
-            "properties": {
-                "frustration_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "industry_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "other_frustration": {
-                    "type": "string"
-                },
-                "other_industry": {
-                    "type": "string"
-                },
-                "other_tool": {
-                    "type": "string"
-                },
-                "role_id": {
-                    "type": "string"
-                },
-                "team_size_id": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "tool_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "wants_early_access": {
-                    "type": "boolean"
-                },
-                "wants_user_testing": {
-                    "type": "boolean"
                 }
             }
         },
@@ -3876,37 +3519,6 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_handler.Role": {
-            "type": "object",
-            "properties": {
-                "emoji": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.RoleListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.Role"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
         "internal_handler.SignupData": {
             "type": "object",
             "properties": {
@@ -3917,10 +3529,6 @@ const docTemplate = `{
                 "region": {
                     "type": "string",
                     "example": "uk"
-                },
-                "token": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
                 }
             }
         },
@@ -3938,83 +3546,57 @@ const docTemplate = `{
         "internal_handler.SignupRequest": {
             "type": "object",
             "properties": {
-                "country_id": {
-                    "type": "string",
-                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-                },
                 "email": {
                     "type": "string",
                     "example": "jerry@example.com"
-                },
-                "full_name": {
-                    "type": "string",
-                    "example": "Jerry"
                 }
             }
         },
-        "internal_handler.TeamSize": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "label": {
-                    "type": "string"
-                },
-                "max_size": {
-                    "type": "integer"
-                },
-                "min_size": {
-                    "type": "integer"
-                }
-            }
-        },
-        "internal_handler.TeamSizeListEnvelope": {
+        "internal_handler.VerifyAddressEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.TeamSize"
-                    }
+                    "$ref": "#/definitions/internal_handler.VerifyAddressResponse"
                 },
                 "meta": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
                 }
             }
         },
-        "internal_handler.WaitlistBusinessType": {
+        "internal_handler.VerifyAddressResponse": {
             "type": "object",
             "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.WaitlistBusinessTypeListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.WaitlistBusinessType"
-                    }
-                },
-                "has_more": {
-                    "type": "boolean"
-                },
-                "next_cursor": {
-                    "type": "string"
-                },
-                "request_id": {
+                "city": {
                     "type": "string",
-                    "example": "abc123"
+                    "example": "London"
+                },
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "line_1": {
+                    "type": "string",
+                    "example": "10 Downing Street"
+                },
+                "line_2": {
+                    "type": "string"
+                },
+                "post_code": {
+                    "type": "string",
+                    "example": "SW1A 2AA"
+                },
+                "state_or_county": {
+                    "type": "string",
+                    "example": "Greater London"
+                },
+                "verification_status": {
+                    "type": "string",
+                    "enum": [
+                        "verified",
+                        "failed",
+                        "unverified"
+                    ],
+                    "example": "verified"
                 }
             }
         },

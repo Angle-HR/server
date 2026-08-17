@@ -15,7 +15,6 @@ import (
 
 var _ = apidoc.ErrorEnvelope{}
 
-const catalogCacheControl = "public, max-age=300"
 
 // CatalogHandler serves onboarding reference data from the global registry.
 type CatalogHandler struct {

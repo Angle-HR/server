@@ -7,7 +7,6 @@ var waitlistTagGroup = map[string]any{
 	"tags": []any{
 		"waitlist/reference",
 		"waitlist/signup",
-		"waitlist/onboarding",
 	},
 }
 
@@ -41,18 +40,13 @@ var adminTagGroup = map[string]any{
 var apiTagDefinitions = []map[string]any{
 	{
 		"name":          "waitlist/reference",
-		"description":   "Reference data for waitlist forms: countries, industries, hiring tools, roles, and team sizes.",
+		"description":   "Reference data for waitlist and onboarding forms: countries.",
 		"x-displayName": "Reference",
 	},
 	{
 		"name":          "waitlist/signup",
-		"description":   "Initial waitlist registration. Creates a regional waitlist entry and global users_registry row.",
+		"description":   "Email-only waitlist registration. Creates a regional waitlist entry and global waitlist.registry row.",
 		"x-displayName": "Signup",
-	},
-	{
-		"name":          "waitlist/onboarding",
-		"description":   "Waitlist onboarding form submission after signup (distinct from product onboarding).",
-		"x-displayName": "Waitlist onboarding",
 	},
 	{
 		"name":          "auth",

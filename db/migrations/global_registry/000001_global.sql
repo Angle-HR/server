@@ -1,8 +1,8 @@
--- Global registry schema for anglehr_global.
+-- Global registry schema for openhr_global.
 -- migrate.sh creates the target database from the bootstrap block below before applying goose migrations.
 
 -- @bootstrap-databases
--- CREATE DATABASE anglehr_global OWNER anglehr;
+-- CREATE DATABASE openhr_global OWNER openhr;
 -- @bootstrap-databases-end
 
 -- +goose Up

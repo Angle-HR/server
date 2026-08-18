@@ -19,7 +19,7 @@ ensure_database() {
 		return 1
 	fi
 	if [[ -z "$db_user" ]]; then
-		db_user="anglehr"
+		db_user="openhr"
 	fi
 
 	local admin_url="${db_url//\/${db_name}/\/postgres}"

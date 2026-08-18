@@ -1,12 +1,12 @@
--- Regional schema for anglehr_uk, anglehr_us, anglehr_africa, anglehr_eu, and anglehr_asia.
+-- Regional schema for openhr_uk, openhr_us, openhr_africa, openhr_eu, and openhr_asia.
 -- migrate.sh creates the target database from the bootstrap block below before applying goose migrations.
 
 -- @bootstrap-databases
--- CREATE DATABASE anglehr_uk OWNER anglehr;
--- CREATE DATABASE anglehr_us OWNER anglehr;
--- CREATE DATABASE anglehr_africa OWNER anglehr;
--- CREATE DATABASE anglehr_eu OWNER anglehr;
--- CREATE DATABASE anglehr_asia OWNER anglehr;
+-- CREATE DATABASE openhr_uk OWNER openhr;
+-- CREATE DATABASE openhr_us OWNER openhr;
+-- CREATE DATABASE openhr_africa OWNER openhr;
+-- CREATE DATABASE openhr_eu OWNER openhr;
+-- CREATE DATABASE openhr_asia OWNER openhr;
 -- @bootstrap-databases-end
 
 -- +goose Up

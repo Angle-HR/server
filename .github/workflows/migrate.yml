@@ -66,9 +66,8 @@ jobs:
       - name: Run all migrations
         env:
           POSTGRES_DSN: ${{ secrets.POSTGRES_DSN }}
-          MIGRATE_COMPARE_REF: ${{ github.event.before }}
-          # Manual runs always migrate; push runs still skip when no SQL changed.
-          FORCE_MIGRATE: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+          # This workflow only runs on db/migrations/**/*.sql changes (push) or manual dispatch.
+          FORCE_MIGRATE: "1"
         run: |
           set -euo pipefail
 

@@ -96,7 +96,7 @@ See [`overlays/dev/secrets.example.yaml`](overlays/dev/secrets.example.yaml) for
 
 | Compose | Kubernetes Service | Databases |
 |---------|-------------------|-----------|
-| `postgres` | `postgres:5432` | `anglehr_uk`, `anglehr_us`, `anglehr_africa`, `anglehr_eu`, `anglehr_asia`, `anglehr_global` |
+| `postgres` | `postgres:5432` | `openhr_uk`, `openhr_us`, `openhr_africa`, `openhr_eu`, `openhr_asia`, `openhr_global` |
 | `redis` | `redis:6379` | — |
 
 `create-dev-secret.sh` builds DSNs against `postgres:5432` with the matching `dbname`. R2 credentials are passed through from `.env` (see [`.env.example`](../../.env.example)).
@@ -131,8 +131,8 @@ The prod overlay deploys **only** the application tier (server, email-worker, up
 
 Outside this repo (Terraform, cloud console, etc.):
 
-- One PostgreSQL instance with databases `anglehr_uk`, `anglehr_us`, `anglehr_africa`, `anglehr_eu`, `anglehr_asia`, and `anglehr_global`
-- Cloudflare R2 bucket names: `anglehr-uk`, `anglehr-us`, `anglehr-africa`, `anglehr-eu`, `anglehr-asia`
+- One PostgreSQL instance with databases `openhr_uk`, `openhr_us`, `openhr_africa`, `openhr_eu`, `openhr_asia`, and `openhr_global`
+- Cloudflare R2 bucket names: `openhr-uk`, `openhr-us`, `openhr-africa`, `openhr-eu`, `openhr-asia`
 - SMTP relay
 - Ingress controller + [cert-manager](https://cert-manager.io/) (for TLS annotations in prod Ingress)
 
@@ -143,8 +143,8 @@ Use [`overlays/prod/secrets.example.yaml`](overlays/prod/secrets.example.yaml) a
 **PostgreSQL DSNs** — same host, different `dbname`, with `sslmode=require`:
 
 ```
-DB_URL_GLOBAL=postgres://user:pass@db.example.com:5432/anglehr_global?sslmode=require
-ANGLEHR_UK_POSTGRES_DSN=postgres://user:pass@db.example.com:5432/anglehr_uk?sslmode=require
+DB_URL_GLOBAL=postgres://user:pass@db.example.com:5432/openhr_global?sslmode=require
+ANGLEHR_UK_POSTGRES_DSN=postgres://user:pass@db.example.com:5432/openhr_uk?sslmode=require
 ```
 
 **Redis** — managed instance URL (required by the server):
@@ -169,7 +169,7 @@ Optional: set `FLUVIO_POLL_ONLY=true` in the ConfigMap when Postgres is behind P
 R2_ACCESS_KEY=<r2-access-key-id>
 R2_SECRET_KEY=<r2-secret-access-key>
 R2_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com
-ANGLEHR_UK_R2_BUCKET=anglehr-uk
+ANGLEHR_UK_R2_BUCKET=openhr-uk
 ```
 
 Prefer [External Secrets Operator](https://external-secrets.io/) or your cloud secret manager rather than committing secrets.

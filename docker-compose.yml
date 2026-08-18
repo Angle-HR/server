@@ -5,15 +5,15 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     environment:
-      POSTGRES_USER: anglehr
+      POSTGRES_USER: openhr
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
-      POSTGRES_DB: anglehr_global
+      POSTGRES_DB: openhr_global
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - anglehr_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U anglehr -d anglehr_global"]
+      test: ["CMD-SHELL", "pg_isready -U openhr -d openhr_global"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -66,11 +66,11 @@ services:
       - |
         set -e
         mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
-        mc mb --ignore-existing local/anglehr-uk
-        mc mb --ignore-existing local/anglehr-us
-        mc mb --ignore-existing local/anglehr-africa
-        mc mb --ignore-existing local/anglehr-eu
-        mc mb --ignore-existing local/anglehr-asia
+        mc mb --ignore-existing local/openhr-uk
+        mc mb --ignore-existing local/openhr-us
+        mc mb --ignore-existing local/openhr-africa
+        mc mb --ignore-existing local/openhr-eu
+        mc mb --ignore-existing local/openhr-asia
     networks:
       - anglehr_net
     restart: "no"
@@ -80,12 +80,12 @@ services:
       context: .
       dockerfile: Dockerfile.migrate
     environment:
-      ANGLEHR_UK_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_uk?sslmode=disable
-      ANGLEHR_US_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_us?sslmode=disable
-      ANGLEHR_AFRICA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_africa?sslmode=disable
-      ANGLEHR_EU_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_eu?sslmode=disable
-      ANGLEHR_ASIA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_asia?sslmode=disable
-      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_global?sslmode=disable
+      ANGLEHR_UK_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_uk?sslmode=disable
+      ANGLEHR_US_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_us?sslmode=disable
+      ANGLEHR_AFRICA_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_africa?sslmode=disable
+      ANGLEHR_EU_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_eu?sslmode=disable
+      ANGLEHR_ASIA_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_asia?sslmode=disable
+      DB_URL_GLOBAL: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_global?sslmode=disable
       FORCE_MIGRATE: "1"
     depends_on:
       postgres:
@@ -116,20 +116,20 @@ services:
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-changeme123}
       ADMIN_BOOTSTRAP_NAME: ${ADMIN_BOOTSTRAP_NAME:-Bootstrap Admin}
       REDIS_URL: redis://redis:6379/${REDIS_DB:-0}
-      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_global?sslmode=disable
+      DB_URL_GLOBAL: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_global?sslmode=disable
       R2_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       R2_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       R2_ENDPOINT: http://minio:9000
-      ANGLEHR_UK_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_uk?sslmode=disable
-      ANGLEHR_UK_R2_BUCKET: ${ANGLEHR_UK_R2_BUCKET:-anglehr-uk}
-      ANGLEHR_US_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_us?sslmode=disable
-      ANGLEHR_US_R2_BUCKET: ${ANGLEHR_US_R2_BUCKET:-anglehr-us}
-      ANGLEHR_AFRICA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_africa?sslmode=disable
-      ANGLEHR_AFRICA_R2_BUCKET: ${ANGLEHR_AFRICA_R2_BUCKET:-anglehr-africa}
-      ANGLEHR_EU_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_eu?sslmode=disable
-      ANGLEHR_EU_R2_BUCKET: ${ANGLEHR_EU_R2_BUCKET:-anglehr-eu}
-      ANGLEHR_ASIA_POSTGRES_DSN: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_asia?sslmode=disable
-      ANGLEHR_ASIA_R2_BUCKET: ${ANGLEHR_ASIA_R2_BUCKET:-anglehr-asia}
+      ANGLEHR_UK_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_uk?sslmode=disable
+      ANGLEHR_UK_R2_BUCKET: ${ANGLEHR_UK_R2_BUCKET:-openhr-uk}
+      ANGLEHR_US_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_us?sslmode=disable
+      ANGLEHR_US_R2_BUCKET: ${ANGLEHR_US_R2_BUCKET:-openhr-us}
+      ANGLEHR_AFRICA_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_africa?sslmode=disable
+      ANGLEHR_AFRICA_R2_BUCKET: ${ANGLEHR_AFRICA_R2_BUCKET:-openhr-africa}
+      ANGLEHR_EU_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_eu?sslmode=disable
+      ANGLEHR_EU_R2_BUCKET: ${ANGLEHR_EU_R2_BUCKET:-openhr-eu}
+      ANGLEHR_ASIA_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_asia?sslmode=disable
+      ANGLEHR_ASIA_R2_BUCKET: ${ANGLEHR_ASIA_R2_BUCKET:-openhr-asia}
     depends_on:
       postgres:
         condition: service_healthy
@@ -168,7 +168,7 @@ services:
       APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-debug}
       REDIS_URL: redis://redis:6379/${REDIS_DB:-0}
-      DB_URL_GLOBAL: postgres://anglehr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/anglehr_global?sslmode=disable
+      DB_URL_GLOBAL: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_global?sslmode=disable
       SMTP_HOST: ${SMTP_HOST:-mailhog}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_USER: ${SMTP_USER:-}

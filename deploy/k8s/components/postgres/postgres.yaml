@@ -7,11 +7,11 @@ metadata:
     app.kubernetes.io/component: database
 data:
   01-init-databases.sql: |
-    CREATE DATABASE anglehr_uk OWNER anglehr;
-    CREATE DATABASE anglehr_us OWNER anglehr;
-    CREATE DATABASE anglehr_africa OWNER anglehr;
-    CREATE DATABASE anglehr_eu OWNER anglehr;
-    CREATE DATABASE anglehr_asia OWNER anglehr;
+    CREATE DATABASE openhr_uk OWNER openhr;
+    CREATE DATABASE openhr_us OWNER openhr;
+    CREATE DATABASE openhr_africa OWNER openhr;
+    CREATE DATABASE openhr_eu OWNER openhr;
+    CREATE DATABASE openhr_asia OWNER openhr;
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -40,9 +40,9 @@ spec:
               containerPort: 5432
           env:
             - name: POSTGRES_USER
-              value: anglehr
+              value: openhr
             - name: POSTGRES_DB
-              value: anglehr_global
+              value: openhr_global
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -59,9 +59,9 @@ spec:
               command:
                 - pg_isready
                 - -U
-                - anglehr
+                - openhr
                 - -d
-                - anglehr_global
+                - openhr_global
             initialDelaySeconds: 5
             periodSeconds: 5
           livenessProbe:
@@ -69,9 +69,9 @@ spec:
               command:
                 - pg_isready
                 - -U
-                - anglehr
+                - openhr
                 - -d
-                - anglehr_global
+                - openhr_global
             initialDelaySeconds: 15
             periodSeconds: 10
       volumes:

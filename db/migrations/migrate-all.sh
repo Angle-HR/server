@@ -21,12 +21,17 @@ sql_files_changed() {
 	repo_root="$(git rev-parse --show-toplevel)"
 
 	sql_changed_in_diff() {
-		git -C "$repo_root" diff --name-only "$@" -- "$migrations_path" | grep -qE '\.sql$'
+		git -C "$repo_root" diff --name-only "$@" -- "$migrations_path" 2>/dev/null | grep -qE '\.sql$'
 	}
 
 	if [[ -n "${MIGRATE_COMPARE_REF:-}" && "${MIGRATE_COMPARE_REF}" != "0000000000000000000000000000000000000000" ]]; then
-		sql_changed_in_diff "${MIGRATE_COMPARE_REF}" HEAD
-		return $?
+		if git -C "$repo_root" rev-parse --verify "${MIGRATE_COMPARE_REF}^{commit}" >/dev/null 2>&1; then
+			if sql_changed_in_diff "${MIGRATE_COMPARE_REF}" HEAD; then
+				return 0
+			fi
+			return 1
+		fi
+		echo "MIGRATE_COMPARE_REF (${MIGRATE_COMPARE_REF}) not available in checkout; using fallback checks." >&2
 	fi
 
 	if sql_changed_in_diff HEAD~1 HEAD 2>/dev/null; then

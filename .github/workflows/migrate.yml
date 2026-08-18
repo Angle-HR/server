@@ -53,12 +53,15 @@ jobs:
           # Manual runs use the selected environment's branch so migrations match that deploy.
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref }}
 
-      - name: Install goose
+      - name: Install migration tools
         run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
           curl -fsSL -o /tmp/goose \
             https://github.com/pressly/goose/releases/download/v3.24.1/goose_linux_x86_64
           sudo install -m 0755 /tmp/goose /usr/local/bin/goose
           goose --version
+          psql --version
 
       - name: Run all migrations
         env:

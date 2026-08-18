@@ -95,7 +95,7 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 	switch args.Type {
 	case TypeWaitlistConfirmation:
 		templateName = "waitlist_confirmation.html"
-		subject = "You're on the Angle HR waitlist"
+		subject = "You're on the OpenHR waitlist"
 	case TypeMoreInfoAck:
 		templateName = "more_info_ack.html"
 		subject = "Thanks for sharing more about yourself"

@@ -27,19 +27,12 @@ import (
 
 var _ = apidoc.ErrorEnvelope{}
 
-// AddressVerifier checks a saved address against a third-party verification
-// provider. No implementation is wired up yet; once one exists, set it on
-// ProductOnboardingHandler.AddressProvider to enable POST /onboarding/address/verify.
-type AddressVerifier interface {
-	Verify(ctx context.Context, addr ProductAddressState) (status string, err error)
-}
-
 // ProductOnboardingHandler handles product onboarding endpoints.
 type ProductOnboardingHandler struct {
 	Router          *dbrouter.DBRouter
 	GlobalDB        globalDB
 	Enqueuer        jobEnqueuer
-	AddressProvider AddressVerifier
+	AddressProvider onboarding.AddressVerifier
 	validate        *validator.Validate
 }
 
@@ -402,7 +395,7 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 // verifyAddress godoc
 //
 //	@Summary		Verify address
-//	@Description	Verifies the saved workspace address against a third-party provider. Returns 501 until a provider is integrated (see ProductOnboardingHandler.AddressProvider).
+//	@Description	Verifies the saved workspace address. With ADDRESS_VERIFY_MODE=passthrough (default non-prod), marks the address verified. Otherwise returns 501 until a real provider is wired.
 //	@Tags			onboarding/address
 //	@Produce		json
 //	@Security		BearerAuth
@@ -456,7 +449,17 @@ func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.
 	}
 	addr.CountryID = countryID.String()
 
-	status, err := h.AddressProvider.Verify(ctx, addr)
+	status, err := h.AddressProvider.Verify(ctx, onboarding.ProductAddress{
+		CountryID:          addr.CountryID,
+		EntryMode:          addr.EntryMode,
+		Line1:              addr.Line1,
+		Line2:              addr.Line2,
+		City:               addr.City,
+		StateOrCounty:      addr.StateOrCounty,
+		PostCode:           addr.PostCode,
+		FormattedAddress:   addr.FormattedAddress,
+		VerificationStatus: addr.VerificationStatus,
+	})
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return

@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -24,8 +23,23 @@ type AccessClaims struct {
 	EmailVerified bool   `json:"email_verified"`
 	jwt.RegisteredClaims
 }
+
+// RefreshClaims are used to mint new access tokens.
 type RefreshClaims struct {
 	TokenType string `json:"token_type"`
+	jwt.RegisteredClaims
+}
+
+const (
+	refreshTokenType = "refresh"
+	mfaTokenUse      = "mfa"
+	mfaLifetime      = 5 * time.Minute
+)
+
+// MFAClaims are short-lived tokens issued when TOTP is required after password/OTP login.
+type MFAClaims struct {
+	TokenUse string `json:"token_use"`
+	Region   string `json:"region"`
 	jwt.RegisteredClaims
 }
 
@@ -69,8 +83,9 @@ func (s *TokenService) IssuePair(userID uuid.UUID, reg region.Region, emailVerif
 	}
 
 	refreshClaims := RefreshClaims{
-		TokenType: "refresh",
+		TokenType: refreshTokenType,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.NewString(),
 			Subject:   userID.String(),
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.refreshLifetime)),
@@ -109,6 +124,27 @@ func (s *TokenService) IssueAccess(refreshToken string, reg region.Region, email
 	return pair.AccessToken, pair.ExpiresIn, nil
 }
 
+// IssueMFAToken mints a short-lived MFA challenge token.
+func (s *TokenService) IssueMFAToken(userID uuid.UUID, reg region.Region) (string, int, error) {
+	now := time.Now()
+	claims := MFAClaims{
+		TokenUse: mfaTokenUse,
+		Region:   string(reg),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.NewString(),
+			Subject:   userID.String(),
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(mfaLifetime)),
+		},
+	}
+
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.secret)
+	if err != nil {
+		return "", 0, fmt.Errorf("sign mfa token: %w", err)
+	}
+	return token, int(mfaLifetime.Seconds()), nil
+}
+
 // ParseAccess validates an access token and returns claims.
 func (s *TokenService) ParseAccess(token string) (AccessClaims, error) {
 	parsed, err := jwt.ParseWithClaims(token, &AccessClaims{}, func(t *jwt.Token) (any, error) {
@@ -144,10 +180,29 @@ func (s *TokenService) ParseRefresh(token string) (RefreshClaims, error) {
 	}
 
 	claims, ok := parsed.Claims.(*RefreshClaims)
-	if !ok || !parsed.Valid || claims.TokenType != "refresh" {
+	if !ok || !parsed.Valid || claims.TokenType != refreshTokenType {
 		return RefreshClaims{}, fmt.Errorf("invalid refresh token")
 	}
 
+	return *claims, nil
+}
+
+// ParseMFA validates an MFA challenge token.
+func (s *TokenService) ParseMFA(token string) (MFAClaims, error) {
+	parsed, err := jwt.ParseWithClaims(token, &MFAClaims{}, func(t *jwt.Token) (any, error) {
+		if t.Method != jwt.SigningMethodHS256 {
+			return nil, fmt.Errorf("unexpected signing method")
+		}
+		return s.secret, nil
+	})
+	if err != nil {
+		return MFAClaims{}, fmt.Errorf("parse mfa token: %w", err)
+	}
+
+	claims, ok := parsed.Claims.(*MFAClaims)
+	if !ok || !parsed.Valid || claims.TokenUse != mfaTokenUse {
+		return MFAClaims{}, fmt.Errorf("invalid mfa token")
+	}
 	return *claims, nil
 }
 
@@ -171,5 +226,7 @@ func (s *TokenService) AccessLifetime() time.Duration {
 	return s.accessLifetime
 }
 
-// Unused context import guard for future key rotation hooks.
-var _ = context.Canceled
+// RefreshLifetime returns configured refresh token TTL.
+func (s *TokenService) RefreshLifetime() time.Duration {
+	return s.refreshLifetime
+}

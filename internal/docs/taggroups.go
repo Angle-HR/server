@@ -50,7 +50,7 @@ var apiTagDefinitions = []map[string]any{
 	},
 	{
 		"name":          "auth",
-		"description":   "Product signup, 6-digit email verification (OTP expires in 300s, resend cooldown 30s), login, and token refresh.",
+		"description":   "Product signup, email verification OTP (not for passwordless login), password login, passwordless login OTP (/auth/login/otp/*), TOTP MFA, password reset, logout, /auth/me, and product org invites.",
 		"x-displayName": "Auth",
 	},
 	{
@@ -60,22 +60,22 @@ var apiTagDefinitions = []map[string]any{
 	},
 	{
 		"name":          "onboarding/profile",
-		"description":   "Account type (`individual` or `business`) and profile fields. Individual accounts set region from country_id.",
+		"description":   "Canonical profile step: account type (`individual` or `business`) and profile fields via PUT /onboarding/profile. Individual accounts set region from country_id.",
 		"x-displayName": "Profile",
 	},
 	{
 		"name":          "onboarding/address",
-		"description":   "Workspace address (search or manual entry). `POST /onboarding/address/verify` is reserved and returns 501.",
+		"description":   "Workspace address (search or manual entry). POST /onboarding/address/verify uses ADDRESS_VERIFY_MODE=passthrough in non-prod; otherwise 501 until a real provider is wired.",
 		"x-displayName": "Address",
 	},
 	{
 		"name":          "onboarding/business",
-		"description":   "Business onboarding and compliance: legal business name, legal full name, country, company role, BIN number, registered address, business type, industry, and employee count. Business accounts only.",
+		"description":   "Canonical compliance step is PUT /onboarding/business (business_type_id, industry_id, employee_count). POST /onboarding/business is deprecated (KYB-oriented one-shot).",
 		"x-displayName": "Business",
 	},
 	{
 		"name":          "onboarding/individual",
-		"description":   "Saves first name, last name, country, business type, industry, and number of employees for an individual account.",
+		"description":   "Deprecated one-shot POST /onboarding/individual. Prefer PUT /onboarding/profile with account_type individual.",
 		"x-displayName": "Individual",
 	},
 	{

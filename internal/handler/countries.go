@@ -2,10 +2,8 @@ package handler
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -98,23 +96,6 @@ func (h *CountriesHandler) loadCountries(ctx context.Context) ([]Country, error)
 	}
 
 	return countries, nil
-}
-
-
-func isCountryNotFound(err error) bool {
-	for err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return true
-		}
-
-		if strings.Contains(strings.ToLower(err.Error()), "no rows") {
-			return true
-		}
-
-		err = errors.Unwrap(err)
-	}
-
-	return false
 }
 
 type countryScanner interface {

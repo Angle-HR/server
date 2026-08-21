@@ -15,7 +15,6 @@ import (
 
 var _ = apidoc.ErrorEnvelope{}
 
-
 // CatalogHandler serves onboarding reference data from the global registry.
 type CatalogHandler struct {
 	GlobalDB globalDB
@@ -87,6 +86,36 @@ type TeamSize struct {
 	Label   string    `json:"label"`
 	MinSize *int      `json:"min_size,omitempty"`
 	MaxSize *int      `json:"max_size,omitempty"`
+}
+
+// IndustryListEnvelope wraps industry catalog responses.
+type IndustryListEnvelope struct {
+	Data []Industry   `json:"data"`
+	Meta *apidoc.Meta `json:"meta,omitempty"`
+}
+
+// HiringToolListEnvelope wraps hiring tool catalog responses.
+type HiringToolListEnvelope struct {
+	Data []HiringTool `json:"data"`
+	Meta *apidoc.Meta `json:"meta,omitempty"`
+}
+
+// HiringFrustrationListEnvelope wraps hiring frustration catalog responses.
+type HiringFrustrationListEnvelope struct {
+	Data []HiringFrustration `json:"data"`
+	Meta *apidoc.Meta        `json:"meta,omitempty"`
+}
+
+// RoleListEnvelope wraps role catalog responses.
+type RoleListEnvelope struct {
+	Data []Role       `json:"data"`
+	Meta *apidoc.Meta `json:"meta,omitempty"`
+}
+
+// TeamSizeListEnvelope wraps team size catalog responses.
+type TeamSizeListEnvelope struct {
+	Data []TeamSize   `json:"data"`
+	Meta *apidoc.Meta `json:"meta,omitempty"`
 }
 
 // listIndustries godoc

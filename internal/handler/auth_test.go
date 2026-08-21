@@ -17,7 +17,7 @@ import (
 func TestAuthSignup_invalidBody(t *testing.T) {
 	t.Parallel()
 
-	h := NewAuthHandler(nil, nil, nil, nil, nil, region.RegionUK)
+	h := NewAuthHandler(nil, nil, nil, nil, nil, region.RegionUK, nil)
 	router := chi.NewRouter()
 	router.Route("/auth", h.RegisterRoutes)
 

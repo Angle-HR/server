@@ -214,9 +214,11 @@ func userAccountRows(passwordHash string, emailVerifiedAt *time.Time) *pgxmock.R
 	return pgxmock.NewRows([]string{
 		"id", "email", "password_hash", "email_verified_at", "onboarding_completed_at",
 		"account_type", "first_name", "last_name", "legal_full_name", "country_id",
+		"totp_secret", "totp_enabled_at",
 	}).AddRow(
 		testLoginUserID, testLoginEmail, passwordHash, emailVerifiedAt, nil,
 		nil, nil, nil, nil, nil,
+		nil, nil,
 	)
 }
 
@@ -228,6 +230,11 @@ func testAuthRouter(
 ) chi.Router {
 	t.Helper()
 
+	crypto, err := auth.NewTOTPCrypto("secret")
+	if err != nil {
+		t.Fatalf("NewTOTPCrypto: %v", err)
+	}
+
 	h := NewAuthHandler(
 		dbrouter.NewWithPools(map[region.Region]dbrouter.PgxPool{
 			region.RegionUK: regionalMock,
@@ -237,6 +244,7 @@ func testAuthRouter(
 		mustTestTokenService(t),
 		nil,
 		region.RegionUK,
+		crypto,
 	)
 
 	router := chi.NewRouter()

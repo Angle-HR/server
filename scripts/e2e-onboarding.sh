@@ -64,5 +64,12 @@ step "11. POST /auth/refresh"
 curl -s -X POST "$BASE/auth/refresh" -H 'Content-Type: application/json' \
   -d "{\"refresh_token\":\"$REFRESH\"}" | pretty
 
+step "12. GET /auth/me"
+curl -s "$BASE/auth/me" -H "$AUTH" | pretty
+
+step "13. POST /auth/logout"
+curl -s -X POST "$BASE/auth/logout" -H 'Content-Type: application/json' \
+  -d "{\"refresh_token\":\"$REFRESH\"}" | pretty
+
 echo ""
 echo "SUCCESS: business onboarding E2E completed for $EMAIL"

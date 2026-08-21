@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Software78/sql-go-query-builder/builder"
 	"github.com/google/uuid"
@@ -79,6 +80,7 @@ func LookupAccountUserByEmail(email string) (string, []any, error) {
 	return mustSQL(postgres.Select(
 		"id", "email", "password_hash", "email_verified_at", "onboarding_completed_at",
 		"account_type", "first_name", "last_name", "legal_full_name", "country_id",
+		"totp_secret", "totp_enabled_at",
 	).
 		From("users").
 		Where("email", "=", email).
@@ -91,6 +93,7 @@ func LookupAccountUserByID(userID uuid.UUID) (string, []any, error) {
 	return mustSQL(postgres.Select(
 		"id", "email", "password_hash", "email_verified_at", "onboarding_completed_at",
 		"account_type", "first_name", "last_name", "legal_full_name", "country_id",
+		"totp_secret", "totp_enabled_at",
 	).
 		From("users").
 		Where("id", "=", userID).
@@ -402,5 +405,109 @@ func UpdateIndividualUserBusinessDetails(
 		Where("id", "=", userID).
 		WhereNull("deleted_at").
 		Returning("id").
+		ToSQL())
+}
+
+// UpdateAccountUserPassword returns SQL to set a new password hash.
+func UpdateAccountUserPassword(userID uuid.UUID, passwordHash string) (string, []any, error) {
+	return mustSQL(postgres.Update("users").
+		Set("password_hash", passwordHash).
+		Where("id", "=", userID).
+		WhereNull("deleted_at").
+		Returning("id").
+		ToSQL())
+}
+
+// SetAccountUserTOTPSecret stores an encrypted pending TOTP secret (not yet enabled).
+func SetAccountUserTOTPSecret(userID uuid.UUID, encryptedSecret string) (string, []any, error) {
+	return mustSQL(postgres.Update("users").
+		Set("totp_secret", encryptedSecret).
+		Where("id", "=", userID).
+		WhereNull("deleted_at").
+		WhereNull("totp_enabled_at").
+		Returning("id").
+		ToSQL())
+}
+
+// EnableAccountUserTOTP marks TOTP as enabled after confirm.
+func EnableAccountUserTOTP(userID uuid.UUID) (string, []any, error) {
+	return mustSQL(postgres.Update("users").
+		SetRaw("totp_enabled_at", "now()").
+		Where("id", "=", userID).
+		WhereNull("deleted_at").
+		WhereNotNull("totp_secret").
+		Returning("id").
+		ToSQL())
+}
+
+// DisableAccountUserTOTP clears TOTP secret and enabled timestamp.
+func DisableAccountUserTOTP(userID uuid.UUID) (string, []any, error) {
+	return mustSQL(postgres.Update("users").
+		Set("totp_secret", nil).
+		Set("totp_enabled_at", nil).
+		Where("id", "=", userID).
+		WhereNull("deleted_at").
+		Returning("id").
+		ToSQL())
+}
+
+// CompleteAccountUserOnboarding marks onboarding complete for invitees.
+func CompleteAccountUserOnboarding(userID uuid.UUID) (string, []any, error) {
+	sql := `
+		UPDATE users
+		SET onboarding_completed_at = COALESCE(onboarding_completed_at, now()),
+		    email_verified_at = COALESCE(email_verified_at, now())
+		WHERE id = $1 AND deleted_at IS NULL
+		RETURNING id
+	`
+	return normalizeSQL(sql), []any{userID}, nil
+}
+
+// InsertOrganizationMember adds a membership row.
+func InsertOrganizationMember(orgID, userID uuid.UUID, role string) (string, []any, error) {
+	sql := `
+		INSERT INTO organization_members (organization_id, user_id, role)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (organization_id, user_id) DO NOTHING
+		RETURNING id
+	`
+	return normalizeSQL(sql), []any{orgID, userID, role}, nil
+}
+
+// InsertOrganizationInvite stores a hashed invite token.
+func InsertOrganizationInvite(orgID uuid.UUID, email, tokenHash string, invitedBy uuid.UUID, expiresAt time.Time) (string, []any, error) {
+	return mustSQL(postgres.Insert("organization_invites").
+		Columns("organization_id", "email", "token_hash", "invited_by", "expires_at").
+		Values(orgID, email, tokenHash, invitedBy, expiresAt).
+		Returning("id").
+		ToSQL())
+}
+
+// LookupOrganizationInviteByTokenHash loads a pending invite by token hash.
+func LookupOrganizationInviteByTokenHash(tokenHash string) (string, []any, error) {
+	sql := `
+		SELECT i.id, i.organization_id, i.email, i.expires_at, i.accepted_at, o.legal_name
+		FROM organization_invites i
+		INNER JOIN organizations o ON o.id = i.organization_id
+		WHERE i.token_hash = $1
+	`
+	return sql, []any{tokenHash}, nil
+}
+
+// AcceptOrganizationInvite marks invite accepted.
+func AcceptOrganizationInvite(inviteID uuid.UUID) (string, []any, error) {
+	return mustSQL(postgres.Update("organization_invites").
+		SetRaw("accepted_at", "now()").
+		Where("id", "=", inviteID).
+		WhereNull("accepted_at").
+		Returning("id").
+		ToSQL())
+}
+
+// LookupOrganizationByOwnerID loads org id and legal name for an owner.
+func LookupOrganizationByOwnerID(ownerUserID uuid.UUID) (string, []any, error) {
+	return mustSQL(postgres.Select("id", "legal_name").
+		From("organizations").
+		Where("owner_user_id", "=", ownerUserID).
 		ToSQL())
 }

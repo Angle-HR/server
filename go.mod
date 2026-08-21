@@ -14,12 +14,16 @@ require (
 	github.com/minio/minio-go/v7 v7.2.0
 	github.com/oschwald/geoip2-golang v1.13.0
 	github.com/pashagolub/pgxmock/v4 v4.9.0
+	github.com/pquerna/otp v1.5.0
 	github.com/redis/go-redis/v9 v9.20.0
 	github.com/software78/fluvio v0.3.1
 	github.com/swaggo/swag v1.16.4
 )
 
-require github.com/kr/pretty v0.3.1 // indirect
+require (
+	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
+	github.com/kr/pretty v0.3.1 // indirect
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect

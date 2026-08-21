@@ -57,6 +57,13 @@ type AuthTokenData struct {
 	Onboarding   OnboardingProgressSummary `json:"onboarding"`
 }
 
+// AuthMFARequiredData is returned when password/OTP succeeded but TOTP is required.
+type AuthMFARequiredData struct {
+	TOTPRequired bool   `json:"totp_required" example:"true"`
+	MFAToken     string `json:"mfa_token" example:"eyJhbGciOiJIUzI1NiIs..."`
+	ExpiresIn    int    `json:"expires_in" example:"300"`
+}
+
 // AuthTokenEnvelope is a successful verify-email or login response.
 type AuthTokenEnvelope struct {
 	Data AuthTokenData `json:"data"`
@@ -92,6 +99,132 @@ type AuthRefreshData struct {
 type AuthRefreshEnvelope struct {
 	Data AuthRefreshData `json:"data"`
 	Meta *apidoc.Meta    `json:"meta,omitempty"`
+}
+
+// AuthLogoutRequest revokes a refresh token.
+type AuthLogoutRequest struct {
+	RefreshToken string `json:"refresh_token" example:"eyJhbGciOiJIUzI1NiIs..."`
+}
+
+// AuthForgotPasswordRequest starts a password reset.
+type AuthForgotPasswordRequest struct {
+	Email string `json:"email" example:"jerry@example.com"`
+}
+
+// AuthResetPasswordRequest completes a password reset.
+type AuthResetPasswordRequest struct {
+	Token    string `json:"token" example:"opaque-reset-token"`
+	Password string `json:"password" example:"new-secure-password"`
+}
+
+// AuthLoginOTPRequest requests a passwordless login code.
+type AuthLoginOTPRequest struct {
+	Email string `json:"email" example:"jerry@example.com"`
+}
+
+// AuthLoginOTPVerifyRequest verifies a passwordless login code.
+type AuthLoginOTPVerifyRequest struct {
+	VerificationSessionID string `json:"verification_session_id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Code                  string `json:"code" example:"224879"`
+}
+
+// AuthLoginTOTPRequest completes MFA after password or OTP login.
+type AuthLoginTOTPRequest struct {
+	MFAToken string `json:"mfa_token" example:"eyJhbGciOiJIUzI1NiIs..."`
+	Code     string `json:"code" example:"123456"`
+}
+
+// AuthTOTPConfirmRequest confirms TOTP enrollment.
+type AuthTOTPConfirmRequest struct {
+	Code string `json:"code" example:"123456"`
+}
+
+// AuthTOTPDisableRequest disables TOTP.
+type AuthTOTPDisableRequest struct {
+	Code     string `json:"code" example:"123456"`
+	Password string `json:"password" example:"secure-password-here"`
+}
+
+// AuthTOTPEnrollData is returned from enroll.
+type AuthTOTPEnrollData struct {
+	Secret     string `json:"secret" example:"JBSWY3DPEHPK3PXP"`
+	OTPAuthURL string `json:"otpauth_url" example:"otpauth://totp/OpenHR:jerry@example.com?secret=..."`
+}
+
+// AuthTOTPEnrollEnvelope wraps enroll data.
+type AuthTOTPEnrollEnvelope struct {
+	Data AuthTOTPEnrollData `json:"data"`
+	Meta *apidoc.Meta       `json:"meta,omitempty"`
+}
+
+// AuthMeData is the current product user.
+type AuthMeData struct {
+	ID            string                    `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Email         string                    `json:"email" example:"jerry@example.com"`
+	EmailVerified bool                      `json:"email_verified" example:"true"`
+	AccountType   *string                   `json:"account_type,omitempty" example:"business"`
+	FirstName     *string                   `json:"first_name,omitempty"`
+	LastName      *string                   `json:"last_name,omitempty"`
+	LegalFullName *string                   `json:"legal_full_name,omitempty"`
+	CountryID     *string                   `json:"country_id,omitempty"`
+	Region        string                    `json:"region" example:"uk"`
+	TOTPEnabled   bool                      `json:"totp_enabled" example:"false"`
+	Onboarding    OnboardingProgressSummary `json:"onboarding"`
+}
+
+// AuthMeEnvelope wraps /auth/me.
+type AuthMeEnvelope struct {
+	Data AuthMeData   `json:"data"`
+	Meta *apidoc.Meta `json:"meta,omitempty"`
+}
+
+// AuthMessageData is a simple status message.
+type AuthMessageData struct {
+	Message string `json:"message" example:"logged out"`
+}
+
+// AuthMessageEnvelope wraps a message response.
+type AuthMessageEnvelope struct {
+	Data AuthMessageData `json:"data"`
+	Meta *apidoc.Meta    `json:"meta,omitempty"`
+}
+
+// AuthInviteData is the public invite preview.
+type AuthInviteData struct {
+	Email            string `json:"email" example:"member@example.com"`
+	OrganizationName string `json:"organization_name" example:"ANGLE"`
+	ExpiresAt        string `json:"expires_at" example:"2026-08-24T12:00:00Z"`
+}
+
+// AuthInviteEnvelope wraps invite preview.
+type AuthInviteEnvelope struct {
+	Data AuthInviteData `json:"data"`
+	Meta *apidoc.Meta   `json:"meta,omitempty"`
+}
+
+// AuthAcceptInviteRequest accepts a product org invite.
+type AuthAcceptInviteRequest struct {
+	Token     string  `json:"token" example:"opaque-invite-token"`
+	Password  string  `json:"password" example:"secure-password-here"`
+	FirstName *string `json:"first_name,omitempty" example:"Jerry"`
+	LastName  *string `json:"last_name,omitempty" example:"Oluwasegun"`
+}
+
+// AuthCreateOrgInviteRequest creates an org invite.
+type AuthCreateOrgInviteRequest struct {
+	Email string `json:"email" example:"member@example.com"`
+}
+
+// AuthCreateOrgInviteData is returned after creating an invite.
+type AuthCreateOrgInviteData struct {
+	Email     string `json:"email" example:"member@example.com"`
+	ExpiresAt string `json:"expires_at" example:"2026-08-24T12:00:00Z"`
+}
+
+// AuthCreateOrgInviteEnvelope wraps create invite.
+type AuthCreateOrgInviteEnvelope struct {
+	Data AuthCreateOrgInviteData `json:"data"`
+	Meta *apidoc.Meta            `json:"meta,omitempty"`
 }
 
 // ProductProfileRequest upserts account type and profile fields.

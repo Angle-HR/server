@@ -66,8 +66,9 @@ func (r *businessOnboardingRequest) trim() {
 
 // submitBusinessOnboarding godoc
 //
-//	@Summary		Submit business onboarding
-//	@Description	Saves legal business name, legal full name, country, company role, BIN number, registered address, business type, and industry type for a business account.
+//	@Summary		Submit business onboarding (deprecated)
+//	@Description	Deprecated: prefer stepped PUT /onboarding/profile → address → PUT /onboarding/business (type/industry/employees) → complete. This one-shot includes KYB-oriented fields (BIN, registered address) and does not advance onboarding progress.
+//	@Deprecated
 //	@Tags			onboarding/business
 //	@Accept			json
 //	@Produce		json

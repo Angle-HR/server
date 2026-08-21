@@ -65,8 +65,9 @@ func (r *individualOnboardingRequest) trim() {
 
 // submitIndividualOnboarding godoc
 //
-//	@Summary		Submit individual onboarding
-//	@Description	Saves first name, last name, country of residence, business type, industry type, and number of employees for an individual account.
+//	@Summary		Submit individual onboarding (deprecated)
+//	@Description	Deprecated: prefer the stepped flow PUT /onboarding/profile then address/complete. Saves first name, last name, country, business type, industry, and employee count on the user row only.
+//	@Deprecated
 //	@Tags			onboarding/individual
 //	@Accept			json
 //	@Produce		json

@@ -21,8 +21,8 @@ import (
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/mailer"
 	"github.com/Angle-HR/server/internal/onboarding"
-	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/query"
+	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
@@ -37,6 +37,9 @@ type AuthHandler struct {
 	Redis         *goredis.Client
 	Tokens        *auth.TokenService
 	Verifier      *auth.VerificationStore
+	Revoker       *auth.RevocationStore
+	Resetter      *auth.ResetStore
+	TOTPCrypto    *auth.TOTPCrypto
 	Enqueuer      jobEnqueuer
 	DefaultRegion region.Region
 	validate      *validator.Validate
@@ -50,6 +53,7 @@ func NewAuthHandler(
 	tokens *auth.TokenService,
 	enqueuer jobEnqueuer,
 	defaultRegion region.Region,
+	totpCrypto *auth.TOTPCrypto,
 ) *AuthHandler {
 	return &AuthHandler{
 		Router:        router,
@@ -57,6 +61,9 @@ func NewAuthHandler(
 		Redis:         redisClient,
 		Tokens:        tokens,
 		Verifier:      auth.NewVerificationStore(redisClient),
+		Revoker:       auth.NewRevocationStore(redisClient),
+		Resetter:      auth.NewResetStore(redisClient),
+		TOTPCrypto:    totpCrypto,
 		Enqueuer:      enqueuer,
 		DefaultRegion: defaultRegion,
 		validate:      validator.New(),
@@ -91,6 +98,53 @@ type authRefreshBody struct {
 	RefreshToken string `json:"refresh_token" validate:"required"`
 }
 
+type authLogoutBody struct {
+	RefreshToken string `json:"refresh_token" validate:"required"`
+}
+
+type authForgotPasswordBody struct {
+	Email string `json:"email" validate:"required,email,max=254"`
+}
+
+type authResetPasswordBody struct {
+	Token    string `json:"token" validate:"required,min=16,max=128"`
+	Password string `json:"password" validate:"required,min=8,max=128"`
+}
+
+type authLoginOTPRequestBody struct {
+	Email string `json:"email" validate:"required,email,max=254"`
+}
+
+type authLoginOTPVerifyBody struct {
+	VerificationSessionID string `json:"verification_session_id" validate:"required,uuid"`
+	Code                  string `json:"code" validate:"required,len=6,numeric"`
+}
+
+type authLoginTOTPBody struct {
+	MFAToken string `json:"mfa_token" validate:"required"`
+	Code     string `json:"code" validate:"required,len=6,numeric"`
+}
+
+type authTOTPConfirmBody struct {
+	Code string `json:"code" validate:"required,len=6,numeric"`
+}
+
+type authTOTPDisableBody struct {
+	Code     string `json:"code" validate:"required,len=6,numeric"`
+	Password string `json:"password" validate:"required,min=8,max=128"`
+}
+
+type authAcceptInviteBody struct {
+	Token     string  `json:"token" validate:"required"`
+	Password  string  `json:"password" validate:"required,min=8,max=128"`
+	FirstName *string `json:"first_name,omitempty" validate:"omitempty,min=1,max=120"`
+	LastName  *string `json:"last_name,omitempty" validate:"omitempty,min=1,max=120"`
+}
+
+type authCreateOrgInviteBody struct {
+	Email string `json:"email" validate:"required,email,max=254"`
+}
+
 type accountUser struct {
 	ID                    uuid.UUID
 	Email                 string
@@ -98,6 +152,12 @@ type accountUser struct {
 	EmailVerifiedAt       *time.Time
 	OnboardingCompletedAt *time.Time
 	AccountType           *string
+	FirstName             *string
+	LastName              *string
+	LegalFullName         *string
+	CountryID             *uuid.UUID
+	TOTPSecret            *string
+	TOTPEnabledAt         *time.Time
 }
 
 // signup godoc
@@ -433,10 +493,10 @@ func (h *AuthHandler) resendVerification(w http.ResponseWriter, r *http.Request)
 	h.enqueueVerificationEmail(ctx, session.Email, code)
 
 	response.Success(w, r, http.StatusOK, AuthSignupData{
-		VerificationSessionID:       session.SessionID,
-		Email:                       session.Email,
-		CodeExpiresInSeconds:        auth.CodeExpiresInSeconds(),
-		ResendAvailableInSeconds:    auth.ResendAvailableInSeconds(),
+		VerificationSessionID:    session.SessionID,
+		Email:                    session.Email,
+		CodeExpiresInSeconds:     auth.CodeExpiresInSeconds(),
+		ResendAvailableInSeconds: auth.ResendAvailableInSeconds(),
 	})
 }
 
@@ -523,24 +583,12 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := h.Tokens.IssuePair(user.ID, reg, true)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
+	if user.TOTPEnabledAt != nil && user.TOTPSecret != nil {
+		h.respondMFARequired(w, r, user.ID, reg)
 		return
 	}
 
-	summary, err := h.loadOnboardingSummary(ctx, reg, user)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	response.Success(w, r, http.StatusOK, AuthTokenData{
-		AccessToken:  tokens.AccessToken,
-		RefreshToken: tokens.RefreshToken,
-		ExpiresIn:    tokens.ExpiresIn,
-		Onboarding:   summary,
-	})
+	h.respondAuthTokens(w, r, ctx, reg, user)
 }
 
 // refresh godoc
@@ -573,13 +621,25 @@ func (h *AuthHandler) refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := r.Context()
+	if h.Revoker != nil {
+		ok, err := h.Revoker.IsRefreshValid(ctx, claims)
+		if err != nil {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
+		if !ok {
+			response.Error(w, r, apperror.ErrUnauthorized)
+			return
+		}
+	}
+
 	userID, err := uuid.Parse(claims.Subject)
 	if err != nil {
 		response.Error(w, r, apperror.ErrUnauthorized)
 		return
 	}
 
-	ctx := r.Context()
 	reg, _, err := h.lookupRegistryByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -621,6 +681,7 @@ func (h *AuthHandler) beginVerification(ctx context.Context, userID uuid.UUID, e
 		Email:     email,
 		Region:    reg,
 		Code:      code,
+		Purpose:   auth.PurposeEmailVerify,
 	}
 
 	if err := h.Verifier.CreateSession(ctx, session); err != nil {
@@ -639,10 +700,10 @@ func (h *AuthHandler) beginVerification(ctx context.Context, userID uuid.UUID, e
 
 func verificationDetails(data AuthSignupData) map[string]any {
 	return map[string]any{
-		"verification_session_id":       data.VerificationSessionID,
-		"email":                         data.Email,
-		"code_expires_in_seconds":       data.CodeExpiresInSeconds,
-		"resend_available_in_seconds":   data.ResendAvailableInSeconds,
+		"verification_session_id":     data.VerificationSessionID,
+		"email":                       data.Email,
+		"code_expires_in_seconds":     data.CodeExpiresInSeconds,
+		"resend_available_in_seconds": data.ResendAvailableInSeconds,
 	}
 }
 
@@ -658,10 +719,10 @@ func (h *AuthHandler) enqueueVerificationEmail(ctx context.Context, email, code 
 	defer rollbackOnError(ctx, tx)
 
 	_, _ = h.Enqueuer.EnqueueTx(ctx, tx, mailer.EmailArgs{
-		Type:              mailer.TypeEmailVerification,
-		Recipient:         email,
-		Code:              code,
-		ExpiresInSeconds:  auth.CodeExpiresInSeconds(),
+		Type:             mailer.TypeEmailVerification,
+		Recipient:        email,
+		Code:             code,
+		ExpiresInSeconds: auth.CodeExpiresInSeconds(),
 	}, queue.EmailEnqueueOptions()...)
 	_ = tx.Commit(ctx)
 }
@@ -766,8 +827,6 @@ func (h *AuthHandler) loadOnboardingSummary(ctx context.Context, reg region.Regi
 
 func scanAccountUser(row pgx.Row) (accountUser, error) {
 	var user accountUser
-	var firstName, lastName, legalFullName *string
-	var countryID *uuid.UUID
 	err := row.Scan(
 		&user.ID,
 		&user.Email,
@@ -775,12 +834,52 @@ func scanAccountUser(row pgx.Row) (accountUser, error) {
 		&user.EmailVerifiedAt,
 		&user.OnboardingCompletedAt,
 		&user.AccountType,
-		&firstName,
-		&lastName,
-		&legalFullName,
-		&countryID,
+		&user.FirstName,
+		&user.LastName,
+		&user.LegalFullName,
+		&user.CountryID,
+		&user.TOTPSecret,
+		&user.TOTPEnabledAt,
 	)
 	return user, err
+}
+
+func (h *AuthHandler) respondAuthTokens(w http.ResponseWriter, r *http.Request, ctx context.Context, reg region.Region, user accountUser) {
+	tokens, err := h.Tokens.IssuePair(user.ID, reg, true)
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
+	summary, err := h.loadOnboardingSummary(ctx, reg, user)
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
+	response.Success(w, r, http.StatusOK, AuthTokenData{
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		ExpiresIn:    tokens.ExpiresIn,
+		Onboarding:   summary,
+	})
+}
+
+func (h *AuthHandler) respondMFARequired(w http.ResponseWriter, r *http.Request, userID uuid.UUID, reg region.Region) {
+	mfaToken, expiresIn, err := h.Tokens.IssueMFAToken(userID, reg)
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+	response.Success(w, r, http.StatusOK, AuthMFARequiredData{
+		TOTPRequired: true,
+		MFAToken:     mfaToken,
+		ExpiresIn:    expiresIn,
+	})
+}
+
+func (h *AuthHandler) userTOTPEnabled(user accountUser) bool {
+	return user.TOTPEnabledAt != nil && user.TOTPSecret != nil && *user.TOTPSecret != ""
 }
 
 func onboardingSummary(completedAt *time.Time, currentStep string, completed []string, accountType *string) OnboardingProgressSummary {

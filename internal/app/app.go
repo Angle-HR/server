@@ -16,6 +16,7 @@ import (
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/docs"
 	"github.com/Angle-HR/server/internal/handler"
+	"github.com/Angle-HR/server/internal/onboarding"
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/pkg/config"
 	"github.com/Angle-HR/server/pkg/db"
@@ -81,6 +82,10 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("create token service: %w", err)
 	}
+	totpCrypto, err := auth.NewTOTPCrypto(cfg.TOTPEncryptionKey)
+	if err != nil {
+		return fmt.Errorf("create totp crypto: %w", err)
+	}
 	authMiddleware := auth.NewMiddleware(tokenService)
 
 	adminStore := admin.NewStore(globalPool)
@@ -101,8 +106,11 @@ func Run() error {
 
 	countriesHandler := handler.NewCountriesHandler(globalPool)
 	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, fluvioClient, cfg.AuthDefaultRegion)
-	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, cfg.AuthDefaultRegion)
+	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, cfg.AuthDefaultRegion, totpCrypto)
 	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient)
+	if cfg.AddressVerifyMode == "passthrough" {
+		productOnboardingHandler.AddressProvider = onboarding.PassthroughAddressVerifier{}
+	}
 	individualOnboardingHandler := handler.NewIndividualOnboardingHandler(dbRouter, globalPool)
 	businessOnboardingHandler := handler.NewBusinessOnboardingHandler(dbRouter, globalPool)
 	adminHandler := handler.NewAdminHandler(adminStore, dbRouter, globalPool, tokenService, fluvioClient, fluvioClient)
@@ -145,6 +153,7 @@ func Run() error {
 		productOnboardingHandler.RegisterRoutes(r)
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.RequireAuth)
+			authHandler.RegisterProtectedRoutes(r)
 			productOnboardingHandler.RegisterProtectedRoutes(r)
 			individualOnboardingHandler.RegisterProtectedRoutes(r)
 			businessOnboardingHandler.RegisterProtectedRoutes(r)

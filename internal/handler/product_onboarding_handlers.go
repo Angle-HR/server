@@ -642,6 +642,7 @@ func (h *ProductOnboardingHandler) complete(w http.ResponseWriter, r *http.Reque
 	if err := pool.QueryRow(ctx, userSQL, userArgs...).Scan(
 		&userID, &email, new(string), new(*time.Time), &completedAt,
 		&accountType, new(*string), new(*string), new(*string), new(*uuid.UUID),
+		new(*string), new(*time.Time),
 	); err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -728,6 +729,7 @@ func (h *ProductOnboardingHandler) loadStatus(ctx context.Context, reg region.Re
 	if err := pool.QueryRow(ctx, userSQL, userArgs...).Scan(
 		&userID, &email, new(string), new(*time.Time), &completedAt,
 		&accountType, &firstName, &lastName, &legalFullName, &countryID,
+		new(*string), new(*time.Time),
 	); err != nil {
 		return ProductOnboardingStatusData{}, err
 	}
@@ -952,6 +954,7 @@ func (h *ProductOnboardingHandler) loadAccountType(ctx context.Context, pool dbr
 	if err := pool.QueryRow(ctx, sql, args...).Scan(
 		&userID, new(string), new(string), new(*time.Time), new(*time.Time),
 		&accountType, new(*string), new(*string), new(*string), new(*uuid.UUID),
+		new(*string), new(*time.Time),
 	); err != nil {
 		return "", err
 	}
@@ -985,7 +988,11 @@ func (h *ProductOnboardingHandler) updateRegistryRegion(ctx context.Context, ema
 func emailFromUser(ctx context.Context, pool dbrouter.PgxPool, userID uuid.UUID) string {
 	sql, args, _ := query.LookupAccountUserByID(userID)
 	var email string
-	_ = pool.QueryRow(ctx, sql, args...).Scan(&userID, &email, new(string), new(*time.Time), new(*time.Time), new(*string), new(*string), new(*string), new(*string), new(*uuid.UUID))
+	_ = pool.QueryRow(ctx, sql, args...).Scan(
+		&userID, &email, new(string), new(*time.Time), new(*time.Time),
+		new(*string), new(*string), new(*string), new(*string), new(*uuid.UUID),
+		new(*string), new(*time.Time),
+	)
 	return email
 }
 

@@ -104,6 +104,55 @@ definitions:
                 example: abc123
                 type: string
         type: object
+    internal_handler.AddressSearchData:
+        properties:
+            suggestions:
+                items:
+                    $ref: '#/definitions/internal_handler.AddressSuggestion'
+                type: array
+        type: object
+    internal_handler.AddressSearchEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/internal_handler.AddressSearchData'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_handler.AddressSearchRequest:
+        properties:
+            country_id:
+                example: a1b2c3d4-e5f6-4789-a012-3456789abcde
+                type: string
+            query:
+                example: 10 Downing
+                type: string
+        type: object
+    internal_handler.AddressSuggestion:
+        properties:
+            city:
+                example: London
+                type: string
+            description:
+                example: 10 Downing Street, London, UK
+                type: string
+            formatted_address:
+                example: 10 Downing Street, London SW1A 2AA, UK
+                type: string
+            line_1:
+                example: 10 Downing Street
+                type: string
+            line_2:
+                type: string
+            place_id:
+                example: ChIJ...
+                type: string
+            post_code:
+                example: SW1A 2AA
+                type: string
+            state_or_county:
+                example: Greater London
+                type: string
+        type: object
     internal_handler.AdminAcceptInviteRequest:
         properties:
             name:
@@ -827,6 +876,47 @@ definitions:
             meta:
                 $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
         type: object
+    internal_handler.IdentificationRequirementField:
+        properties:
+            format_hint:
+                example: 8 digits, or SC/NI prefix + 6 digits
+                type: string
+            key:
+                example: registration_number
+                type: string
+            label:
+                example: Company Registration Number (CRN)
+                type: string
+            pattern:
+                example: ^(\d{8}|(SC|NI)\d{6})$
+                type: string
+            placeholder:
+                example: "12345678"
+                type: string
+            required:
+                example: true
+                type: boolean
+        type: object
+    internal_handler.IdentificationRequirementsData:
+        properties:
+            country_id:
+                example: a1b2c3d4-e5f6-4789-a012-3456789abcde
+                type: string
+            country_slug:
+                example: united-kingdom
+                type: string
+            fields:
+                items:
+                    $ref: '#/definitions/internal_handler.IdentificationRequirementField'
+                type: array
+        type: object
+    internal_handler.IdentificationRequirementsEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/internal_handler.IdentificationRequirementsData'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
     internal_handler.IndividualEnvelope:
         properties:
             data:
@@ -929,7 +1019,7 @@ definitions:
                 example: profile
                 type: string
             next_step:
-                example: address
+                example: compliance
                 type: string
             status:
                 enum:
@@ -948,6 +1038,10 @@ definitions:
                 type: string
             formatted_address:
                 type: string
+            identification:
+                additionalProperties:
+                    type: string
+                type: object
             line_1:
                 type: string
             line_2:
@@ -989,6 +1083,10 @@ definitions:
                 type: string
             formatted_address:
                 type: string
+            identification:
+                additionalProperties:
+                    type: string
+                type: object
             line_1:
                 example: 10 Downing Street
                 type: string
@@ -1011,6 +1109,10 @@ definitions:
                 type: string
             formatted_address:
                 type: string
+            identification:
+                additionalProperties:
+                    type: string
+                type: object
             line_1:
                 type: string
             line_2:
@@ -1061,6 +1163,45 @@ definitions:
             industry_id:
                 type: string
         type: object
+    internal_handler.ProductComplianceData:
+        properties:
+            business_type_id:
+                type: string
+            employee_count:
+                type: integer
+            industry_id:
+                type: string
+            onboarding:
+                $ref: '#/definitions/internal_handler.OnboardingProgressSummary'
+        type: object
+    internal_handler.ProductComplianceEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/internal_handler.ProductComplianceData'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_handler.ProductComplianceRequest:
+        properties:
+            business_type_id:
+                example: 61000000-0000-4000-8000-000000000001
+                type: string
+            employee_count:
+                example: 25
+                type: integer
+            industry_id:
+                example: 62000000-0000-4000-8000-000000000001
+                type: string
+        type: object
+    internal_handler.ProductComplianceState:
+        properties:
+            business_type_id:
+                type: string
+            employee_count:
+                type: integer
+            industry_id:
+                type: string
+        type: object
     internal_handler.ProductOnboardingCompleteData:
         properties:
             redirect_url:
@@ -1087,16 +1228,20 @@ definitions:
             address:
                 $ref: '#/definitions/internal_handler.ProductAddressState'
             business:
-                $ref: '#/definitions/internal_handler.ProductBusinessState'
+                allOf:
+                    - $ref: '#/definitions/internal_handler.ProductBusinessState'
+                description: 'deprecated: use compliance'
             completed_steps:
                 items:
                     type: string
                 type: array
+            compliance:
+                $ref: '#/definitions/internal_handler.ProductComplianceState'
             current_step:
-                example: address
+                example: identification_address
                 type: string
             next_step:
-                example: address
+                example: compliance
                 type: string
             profile:
                 $ref: '#/definitions/internal_handler.ProductProfileState'
@@ -1266,6 +1411,37 @@ definitions:
             meta:
                 $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
         type: object
+    internal_handler.VerifyAddressRequest:
+        properties:
+            city:
+                example: London
+                type: string
+            country_id:
+                example: a1b2c3d4-e5f6-4789-a012-3456789abcde
+                type: string
+            entry_mode:
+                enum:
+                    - search
+                    - manual
+                example: search
+                type: string
+            formatted_address:
+                type: string
+            line_1:
+                example: 10 Downing Street
+                type: string
+            line_2:
+                type: string
+            place_id:
+                example: ChIJ...
+                type: string
+            post_code:
+                example: SW1A 2AA
+                type: string
+            state_or_county:
+                example: Greater London
+                type: string
+        type: object
     internal_handler.VerifyAddressResponse:
         properties:
             city:
@@ -1273,6 +1449,20 @@ definitions:
                 type: string
             country_id:
                 example: a1b2c3d4-e5f6-4789-a012-3456789abcde
+                type: string
+            entry_mode:
+                enum:
+                    - search
+                    - manual
+                example: search
+                type: string
+            failure_reason:
+                enum:
+                    - not_verifiable
+                    - invalid_address
+                example: not_verifiable
+                type: string
+            formatted_address:
                 type: string
             line_1:
                 example: 10 Downing Street
@@ -2943,7 +3133,7 @@ paths:
         put:
             consumes:
                 - application/json
-            description: Saves workspace address from search or manual entry.
+            description: Saves business registry identification and workspace address. Business accounts only.
             parameters:
                 - description: Address payload
                   in: body
@@ -2972,12 +3162,61 @@ paths:
                         $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
             security:
                 - BearerAuth: []
-            summary: Upsert address
+            summary: Upsert identification and address
+            tags:
+                - onboarding/address
+    /onboarding/address/search:
+        post:
+            consumes:
+                - application/json
+            description: Returns address autocomplete suggestions for a partial query and country.
+            parameters:
+                - description: Address search payload
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.AddressSearchRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.AddressSearchEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "401":
+                    description: Unauthorized
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "500":
+                    description: Internal Server Error
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "501":
+                    description: Not Implemented
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Search addresses
             tags:
                 - onboarding/address
     /onboarding/address/verify:
         post:
-            description: Verifies the saved workspace address. With ADDRESS_VERIFY_MODE=passthrough (default non-prod), marks the address verified. Otherwise returns 501 until a real provider is wired.
+            consumes:
+                - application/json
+            description: Verifies a search or manual address payload. Returns verification_status and optional failure_reason (not_verifiable shows manual entry).
+            parameters:
+                - description: Address verification payload
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.VerifyAddressRequest'
             produces:
                 - application/json
             responses:
@@ -3046,7 +3285,8 @@ paths:
         put:
             consumes:
                 - application/json
-            description: Saves business type, industry, and employee count. Business accounts only.
+            deprecated: true
+            description: 'Deprecated: use PUT /onboarding/compliance. Saves business type, industry, and employee count.'
             parameters:
                 - description: Business payload
                   in: body
@@ -3075,7 +3315,7 @@ paths:
                         $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
             security:
                 - BearerAuth: []
-            summary: Upsert business compliance
+            summary: Upsert business compliance (deprecated)
             tags:
                 - onboarding/business
     /onboarding/business-types:
@@ -3143,6 +3383,73 @@ paths:
             summary: Complete onboarding
             tags:
                 - onboarding/session
+    /onboarding/compliance:
+        put:
+            consumes:
+                - application/json
+            description: Saves business type, industry, and employee count for individual or business accounts.
+            parameters:
+                - description: Compliance payload
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.ProductComplianceRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.ProductComplianceEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "401":
+                    description: Unauthorized
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "500":
+                    description: Internal Server Error
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Upsert compliance
+            tags:
+                - onboarding/compliance
+    /onboarding/identification-requirements:
+        get:
+            description: Returns country-specific business identification field labels, formats, and validation patterns.
+            parameters:
+                - description: Country UUID
+                  in: query
+                  name: country_id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.IdentificationRequirementsEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "500":
+                    description: Internal Server Error
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            summary: Get business identification requirements
+            tags:
+                - onboarding/reference
     /onboarding/individual:
         post:
             consumes:
@@ -3381,22 +3688,25 @@ tags:
     - description: Product signup, email verification OTP (not for passwordless login), password login, passwordless login OTP (/auth/login/otp/*), TOTP MFA, password reset, logout, /auth/me, and product org invites.
       name: auth
       x-displayName: Auth
-    - description: Product onboarding catalog endpoints (business types, industries, company roles). Separate from waitlist reference data.
+    - description: Product onboarding catalog endpoints (business types, industries, company roles, identification requirements). Separate from waitlist reference data.
       name: onboarding/reference
       x-displayName: Reference
     - description: 'Canonical profile step: account type (`individual` or `business`) and profile fields via PUT /onboarding/profile. Individual accounts set region from country_id.'
       name: onboarding/profile
       x-displayName: Profile
-    - description: Workspace address (search or manual entry). POST /onboarding/address/verify uses ADDRESS_VERIFY_MODE=passthrough in non-prod; otherwise 501 until a real provider is wired.
+    - description: Business identification and workspace address. POST /onboarding/address/search and POST /onboarding/address/verify accept payloads directly. Uses ADDRESS_SEARCH_MODE and ADDRESS_VERIFY_MODE passthrough in non-prod.
       name: onboarding/address
       x-displayName: Address
-    - description: Canonical compliance step is PUT /onboarding/business (business_type_id, industry_id, employee_count). POST /onboarding/business is deprecated (KYB-oriented one-shot).
+    - description: 'Canonical compliance step: PUT /onboarding/compliance (business_type_id, industry_id, employee_count) for individual and business accounts.'
+      name: onboarding/compliance
+      x-displayName: Compliance
+    - description: Deprecated alias for PUT /onboarding/compliance. POST /onboarding/business is deprecated (KYB-oriented one-shot).
       name: onboarding/business
       x-displayName: Business
     - description: Deprecated one-shot POST /onboarding/individual. Prefer PUT /onboarding/profile with account_type individual.
       name: onboarding/individual
       x-displayName: Individual
-    - description: 'Onboarding progress and completion. Individual: verify_email → profile → address. Business: also requires business step.'
+    - description: 'Onboarding progress and completion. Individual: verify_email → profile → compliance → complete. Business: verify_email → profile → identification_address → compliance → complete.'
       name: onboarding/session
       x-displayName: Session
     - description: Admin console login, invite acceptance, token refresh, and current admin profile with RBAC permissions.
@@ -3434,6 +3744,7 @@ x-tagGroups:
         - onboarding/reference
         - onboarding/profile
         - onboarding/address
+        - onboarding/compliance
         - onboarding/business
         - onboarding/individual
         - onboarding/session

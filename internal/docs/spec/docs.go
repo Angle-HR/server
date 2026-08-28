@@ -2263,7 +2263,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Saves workspace address from search or manual entry.",
+                "description": "Saves business registry identification and workspace address. Business accounts only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2273,7 +2273,7 @@ const docTemplate = `{
                 "tags": [
                     "onboarding/address"
                 ],
-                "summary": "Upsert address",
+                "summary": "Upsert identification and address",
                 "parameters": [
                     {
                         "description": "Address payload",
@@ -2313,6 +2313,69 @@ const docTemplate = `{
                 }
             }
         },
+        "/onboarding/address/search": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns address autocomplete suggestions for a partial query and country.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "onboarding/address"
+                ],
+                "summary": "Search addresses",
+                "parameters": [
+                    {
+                        "description": "Address search payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AddressSearchRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AddressSearchEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "501": {
+                        "description": "Not Implemented",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/onboarding/address/verify": {
             "post": {
                 "security": [
@@ -2320,7 +2383,10 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Verifies the saved workspace address. With ADDRESS_VERIFY_MODE=passthrough (default non-prod), marks the address verified. Otherwise returns 501 until a real provider is wired.",
+                "description": "Verifies a search or manual address payload. Returns verification_status and optional failure_reason (not_verifiable shows manual entry).",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -2328,6 +2394,17 @@ const docTemplate = `{
                     "onboarding/address"
                 ],
                 "summary": "Verify address",
+                "parameters": [
+                    {
+                        "description": "Address verification payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.VerifyAddressRequest"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -2369,7 +2446,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Saves business type, industry, and employee count. Business accounts only.",
+                "description": "Deprecated: use PUT /onboarding/compliance. Saves business type, industry, and employee count.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2379,7 +2456,8 @@ const docTemplate = `{
                 "tags": [
                     "onboarding/business"
                 ],
-                "summary": "Upsert business compliance",
+                "summary": "Upsert business compliance (deprecated)",
+                "deprecated": true,
                 "parameters": [
                     {
                         "description": "Business payload",
@@ -2563,6 +2641,110 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/onboarding/compliance": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Saves business type, industry, and employee count for individual or business accounts.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "onboarding/compliance"
+                ],
+                "summary": "Upsert compliance",
+                "parameters": [
+                    {
+                        "description": "Compliance payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ProductComplianceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ProductComplianceEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/onboarding/identification-requirements": {
+            "get": {
+                "description": "Returns country-specific business identification field labels, formats, and validation patterns.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "onboarding/reference"
+                ],
+                "summary": "Get business identification requirements",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Country UUID",
+                        "name": "country_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.IdentificationRequirementsEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -3078,6 +3260,77 @@ const docTemplate = `{
                 "request_id": {
                     "type": "string",
                     "example": "abc123"
+                }
+            }
+        },
+        "internal_handler.AddressSearchData": {
+            "type": "object",
+            "properties": {
+                "suggestions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.AddressSuggestion"
+                    }
+                }
+            }
+        },
+        "internal_handler.AddressSearchEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.AddressSearchData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_handler.AddressSearchRequest": {
+            "type": "object",
+            "properties": {
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "query": {
+                    "type": "string",
+                    "example": "10 Downing"
+                }
+            }
+        },
+        "internal_handler.AddressSuggestion": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "example": "London"
+                },
+                "description": {
+                    "type": "string",
+                    "example": "10 Downing Street, London, UK"
+                },
+                "formatted_address": {
+                    "type": "string",
+                    "example": "10 Downing Street, London SW1A 2AA, UK"
+                },
+                "line_1": {
+                    "type": "string",
+                    "example": "10 Downing Street"
+                },
+                "line_2": {
+                    "type": "string"
+                },
+                "place_id": {
+                    "type": "string",
+                    "example": "ChIJ..."
+                },
+                "post_code": {
+                    "type": "string",
+                    "example": "SW1A 2AA"
+                },
+                "state_or_county": {
+                    "type": "string",
+                    "example": "Greater London"
                 }
             }
         },
@@ -4163,6 +4416,65 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_handler.IdentificationRequirementField": {
+            "type": "object",
+            "properties": {
+                "format_hint": {
+                    "type": "string",
+                    "example": "8 digits, or SC/NI prefix + 6 digits"
+                },
+                "key": {
+                    "type": "string",
+                    "example": "registration_number"
+                },
+                "label": {
+                    "type": "string",
+                    "example": "Company Registration Number (CRN)"
+                },
+                "pattern": {
+                    "type": "string",
+                    "example": "^(\\d{8}|(SC|NI)\\d{6})$"
+                },
+                "placeholder": {
+                    "type": "string",
+                    "example": "12345678"
+                },
+                "required": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "internal_handler.IdentificationRequirementsData": {
+            "type": "object",
+            "properties": {
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "country_slug": {
+                    "type": "string",
+                    "example": "united-kingdom"
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.IdentificationRequirementField"
+                    }
+                }
+            }
+        },
+        "internal_handler.IdentificationRequirementsEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.IdentificationRequirementsData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
         "internal_handler.IndividualEnvelope": {
             "type": "object",
             "properties": {
@@ -4314,7 +4626,7 @@ const docTemplate = `{
                 },
                 "next_step": {
                     "type": "string",
-                    "example": "address"
+                    "example": "compliance"
                 },
                 "status": {
                     "type": "string",
@@ -4340,6 +4652,12 @@ const docTemplate = `{
                 },
                 "formatted_address": {
                     "type": "string"
+                },
+                "identification": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 },
                 "line_1": {
                     "type": "string"
@@ -4400,6 +4718,12 @@ const docTemplate = `{
                 "formatted_address": {
                     "type": "string"
                 },
+                "identification": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
                 "line_1": {
                     "type": "string",
                     "example": "10 Downing Street"
@@ -4431,6 +4755,12 @@ const docTemplate = `{
                 },
                 "formatted_address": {
                     "type": "string"
+                },
+                "identification": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 },
                 "line_1": {
                     "type": "string"
@@ -4508,6 +4838,65 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_handler.ProductComplianceData": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "type": "string"
+                },
+                "employee_count": {
+                    "type": "integer"
+                },
+                "industry_id": {
+                    "type": "string"
+                },
+                "onboarding": {
+                    "$ref": "#/definitions/internal_handler.OnboardingProgressSummary"
+                }
+            }
+        },
+        "internal_handler.ProductComplianceEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.ProductComplianceData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_handler.ProductComplianceRequest": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "type": "string",
+                    "example": "61000000-0000-4000-8000-000000000001"
+                },
+                "employee_count": {
+                    "type": "integer",
+                    "example": 25
+                },
+                "industry_id": {
+                    "type": "string",
+                    "example": "62000000-0000-4000-8000-000000000001"
+                }
+            }
+        },
+        "internal_handler.ProductComplianceState": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "type": "string"
+                },
+                "employee_count": {
+                    "type": "integer"
+                },
+                "industry_id": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_handler.ProductOnboardingCompleteData": {
             "type": "object",
             "properties": {
@@ -4546,7 +4935,12 @@ const docTemplate = `{
                     "$ref": "#/definitions/internal_handler.ProductAddressState"
                 },
                 "business": {
-                    "$ref": "#/definitions/internal_handler.ProductBusinessState"
+                    "description": "deprecated: use compliance",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/internal_handler.ProductBusinessState"
+                        }
+                    ]
                 },
                 "completed_steps": {
                     "type": "array",
@@ -4554,13 +4948,16 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "compliance": {
+                    "$ref": "#/definitions/internal_handler.ProductComplianceState"
+                },
                 "current_step": {
                     "type": "string",
-                    "example": "address"
+                    "example": "identification_address"
                 },
                 "next_step": {
                     "type": "string",
-                    "example": "address"
+                    "example": "compliance"
                 },
                 "profile": {
                     "$ref": "#/definitions/internal_handler.ProductProfileState"
@@ -4813,6 +5210,49 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_handler.VerifyAddressRequest": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "example": "London"
+                },
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "entry_mode": {
+                    "type": "string",
+                    "enum": [
+                        "search",
+                        "manual"
+                    ],
+                    "example": "search"
+                },
+                "formatted_address": {
+                    "type": "string"
+                },
+                "line_1": {
+                    "type": "string",
+                    "example": "10 Downing Street"
+                },
+                "line_2": {
+                    "type": "string"
+                },
+                "place_id": {
+                    "type": "string",
+                    "example": "ChIJ..."
+                },
+                "post_code": {
+                    "type": "string",
+                    "example": "SW1A 2AA"
+                },
+                "state_or_county": {
+                    "type": "string",
+                    "example": "Greater London"
+                }
+            }
+        },
         "internal_handler.VerifyAddressResponse": {
             "type": "object",
             "properties": {
@@ -4823,6 +5263,25 @@ const docTemplate = `{
                 "country_id": {
                     "type": "string",
                     "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "entry_mode": {
+                    "type": "string",
+                    "enum": [
+                        "search",
+                        "manual"
+                    ],
+                    "example": "search"
+                },
+                "failure_reason": {
+                    "type": "string",
+                    "enum": [
+                        "not_verifiable",
+                        "invalid_address"
+                    ],
+                    "example": "not_verifiable"
+                },
+                "formatted_address": {
+                    "type": "string"
                 },
                 "line_1": {
                     "type": "string",

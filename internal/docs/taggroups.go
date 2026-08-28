@@ -17,6 +17,7 @@ var onboardingTagGroup = map[string]any{
 		"onboarding/reference",
 		"onboarding/profile",
 		"onboarding/address",
+		"onboarding/compliance",
 		"onboarding/business",
 		"onboarding/individual",
 		"onboarding/session",
@@ -55,7 +56,7 @@ var apiTagDefinitions = []map[string]any{
 	},
 	{
 		"name":          "onboarding/reference",
-		"description":   "Product onboarding catalog endpoints (business types, industries, company roles). Separate from waitlist reference data.",
+		"description":   "Product onboarding catalog endpoints (business types, industries, company roles, identification requirements). Separate from waitlist reference data.",
 		"x-displayName": "Reference",
 	},
 	{
@@ -65,12 +66,17 @@ var apiTagDefinitions = []map[string]any{
 	},
 	{
 		"name":          "onboarding/address",
-		"description":   "Workspace address (search or manual entry). POST /onboarding/address/verify uses ADDRESS_VERIFY_MODE=passthrough in non-prod; otherwise 501 until a real provider is wired.",
+		"description":   "Business identification and workspace address. POST /onboarding/address/search and POST /onboarding/address/verify accept payloads directly. Uses ADDRESS_SEARCH_MODE and ADDRESS_VERIFY_MODE passthrough in non-prod.",
 		"x-displayName": "Address",
 	},
 	{
+		"name":          "onboarding/compliance",
+		"description":   "Canonical compliance step: PUT /onboarding/compliance (business_type_id, industry_id, employee_count) for individual and business accounts.",
+		"x-displayName": "Compliance",
+	},
+	{
 		"name":          "onboarding/business",
-		"description":   "Canonical compliance step is PUT /onboarding/business (business_type_id, industry_id, employee_count). POST /onboarding/business is deprecated (KYB-oriented one-shot).",
+		"description":   "Deprecated alias for PUT /onboarding/compliance. POST /onboarding/business is deprecated (KYB-oriented one-shot).",
 		"x-displayName": "Business",
 	},
 	{
@@ -80,7 +86,7 @@ var apiTagDefinitions = []map[string]any{
 	},
 	{
 		"name":          "onboarding/session",
-		"description":   "Onboarding progress and completion. Individual: verify_email → profile → address. Business: also requires business step.",
+		"description":   "Onboarding progress and completion. Individual: verify_email → profile → compliance → complete. Business: verify_email → profile → identification_address → compliance → complete.",
 		"x-displayName": "Session",
 	},
 	{

@@ -46,7 +46,7 @@ type OnboardingProgressSummary struct {
 	Status         string   `json:"status" example:"in_progress" enums:"in_progress,completed"`
 	CurrentStep    *string  `json:"current_step,omitempty" example:"profile"`
 	CompletedSteps []string `json:"completed_steps" example:"verify_email,profile"`
-	NextStep       *string  `json:"next_step,omitempty" example:"address"`
+	NextStep       *string  `json:"next_step,omitempty" example:"compliance"`
 }
 
 // AuthTokenData is returned after verify-email or login.
@@ -259,14 +259,15 @@ type ProductProfileEnvelope struct {
 
 // ProductAddressRequest upserts workspace address.
 type ProductAddressRequest struct {
-	CountryID        string  `json:"country_id" example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
-	EntryMode        string  `json:"entry_mode" example:"manual" enums:"search,manual"`
-	Line1            string  `json:"line_1" example:"10 Downing Street"`
-	Line2            *string `json:"line_2,omitempty"`
-	City             string  `json:"city" example:"London"`
-	StateOrCounty    string  `json:"state_or_county" example:"Greater London"`
-	PostCode         string  `json:"post_code" example:"SW1A 2AA"`
-	FormattedAddress *string `json:"formatted_address,omitempty"`
+	CountryID        string            `json:"country_id" example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
+	EntryMode        string            `json:"entry_mode" example:"manual" enums:"search,manual"`
+	Line1            string            `json:"line_1" example:"10 Downing Street"`
+	Line2            *string           `json:"line_2,omitempty"`
+	City             string            `json:"city" example:"London"`
+	StateOrCounty    string            `json:"state_or_county" example:"Greater London"`
+	PostCode         string            `json:"post_code" example:"SW1A 2AA"`
+	FormattedAddress *string           `json:"formatted_address,omitempty"`
+	Identification   map[string]string `json:"identification,omitempty" swaggertype:"object,string"`
 }
 
 // ProductAddressData is the address step response payload.
@@ -279,6 +280,7 @@ type ProductAddressData struct {
 	StateOrCounty      string                    `json:"state_or_county"`
 	PostCode           string                    `json:"post_code"`
 	FormattedAddress   *string                   `json:"formatted_address,omitempty"`
+	Identification     map[string]string         `json:"identification,omitempty" swaggertype:"object,string"`
 	VerificationStatus string                    `json:"verification_status" example:"unverified" enums:"unverified,verified,failed"`
 	Onboarding         OnboardingProgressSummary `json:"onboarding"`
 }
@@ -289,16 +291,31 @@ type ProductAddressEnvelope struct {
 	Meta *apidoc.Meta       `json:"meta,omitempty"`
 }
 
-// VerifyAddressResponse is the reserved response payload for third-party
-// address verification, once a provider is integrated.
+// VerifyAddressRequest is the address verification request body.
+type VerifyAddressRequest struct {
+	CountryID        string  `json:"country_id" example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
+	EntryMode        string  `json:"entry_mode" example:"search" enums:"search,manual"`
+	Line1            string  `json:"line_1" example:"10 Downing Street"`
+	Line2            *string `json:"line_2,omitempty"`
+	City             string  `json:"city" example:"London"`
+	StateOrCounty    string  `json:"state_or_county" example:"Greater London"`
+	PostCode         string  `json:"post_code" example:"SW1A 2AA"`
+	FormattedAddress *string `json:"formatted_address,omitempty"`
+	PlaceID          *string `json:"place_id,omitempty" example:"ChIJ..."`
+}
+
+// VerifyAddressResponse is the address verification response payload.
 type VerifyAddressResponse struct {
 	CountryID          string  `json:"country_id" example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
+	EntryMode          string  `json:"entry_mode" example:"search" enums:"search,manual"`
 	Line1              string  `json:"line_1" example:"10 Downing Street"`
 	Line2              *string `json:"line_2,omitempty"`
 	City               string  `json:"city" example:"London"`
 	StateOrCounty      string  `json:"state_or_county" example:"Greater London"`
 	PostCode           string  `json:"post_code" example:"SW1A 2AA"`
+	FormattedAddress   *string `json:"formatted_address,omitempty"`
 	VerificationStatus string  `json:"verification_status" example:"verified" enums:"verified,failed,unverified"`
+	FailureReason      *string `json:"failure_reason,omitempty" example:"not_verifiable" enums:"not_verifiable,invalid_address"`
 }
 
 // VerifyAddressEnvelope is a successful address verification response.
@@ -307,19 +324,31 @@ type VerifyAddressEnvelope struct {
 	Meta *apidoc.Meta          `json:"meta,omitempty"`
 }
 
-// ProductBusinessRequest upserts business compliance fields.
+// ProductBusinessRequest upserts compliance fields (business type, industry, employee count).
 type ProductBusinessRequest struct {
 	BusinessTypeID string `json:"business_type_id" example:"61000000-0000-4000-8000-000000000001"`
 	IndustryID     string `json:"industry_id" example:"62000000-0000-4000-8000-000000000001"`
 	EmployeeCount  int    `json:"employee_count" example:"25"`
 }
 
-// ProductBusinessData is the business step response payload.
+// ProductComplianceRequest is an alias for the compliance step request body.
+type ProductComplianceRequest = ProductBusinessRequest
+
+// ProductBusinessData is the compliance step response payload.
 type ProductBusinessData struct {
 	BusinessTypeID string                    `json:"business_type_id"`
 	IndustryID     string                    `json:"industry_id"`
 	EmployeeCount  int                       `json:"employee_count"`
 	Onboarding     OnboardingProgressSummary `json:"onboarding"`
+}
+
+// ProductComplianceData is an alias for the compliance step response payload.
+type ProductComplianceData = ProductBusinessData
+
+// ProductComplianceEnvelope is a successful compliance upsert response.
+type ProductComplianceEnvelope struct {
+	Data ProductComplianceData `json:"data"`
+	Meta *apidoc.Meta          `json:"meta,omitempty"`
 }
 
 // ProductBusinessEnvelope is a successful business upsert response.
@@ -341,34 +370,91 @@ type ProductProfileState struct {
 
 // ProductAddressState is saved address fields in status response.
 type ProductAddressState struct {
-	CountryID          string  `json:"country_id"`
-	EntryMode          string  `json:"entry_mode"`
-	Line1              string  `json:"line_1"`
-	Line2              *string `json:"line_2,omitempty"`
-	City               string  `json:"city"`
-	StateOrCounty      string  `json:"state_or_county"`
-	PostCode           string  `json:"post_code"`
-	FormattedAddress   *string `json:"formatted_address,omitempty"`
-	VerificationStatus string  `json:"verification_status"`
+	CountryID          string            `json:"country_id"`
+	EntryMode          string            `json:"entry_mode"`
+	Line1              string            `json:"line_1"`
+	Line2              *string           `json:"line_2,omitempty"`
+	City               string            `json:"city"`
+	StateOrCounty      string            `json:"state_or_county"`
+	PostCode           string            `json:"post_code"`
+	FormattedAddress   *string           `json:"formatted_address,omitempty"`
+	Identification     map[string]string `json:"identification,omitempty" swaggertype:"object,string"`
+	VerificationStatus string            `json:"verification_status"`
 }
 
-// ProductBusinessState is saved business fields in status response.
+// ProductBusinessState is saved compliance fields in status response.
 type ProductBusinessState struct {
 	BusinessTypeID string `json:"business_type_id"`
 	IndustryID     string `json:"industry_id"`
 	EmployeeCount  int    `json:"employee_count"`
 }
 
+// ProductComplianceState is an alias for saved compliance fields in status response.
+type ProductComplianceState = ProductBusinessState
+
+// AddressSearchRequest is the address autocomplete request body.
+type AddressSearchRequest struct {
+	Query     string `json:"query" example:"10 Downing"`
+	CountryID string `json:"country_id" example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
+}
+
+// AddressSuggestion is one address autocomplete candidate.
+type AddressSuggestion struct {
+	PlaceID          string  `json:"place_id" example:"ChIJ..."`
+	Description      string  `json:"description" example:"10 Downing Street, London, UK"`
+	Line1            string  `json:"line_1" example:"10 Downing Street"`
+	Line2            *string `json:"line_2,omitempty"`
+	City             string  `json:"city" example:"London"`
+	StateOrCounty    string  `json:"state_or_county" example:"Greater London"`
+	PostCode         string  `json:"post_code" example:"SW1A 2AA"`
+	FormattedAddress string  `json:"formatted_address" example:"10 Downing Street, London SW1A 2AA, UK"`
+}
+
+// AddressSearchData is the address search response payload.
+type AddressSearchData struct {
+	Suggestions []AddressSuggestion `json:"suggestions"`
+}
+
+// AddressSearchEnvelope is a successful address search response.
+type AddressSearchEnvelope struct {
+	Data AddressSearchData `json:"data"`
+	Meta *apidoc.Meta      `json:"meta,omitempty"`
+}
+
+// IdentificationRequirementField describes one business identification input.
+type IdentificationRequirementField struct {
+	Key         string `json:"key" example:"registration_number"`
+	Label       string `json:"label" example:"Company Registration Number (CRN)"`
+	FormatHint  string `json:"format_hint" example:"8 digits, or SC/NI prefix + 6 digits"`
+	Placeholder string `json:"placeholder" example:"12345678"`
+	Pattern     string `json:"pattern" example:"^(\\d{8}|(SC|NI)\\d{6})$"`
+	Required    bool   `json:"required" example:"true"`
+}
+
+// IdentificationRequirementsData is the identification requirements payload.
+type IdentificationRequirementsData struct {
+	CountryID   string                           `json:"country_id" example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
+	CountrySlug string                           `json:"country_slug" example:"united-kingdom"`
+	Fields      []IdentificationRequirementField `json:"fields"`
+}
+
+// IdentificationRequirementsEnvelope is a successful identification requirements response.
+type IdentificationRequirementsEnvelope struct {
+	Data IdentificationRequirementsData `json:"data"`
+	Meta *apidoc.Meta                   `json:"meta,omitempty"`
+}
+
 // ProductOnboardingStatusData is the full onboarding state.
 type ProductOnboardingStatusData struct {
 	Status         string                `json:"status" example:"in_progress" enums:"in_progress,completed"`
 	AccountType    *string               `json:"account_type,omitempty" example:"business"`
-	CurrentStep    *string               `json:"current_step,omitempty" example:"address"`
+	CurrentStep    *string               `json:"current_step,omitempty" example:"identification_address"`
 	CompletedSteps []string              `json:"completed_steps"`
-	NextStep       *string               `json:"next_step,omitempty" example:"address"`
+	NextStep       *string               `json:"next_step,omitempty" example:"compliance"`
 	Profile        *ProductProfileState  `json:"profile,omitempty"`
 	Address        *ProductAddressState  `json:"address,omitempty"`
-	Business       *ProductBusinessState `json:"business,omitempty"`
+	Compliance     *ProductComplianceState `json:"compliance,omitempty"`
+	Business       *ProductBusinessState `json:"business,omitempty"` // deprecated: use compliance
 }
 
 // ProductOnboardingStatusEnvelope is a successful status response.

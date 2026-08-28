@@ -1,6 +1,18 @@
 package onboarding
 
-import "context"
+import (
+	"context"
+	"strings"
+)
+
+const (
+	VerificationStatusVerified   = "verified"
+	VerificationStatusFailed     = "failed"
+	VerificationStatusUnverified = "unverified"
+
+	FailureReasonNotVerifiable  = "not_verifiable"
+	FailureReasonInvalidAddress = "invalid_address"
+)
 
 // ProductAddress is the subset of address fields used for verification.
 type ProductAddress struct {
@@ -12,19 +24,34 @@ type ProductAddress struct {
 	StateOrCounty      string
 	PostCode           string
 	FormattedAddress   *string
+	PlaceID            *string
 	VerificationStatus string
 }
 
-// AddressVerifier checks a saved address.
-type AddressVerifier interface {
-	Verify(ctx context.Context, addr ProductAddress) (status string, err error)
+// VerificationResult is returned by an address verifier.
+type VerificationResult struct {
+	Status        string
+	FailureReason *string
 }
 
-// PassthroughAddressVerifier marks a saved address as verified without a third-party call.
+// AddressVerifier checks an address payload.
+type AddressVerifier interface {
+	Verify(ctx context.Context, addr ProductAddress) (VerificationResult, error)
+}
+
+// PassthroughAddressVerifier marks any address as verified without a third-party call.
 // Intended for non-production or interim use via ADDRESS_VERIFY_MODE=passthrough.
 type PassthroughAddressVerifier struct{}
 
-// Verify returns "verified" for any saved address.
-func (PassthroughAddressVerifier) Verify(_ context.Context, _ ProductAddress) (string, error) {
-	return "verified", nil
+// Verify returns verified for any address with required fields present.
+func (PassthroughAddressVerifier) Verify(_ context.Context, addr ProductAddress) (VerificationResult, error) {
+	if addr.EntryMode == "search" && (addr.PlaceID == nil || *addr.PlaceID == "") {
+		reason := FailureReasonNotVerifiable
+		return VerificationResult{Status: VerificationStatusFailed, FailureReason: &reason}, nil
+	}
+	if strings.TrimSpace(addr.Line1) == "" || strings.TrimSpace(addr.City) == "" || strings.TrimSpace(addr.PostCode) == "" {
+		reason := FailureReasonInvalidAddress
+		return VerificationResult{Status: VerificationStatusFailed, FailureReason: &reason}, nil
+	}
+	return VerificationResult{Status: VerificationStatusVerified}, nil
 }

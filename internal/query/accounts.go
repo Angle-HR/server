@@ -199,6 +199,37 @@ func UpsertOrganizationProfile(
 		ToSQL())
 }
 
+// UpdateOrganizationIdentification saves registry identification fields on the organization row.
+func UpdateOrganizationIdentification(
+	ownerUserID uuid.UUID,
+	binNumber string,
+	identificationPayload []byte,
+) (string, []any, error) {
+	return mustSQL(postgres.Update("organizations").
+		Set("bin_number", binNumber).
+		Set("identification_payload", identificationPayload).
+		Where("owner_user_id", "=", ownerUserID).
+		Returning("id").
+		ToSQL())
+}
+
+// LookupOrganizationIdentification returns SQL to load identification fields for an organization owner.
+func LookupOrganizationIdentification(ownerUserID uuid.UUID) (string, []any, error) {
+	return mustSQL(postgres.Select("bin_number", "identification_payload").
+		From("organizations").
+		Where("owner_user_id", "=", ownerUserID).
+		ToSQL())
+}
+
+// LookupIndividualUserCompliance returns SQL to load individual compliance fields from the user row.
+func LookupIndividualUserCompliance(userID uuid.UUID) (string, []any, error) {
+	return mustSQL(postgres.Select("business_type_id", "industry_id", "employee_count").
+		From("users").
+		Where("id", "=", userID).
+		WhereNull("deleted_at").
+		ToSQL())
+}
+
 // UpdateOrganizationBusiness returns SQL to save business compliance fields.
 func UpdateOrganizationBusiness(
 	ownerUserID uuid.UUID,

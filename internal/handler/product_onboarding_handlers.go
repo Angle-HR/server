@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -33,6 +34,7 @@ type ProductOnboardingHandler struct {
 	GlobalDB        globalDB
 	Enqueuer        jobEnqueuer
 	AddressProvider onboarding.AddressVerifier
+	AddressSearcher onboarding.AddressSearcher
 	validate        *validator.Validate
 }
 
@@ -57,6 +59,18 @@ type productProfileBody struct {
 }
 
 type productAddressBody struct {
+	CountryID        string            `json:"country_id" validate:"required,uuid"`
+	EntryMode        string            `json:"entry_mode" validate:"required,oneof=search manual"`
+	Line1            string            `json:"line_1" validate:"required,max=200"`
+	Line2            *string           `json:"line_2"`
+	City             string            `json:"city" validate:"required,max=100"`
+	StateOrCounty    string            `json:"state_or_county" validate:"required,max=100"`
+	PostCode         string            `json:"post_code" validate:"required,max=20"`
+	FormattedAddress *string           `json:"formatted_address"`
+	Identification   map[string]string `json:"identification"`
+}
+
+type productVerifyAddressBody struct {
 	CountryID        string  `json:"country_id" validate:"required,uuid"`
 	EntryMode        string  `json:"entry_mode" validate:"required,oneof=search manual"`
 	Line1            string  `json:"line_1" validate:"required,max=200"`
@@ -65,6 +79,12 @@ type productAddressBody struct {
 	StateOrCounty    string  `json:"state_or_county" validate:"required,max=100"`
 	PostCode         string  `json:"post_code" validate:"required,max=20"`
 	FormattedAddress *string `json:"formatted_address"`
+	PlaceID          *string `json:"place_id"`
+}
+
+type addressSearchBody struct {
+	Query     string `json:"query" validate:"required,min=2,max=200"`
+	CountryID string `json:"country_id" validate:"required,uuid"`
 }
 
 type productBusinessBody struct {
@@ -279,8 +299,8 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 
 // putAddress godoc
 //
-//	@Summary		Upsert address
-//	@Description	Saves workspace address from search or manual entry.
+//	@Summary		Upsert identification and address
+//	@Description	Saves business registry identification and workspace address. Business accounts only.
 //	@Tags			onboarding/address
 //	@Accept			json
 //	@Produce		json
@@ -330,6 +350,26 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
+	if accountType != onboarding.AccountBusiness {
+		response.Error(w, r, apperror.New(apperror.CodeInvalidAccountBranch, apperror.MsgInvalidAccountTypeBranch))
+		return
+	}
+
+	countrySlug, err := h.countrySlugByID(ctx, countryID)
+	if err != nil {
+		response.Error(w, r, err)
+		return
+	}
+	if err := onboarding.ValidateIdentification(countrySlug, req.Identification); err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, err.Error()))
+		return
+	}
+	identificationPayload, err := json.Marshal(req.Identification)
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+	binNumber := onboarding.PrimaryIdentificationNumber(countrySlug, req.Identification)
 
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -338,14 +378,21 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 	}
 	defer rollbackOnError(ctx, tx)
 
-	var orgID *uuid.UUID
-	if accountType == onboarding.AccountBusiness {
-		id, err := h.loadOrganizationID(ctx, tx, userID)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		orgID = &id
+	id, err := h.loadOrganizationID(ctx, tx, userID)
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+	orgID := &id
+
+	idSQL, idArgs, err := query.UpdateOrganizationIdentification(userID, binNumber, identificationPayload)
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+	if _, err := tx.Exec(ctx, idSQL, idArgs...); err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
 	}
 
 	addrSQL, addrArgs, err := query.UpsertAccountAddress(
@@ -361,7 +408,7 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepAddress)
+	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepIdentificationAddress)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -382,6 +429,7 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 		StateOrCounty:      req.StateOrCounty,
 		PostCode:           req.PostCode,
 		FormattedAddress:   req.FormattedAddress,
+		Identification:     req.Identification,
 		VerificationStatus: "unverified",
 		Onboarding: OnboardingProgressSummary{
 			Status:         onboarding.StatusInProgress,
@@ -392,13 +440,82 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 	})
 }
 
+// searchAddress godoc
+//
+//	@Summary		Search addresses
+//	@Description	Returns address autocomplete suggestions for a partial query and country.
+//	@Tags			onboarding/address
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			body	body		handler.AddressSearchRequest	true	"Address search payload"
+//	@Success		200		{object}	handler.AddressSearchEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		401		{object}	apidoc.ErrorEnvelope
+//	@Failure		501		{object}	apidoc.ErrorEnvelope
+//	@Failure		500		{object}	apidoc.ErrorEnvelope
+//	@Router			/onboarding/address/search [post]
+func (h *ProductOnboardingHandler) searchAddress(w http.ResponseWriter, r *http.Request) {
+	if h.AddressSearcher == nil {
+		response.Error(w, r, apperror.New(apperror.CodeNotImplemented, apperror.MsgNotImplemented))
+		return
+	}
+
+	_, _, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		response.Error(w, r, apperror.ErrUnauthorized)
+		return
+	}
+
+	var req addressSearchBody
+	if err := decodeJSON(r, &req); err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		return
+	}
+	if err := h.validate.Struct(req); err != nil {
+		response.Error(w, r, validationError(err))
+		return
+	}
+
+	ctx := r.Context()
+	countryID := uuid.MustParse(req.CountryID)
+	if err := h.ensureActiveCountry(ctx, countryID); err != nil {
+		response.Error(w, r, err)
+		return
+	}
+
+	results, err := h.AddressSearcher.Search(ctx, req.CountryID, strings.TrimSpace(req.Query))
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
+	suggestions := make([]AddressSuggestion, 0, len(results))
+	for _, item := range results {
+		suggestions = append(suggestions, AddressSuggestion{
+			PlaceID:          item.PlaceID,
+			Description:      item.Description,
+			Line1:            item.Line1,
+			Line2:            item.Line2,
+			City:             item.City,
+			StateOrCounty:    item.StateOrCounty,
+			PostCode:         item.PostCode,
+			FormattedAddress: item.FormattedAddress,
+		})
+	}
+
+	response.Success(w, r, http.StatusOK, AddressSearchData{Suggestions: suggestions})
+}
+
 // verifyAddress godoc
 //
 //	@Summary		Verify address
-//	@Description	Verifies the saved workspace address. With ADDRESS_VERIFY_MODE=passthrough (default non-prod), marks the address verified. Otherwise returns 501 until a real provider is wired.
+//	@Description	Verifies a search or manual address payload. Returns verification_status and optional failure_reason (not_verifiable shows manual entry).
 //	@Tags			onboarding/address
+//	@Accept			json
 //	@Produce		json
 //	@Security		BearerAuth
+//	@Param			body	body		handler.VerifyAddressRequest	true	"Address verification payload"
 //	@Success		200	{object}	handler.VerifyAddressEnvelope
 //	@Failure		400	{object}	apidoc.ErrorEnvelope
 //	@Failure		401	{object}	apidoc.ErrorEnvelope
@@ -406,10 +523,6 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 //	@Failure		501	{object}	apidoc.ErrorEnvelope
 //	@Router			/onboarding/address/verify [post]
 func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.Request) {
-	// TODO: remove this gate once AddressProvider has a real third-party
-	// implementation wired up (e.g. in NewProductOnboardingHandler). Everything
-	// below is already wired to load the saved address, call the provider, and
-	// persist its result.
 	if h.AddressProvider == nil {
 		response.Error(w, r, apperror.New(apperror.CodeNotImplemented, apperror.MsgNotImplemented))
 		return
@@ -420,7 +533,43 @@ func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.
 		response.Error(w, r, apperror.ErrUnauthorized)
 		return
 	}
+
+	var req productVerifyAddressBody
+	if err := decodeJSON(r, &req); err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		return
+	}
+	if err := h.validate.Struct(req); err != nil {
+		response.Error(w, r, validationError(err))
+		return
+	}
+	if req.EntryMode == "search" && (req.FormattedAddress == nil || strings.TrimSpace(*req.FormattedAddress) == "") {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, "formatted_address is required when entry_mode is search"))
+		return
+	}
+
 	ctx := r.Context()
+	countryID := uuid.MustParse(req.CountryID)
+	if err := h.ensureActiveCountry(ctx, countryID); err != nil {
+		response.Error(w, r, err)
+		return
+	}
+
+	result, err := h.AddressProvider.Verify(ctx, onboarding.ProductAddress{
+		CountryID:        req.CountryID,
+		EntryMode:        req.EntryMode,
+		Line1:            req.Line1,
+		Line2:            req.Line2,
+		City:             req.City,
+		StateOrCounty:    req.StateOrCounty,
+		PostCode:         req.PostCode,
+		FormattedAddress: req.FormattedAddress,
+		PlaceID:          req.PlaceID,
+	})
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
 
 	pool, err := h.Router.DB(reg)
 	if err != nil {
@@ -428,91 +577,59 @@ func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.
 		return
 	}
 
-	addrSQL, addrArgs, err := query.LookupAccountAddressByUser(userID)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	var addr ProductAddressState
-	var addressID, countryID uuid.UUID
-	if err := pool.QueryRow(ctx, addrSQL, addrArgs...).Scan(
-		&addressID, &countryID, &addr.EntryMode, &addr.Line1, &addr.Line2,
-		&addr.City, &addr.StateOrCounty, &addr.PostCode, &addr.FormattedAddress, &addr.VerificationStatus,
-	); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			response.Error(w, r, apperror.New(apperror.CodeValidationError, "complete address step before verification"))
+	if result.Status == onboarding.VerificationStatusVerified {
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			response.Error(w, r, apperror.ErrInternal)
 			return
 		}
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	addr.CountryID = countryID.String()
+		defer rollbackOnError(ctx, tx)
 
-	status, err := h.AddressProvider.Verify(ctx, onboarding.ProductAddress{
-		CountryID:          addr.CountryID,
-		EntryMode:          addr.EntryMode,
-		Line1:              addr.Line1,
-		Line2:              addr.Line2,
-		City:               addr.City,
-		StateOrCounty:      addr.StateOrCounty,
-		PostCode:           addr.PostCode,
-		FormattedAddress:   addr.FormattedAddress,
-		VerificationStatus: addr.VerificationStatus,
-	})
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
+		updSQL, updArgs, err := query.UpdateAccountAddressVerificationStatus(userID, result.Status)
+		if err != nil {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
+		if _, err := tx.Exec(ctx, updSQL, updArgs...); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
 
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	defer rollbackOnError(ctx, tx)
-
-	updSQL, updArgs, err := query.UpdateAccountAddressVerificationStatus(userID, status)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if _, err := tx.Exec(ctx, updSQL, updArgs...); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
+		if err := tx.Commit(ctx); err != nil {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
 	}
 
 	response.Success(w, r, http.StatusOK, VerifyAddressResponse{
-		CountryID:          addr.CountryID,
-		Line1:              addr.Line1,
-		Line2:              addr.Line2,
-		City:               addr.City,
-		StateOrCounty:      addr.StateOrCounty,
-		PostCode:           addr.PostCode,
-		VerificationStatus: status,
+		CountryID:          req.CountryID,
+		EntryMode:          req.EntryMode,
+		Line1:              req.Line1,
+		Line2:              req.Line2,
+		City:               req.City,
+		StateOrCounty:      req.StateOrCounty,
+		PostCode:           req.PostCode,
+		FormattedAddress:   req.FormattedAddress,
+		VerificationStatus: result.Status,
+		FailureReason:      result.FailureReason,
 	})
 }
 
-// putBusiness godoc
+// putCompliance godoc
 //
-//	@Summary		Upsert business compliance
-//	@Description	Saves business type, industry, and employee count. Business accounts only.
-//	@Tags			onboarding/business
+//	@Summary		Upsert compliance
+//	@Description	Saves business type, industry, and employee count for individual or business accounts.
+//	@Tags			onboarding/compliance
 //	@Accept			json
 //	@Produce		json
 //	@Security		BearerAuth
-//	@Param			body	body		handler.ProductBusinessRequest	true	"Business payload"
-//	@Success		200		{object}	handler.ProductBusinessEnvelope
+//	@Param			body	body		handler.ProductComplianceRequest	true	"Compliance payload"
+//	@Success		200		{object}	handler.ProductComplianceEnvelope
 //	@Failure		400		{object}	apidoc.ErrorEnvelope
 //	@Failure		401		{object}	apidoc.ErrorEnvelope
 //	@Failure		500		{object}	apidoc.ErrorEnvelope
-//	@Router			/onboarding/business [put]
-func (h *ProductOnboardingHandler) putBusiness(w http.ResponseWriter, r *http.Request) {
+//	@Router			/onboarding/compliance [put]
+func (h *ProductOnboardingHandler) putCompliance(w http.ResponseWriter, r *http.Request) {
 	userID, reg, ok := auth.UserFromContext(r.Context())
 	if !ok {
 		response.Error(w, r, apperror.ErrUnauthorized)
@@ -541,10 +658,6 @@ func (h *ProductOnboardingHandler) putBusiness(w http.ResponseWriter, r *http.Re
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
-	if accountType != onboarding.AccountBusiness {
-		response.Error(w, r, apperror.New(apperror.CodeInvalidAccountBranch, apperror.MsgInvalidAccountTypeBranch))
-		return
-	}
 
 	businessTypeID := uuid.MustParse(req.BusinessTypeID)
 	industryID := uuid.MustParse(req.IndustryID)
@@ -564,21 +677,37 @@ func (h *ProductOnboardingHandler) putBusiness(w http.ResponseWriter, r *http.Re
 	}
 	defer rollbackOnError(ctx, tx)
 
-	bizSQL, bizArgs, err := query.UpdateOrganizationBusiness(userID, businessTypeID, industryID, req.EmployeeCount)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if err := tx.QueryRow(ctx, bizSQL, bizArgs...).Scan(new(uuid.UUID)); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			response.Error(w, r, apperror.New(apperror.CodeValidationError, "complete profile before business step"))
+	switch accountType {
+	case onboarding.AccountIndividual:
+		bizSQL, bizArgs, err := query.UpdateIndividualUserBusinessDetails(userID, businessTypeID, industryID, req.EmployeeCount)
+		if err != nil {
+			response.Error(w, r, apperror.ErrInternal)
 			return
 		}
-		response.Error(w, r, apperror.ErrInternal)
+		if _, err := tx.Exec(ctx, bizSQL, bizArgs...); err != nil {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
+	case onboarding.AccountBusiness:
+		bizSQL, bizArgs, err := query.UpdateOrganizationBusiness(userID, businessTypeID, industryID, req.EmployeeCount)
+		if err != nil {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
+		if err := tx.QueryRow(ctx, bizSQL, bizArgs...).Scan(new(uuid.UUID)); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				response.Error(w, r, apperror.New(apperror.CodeValidationError, "complete profile before compliance step"))
+				return
+			}
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
+	default:
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequest))
 		return
 	}
 
-	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepBusiness)
+	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepCompliance)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -590,7 +719,7 @@ func (h *ProductOnboardingHandler) putBusiness(w http.ResponseWriter, r *http.Re
 	}
 
 	next := onboarding.NextStep(accountType, completed)
-	response.Success(w, r, http.StatusOK, ProductBusinessData{
+	response.Success(w, r, http.StatusOK, ProductComplianceData{
 		BusinessTypeID: req.BusinessTypeID,
 		IndustryID:     req.IndustryID,
 		EmployeeCount:  req.EmployeeCount,
@@ -601,6 +730,25 @@ func (h *ProductOnboardingHandler) putBusiness(w http.ResponseWriter, r *http.Re
 			NextStep:       &next,
 		},
 	})
+}
+
+// putBusiness godoc
+//
+//	@Summary		Upsert business compliance (deprecated)
+//	@Description	Deprecated: use PUT /onboarding/compliance. Saves business type, industry, and employee count.
+//	@Deprecated
+//	@Tags			onboarding/business
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			body	body		handler.ProductBusinessRequest	true	"Business payload"
+//	@Success		200		{object}	handler.ProductBusinessEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		401		{object}	apidoc.ErrorEnvelope
+//	@Failure		500		{object}	apidoc.ErrorEnvelope
+//	@Router			/onboarding/business [put]
+func (h *ProductOnboardingHandler) putBusiness(w http.ResponseWriter, r *http.Request) {
+	h.putCompliance(w, r)
 }
 
 // complete godoc
@@ -663,6 +811,7 @@ func (h *ProductOnboardingHandler) complete(w http.ResponseWriter, r *http.Reque
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
+	completed = onboarding.NormalizeCompletedSteps(completed)
 
 	if !onboarding.CanComplete(stringValue(accountType), completed) {
 		response.Error(w, r, apperror.New(apperror.CodeOnboardingIncomplete, apperror.MsgOnboardingStepIncomplete))
@@ -752,6 +901,8 @@ func (h *ProductOnboardingHandler) loadStatus(ctx context.Context, reg region.Re
 		}
 		currentStep, completed = onboarding.InitialProgress()
 	}
+	completed = onboarding.NormalizeCompletedSteps(completed)
+	currentStep = normalizeCurrentStep(currentStep)
 
 	next := onboarding.NextStep(stringValue(accountType), completed)
 	data := ProductOnboardingStatusData{
@@ -805,7 +956,7 @@ func (h *ProductOnboardingHandler) loadStatus(ctx context.Context, reg region.Re
 			new(uuid.UUID), &country, &entryMode, &line1, &line2, &city, &state, &postCode, &formatted, &verification,
 		); err == nil {
 			cid := country.String()
-			data.Address = &ProductAddressState{
+			addrState := &ProductAddressState{
 				CountryID:          cid,
 				EntryMode:          entryMode,
 				Line1:              line1,
@@ -815,6 +966,36 @@ func (h *ProductOnboardingHandler) loadStatus(ctx context.Context, reg region.Re
 				PostCode:           postCode,
 				FormattedAddress:   formatted,
 				VerificationStatus: verification,
+			}
+			idSQL, idArgs, err := query.LookupOrganizationIdentification(userID)
+			if err == nil {
+				var binNumber *string
+				var payload []byte
+				if err := pool.QueryRow(ctx, idSQL, idArgs...).Scan(&binNumber, &payload); err == nil && len(payload) > 0 {
+					var identification map[string]string
+					if err := json.Unmarshal(payload, &identification); err == nil {
+						addrState.Identification = identification
+					}
+				}
+			}
+			data.Address = addrState
+		}
+	}
+
+	if accountType != nil && *accountType == onboarding.AccountIndividual {
+		complianceSQL, complianceArgs, err := query.LookupIndividualUserCompliance(userID)
+		if err == nil {
+			var businessTypeID, industryID *uuid.UUID
+			var employeeCount *int
+			if err := pool.QueryRow(ctx, complianceSQL, complianceArgs...).Scan(&businessTypeID, &industryID, &employeeCount); err == nil &&
+				businessTypeID != nil && industryID != nil && employeeCount != nil {
+				compliance := &ProductComplianceState{
+					BusinessTypeID: businessTypeID.String(),
+					IndustryID:     industryID.String(),
+					EmployeeCount:  *employeeCount,
+				}
+				data.Compliance = compliance
+				data.Business = compliance
 			}
 		}
 	}
@@ -827,11 +1008,13 @@ func (h *ProductOnboardingHandler) loadStatus(ctx context.Context, reg region.Re
 			if err := pool.QueryRow(ctx, orgSQL, orgArgs...).Scan(
 				new(uuid.UUID), new(string), new(uuid.UUID), &businessTypeID, &industryID, &employeeCount,
 			); err == nil && businessTypeID != nil && industryID != nil && employeeCount != nil {
-				data.Business = &ProductBusinessState{
+				compliance := &ProductComplianceState{
 					BusinessTypeID: businessTypeID.String(),
 					IndustryID:     industryID.String(),
 					EmployeeCount:  *employeeCount,
 				}
+				data.Compliance = compliance
+				data.Business = compliance
 			}
 		}
 	}
@@ -853,9 +1036,10 @@ func (h *ProductOnboardingHandler) advanceProgress(ctx context.Context, tx pgx.T
 		}
 		currentStep, completed = onboarding.InitialProgress()
 	}
+	completed = onboarding.NormalizeCompletedSteps(completed)
 
 	completed = onboarding.AdvanceCompleted(completed, step)
-	currentStep = step
+	currentStep = normalizeStep(step)
 	upsertSQL, upsertArgs, err := query.UpsertOnboardingProgress(userID, currentStep, completed)
 	if err != nil {
 		return nil, "", err
@@ -891,6 +1075,36 @@ func (h *ProductOnboardingHandler) validateBusinessProfile(req productProfileBod
 		return apperror.New(apperror.CodeValidationError, "company_role_id is required")
 	}
 	return nil
+}
+
+func (h *ProductOnboardingHandler) countrySlugByID(ctx context.Context, countryID uuid.UUID) (string, error) {
+	sql, args, err := query.LookupCountryByID(countryID)
+	if err != nil {
+		return "", apperror.ErrInternal
+	}
+	var slug string
+	if err := h.GlobalDB.QueryRow(ctx, sql, args...).Scan(new(uuid.UUID), new(string), &slug, new(string), new(*string)); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID)
+		}
+		return "", apperror.ErrInternal
+	}
+	return slug, nil
+}
+
+func normalizeCurrentStep(step string) string {
+	switch step {
+	case onboarding.StepAddress:
+		return onboarding.StepIdentificationAddress
+	case onboarding.StepBusiness:
+		return onboarding.StepCompliance
+	default:
+		return step
+	}
+}
+
+func normalizeStep(step string) string {
+	return normalizeCurrentStep(step)
 }
 
 func (h *ProductOnboardingHandler) ensureActiveCountry(ctx context.Context, countryID uuid.UUID) error {

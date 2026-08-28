@@ -35,6 +35,7 @@ type Config struct {
 	AdminBootstrapName     string
 	TOTPEncryptionKey      string
 	AddressVerifyMode      string
+	AddressSearchMode      string
 }
 
 // Load reads configuration from the environment.
@@ -57,6 +58,7 @@ func Load() (Config, error) {
 		AdminBootstrapName:     strings.TrimSpace(os.Getenv("ADMIN_BOOTSTRAP_NAME")),
 		TOTPEncryptionKey:      strings.TrimSpace(os.Getenv("TOTP_ENCRYPTION_KEY")),
 		AddressVerifyMode:      strings.ToLower(strings.TrimSpace(os.Getenv("ADDRESS_VERIFY_MODE"))),
+		AddressSearchMode:      strings.ToLower(strings.TrimSpace(os.Getenv("ADDRESS_SEARCH_MODE"))),
 	}
 
 	if cfg.JWTSecret == "" {
@@ -97,6 +99,9 @@ func Load() (Config, error) {
 
 	if cfg.AddressVerifyMode == "" && cfg.AppEnv != "production" && cfg.AppEnv != "prod" {
 		cfg.AddressVerifyMode = "passthrough"
+	}
+	if cfg.AddressSearchMode == "" && cfg.AppEnv != "production" && cfg.AppEnv != "prod" {
+		cfg.AddressSearchMode = "passthrough"
 	}
 
 	if _, err := logger.ParseLevel(cfg.LogLevel, cfg.AppEnv); err != nil {

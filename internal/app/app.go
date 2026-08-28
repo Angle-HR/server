@@ -111,6 +111,9 @@ func Run() error {
 	if cfg.AddressVerifyMode == "passthrough" {
 		productOnboardingHandler.AddressProvider = onboarding.PassthroughAddressVerifier{}
 	}
+	if cfg.AddressSearchMode == "passthrough" {
+		productOnboardingHandler.AddressSearcher = onboarding.PassthroughAddressSearcher{}
+	}
 	individualOnboardingHandler := handler.NewIndividualOnboardingHandler(dbRouter, globalPool)
 	businessOnboardingHandler := handler.NewBusinessOnboardingHandler(dbRouter, globalPool)
 	adminHandler := handler.NewAdminHandler(adminStore, dbRouter, globalPool, tokenService, fluvioClient, fluvioClient)

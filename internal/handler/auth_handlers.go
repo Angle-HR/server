@@ -890,7 +890,7 @@ func onboardingSummary(completedAt *time.Time, currentStep string, completed []s
 		}
 	}
 
-	next := onboarding.NextStep(stringValue(accountType), completed)
+	next := onboarding.NextStep(stringValue(accountType), onboarding.NormalizeCompletedSteps(completed))
 	return OnboardingProgressSummary{
 		Status:         onboarding.StatusInProgress,
 		CurrentStep:    &currentStep,

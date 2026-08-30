@@ -640,7 +640,17 @@ func (h *AuthHandler) refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reg, _, err := h.lookupRegistryByUserID(ctx, userID)
+	reg, email, err := h.lookupRegistryByUserID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			response.Error(w, r, apperror.ErrUnauthorized)
+			return
+		}
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
+	reg, err = h.reconcileUserRegion(ctx, email, userID, reg)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			response.Error(w, r, apperror.ErrUnauthorized)
@@ -780,7 +790,81 @@ func (h *AuthHandler) resolveUserRegion(ctx context.Context, email string) (regi
 		return region.RegionUnknown, uuid.Nil, pgx.ErrNoRows
 	}
 
-	return region.Region(reg), *userID, nil
+	homeReg, err := h.reconcileUserRegion(ctx, registryEmail, *userID, region.Region(reg))
+	if err != nil {
+		return region.RegionUnknown, uuid.Nil, err
+	}
+
+	return homeReg, *userID, nil
+}
+
+func (h *AuthHandler) reconcileUserRegion(ctx context.Context, email string, userID uuid.UUID, registryRegion region.Region) (region.Region, error) {
+	if _, err := h.loadUserByID(ctx, registryRegion, userID); err == nil {
+		return registryRegion, nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return region.RegionUnknown, err
+	}
+
+	homeReg, err := h.findUserHomeRegion(ctx, userID)
+	if err != nil {
+		return region.RegionUnknown, err
+	}
+
+	if homeReg != registryRegion {
+		if err := h.correctRegistryRegion(ctx, email, homeReg); err != nil {
+			return region.RegionUnknown, err
+		}
+	}
+
+	return homeReg, nil
+}
+
+func (h *AuthHandler) findUserHomeRegion(ctx context.Context, userID uuid.UUID) (region.Region, error) {
+	sql, args, err := query.LookupAccountUserByID(userID)
+	if err != nil {
+		return region.RegionUnknown, err
+	}
+
+	var lastErr error
+	for _, reg := range region.All() {
+		pool, err := h.Router.DB(reg)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		var id uuid.UUID
+		err = pool.QueryRow(ctx, sql, args...).Scan(
+			&id, new(string), new(string), new(*time.Time), new(*time.Time),
+			new(*string), new(*string), new(*string), new(*string), new(*uuid.UUID),
+			new(*string), new(*time.Time),
+		)
+		if errors.Is(err, pgx.ErrNoRows) {
+			lastErr = err
+			continue
+		}
+		if err != nil {
+			return region.RegionUnknown, err
+		}
+
+		return reg, nil
+	}
+
+	if lastErr != nil {
+		return region.RegionUnknown, lastErr
+	}
+
+	return region.RegionUnknown, pgx.ErrNoRows
+}
+
+func (h *AuthHandler) correctRegistryRegion(ctx context.Context, email string, homeReg region.Region) error {
+	sql, args, err := query.UpdateUsersRegistryRegion(email, string(homeReg), regionSourceExplicit)
+	if err != nil {
+		return err
+	}
+
+	_, err = h.GlobalDB.Exec(ctx, sql, args...)
+	return err
 }
 
 func (h *AuthHandler) lookupRegistryByUserID(ctx context.Context, userID uuid.UUID) (region.Region, string, error) {

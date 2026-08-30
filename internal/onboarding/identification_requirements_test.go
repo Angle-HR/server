@@ -22,6 +22,46 @@ func TestValidateIdentificationUK(t *testing.T) {
 	}
 }
 
+func TestValidateIdentificationNigeria(t *testing.T) {
+	t.Parallel()
+
+	if err := ValidateIdentification("nigeria", map[string]string{
+		"registration_number": "1234567",
+	}); err != nil {
+		t.Fatalf("valid 7-digit RC: %v", err)
+	}
+
+	if err := ValidateIdentification("nigeria", map[string]string{
+		"registration_number": "RC1234567",
+	}); err != nil {
+		t.Fatalf("valid RC-prefixed number: %v", err)
+	}
+
+	if err := ValidateIdentification("nigeria", map[string]string{
+		"registration_number": "RC 1234567",
+	}); err != nil {
+		t.Fatalf("valid RC-prefixed number with space: %v", err)
+	}
+}
+
+func TestPrimaryIdentificationNumberNigeria(t *testing.T) {
+	t.Parallel()
+
+	got := PrimaryIdentificationNumber("nigeria", map[string]string{
+		"registration_number": "RC1234567",
+	})
+	if got != "1234567" {
+		t.Fatalf("got %q, want normalized 7 digits", got)
+	}
+
+	got = PrimaryIdentificationNumber("nigeria", map[string]string{
+		"registration_number": "1234567",
+	})
+	if got != "1234567" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestPrimaryIdentificationNumber(t *testing.T) {
 	t.Parallel()
 

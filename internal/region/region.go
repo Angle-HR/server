@@ -35,6 +35,11 @@ func Valid(r Region) bool {
 	}
 }
 
+// All returns every configured deployment region.
+func All() []Region {
+	return []Region{RegionUK, RegionUS, RegionAfrica, RegionEU, RegionAsia}
+}
+
 // WithRegion returns a context carrying the resolved region and source.
 func WithRegion(ctx context.Context, region Region, source string) context.Context {
 	ctx = context.WithValue(ctx, regionContextKey, region)

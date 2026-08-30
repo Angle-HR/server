@@ -203,9 +203,9 @@ func expectVerifiedLoginMocks(t *testing.T, emailVerifiedAt *time.Time) (pgxmock
 	if err != nil {
 		t.Fatalf("LookupAccountUserByID: %v", err)
 	}
-	regionalMock.ExpectQuery(userSQL).WithArgs(userArgs...).WillReturnRows(
-		userAccountRows(passwordHash, emailVerifiedAt),
-	)
+	rows := userAccountRows(passwordHash, emailVerifiedAt)
+	regionalMock.ExpectQuery(userSQL).WithArgs(userArgs...).WillReturnRows(rows)
+	regionalMock.ExpectQuery(userSQL).WithArgs(userArgs...).WillReturnRows(rows)
 
 	return globalMock, regionalMock
 }

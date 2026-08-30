@@ -170,12 +170,6 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		countryRegion, err := h.countryRegion(ctx, countryID)
-		if err != nil {
-			response.Error(w, r, err)
-			return
-		}
-
 		tx, err := pool.Begin(ctx)
 		if err != nil {
 			response.Error(w, r, apperror.ErrInternal)
@@ -209,18 +203,13 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		if err := h.updateRegistryRegion(ctx, emailFromUser(ctx, pool, userID), countryRegion); err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-
 		next := onboarding.NextStep(req.AccountType, completed)
 		response.Success(w, r, http.StatusOK, ProductProfileData{
 			AccountType: req.AccountType,
 			FirstName:   req.FirstName,
 			LastName:    req.LastName,
 			CountryID:   req.CountryID,
-			Region:      string(countryRegion),
+			Region:      string(reg),
 			Onboarding: OnboardingProgressSummary{
 				Status:         onboarding.StatusInProgress,
 				CurrentStep:    &currentStep,
@@ -1188,15 +1177,6 @@ func (h *ProductOnboardingHandler) loadOrganizationID(ctx context.Context, tx pg
 		return uuid.Nil, err
 	}
 	return id, nil
-}
-
-func (h *ProductOnboardingHandler) updateRegistryRegion(ctx context.Context, email string, reg region.Region) error {
-	sql, args, err := query.UpdateUsersRegistryRegion(email, string(reg), regionSourceExplicit)
-	if err != nil {
-		return err
-	}
-	_, err = h.GlobalDB.Exec(ctx, sql, args...)
-	return err
 }
 
 func emailFromUser(ctx context.Context, pool dbrouter.PgxPool, userID uuid.UUID) string {

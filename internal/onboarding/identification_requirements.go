@@ -1,9 +1,12 @@
 package onboarding
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // IdentificationField describes one business identification input for a country.
@@ -43,8 +46,8 @@ var identificationBySlug = map[string]IdentificationRequirements{
 				Key:         "registration_number",
 				Label:       "RC number",
 				FormatHint:  "RC followed by 7 digits",
-				Placeholder: "1234567",
-				Pattern:     `^\d{7}$`,
+				Placeholder: "RC 1234567",
+				Pattern:     `(?i)^(RC)?\s?\d{7}$`,
 				Required:    true,
 			},
 		},
@@ -165,7 +168,19 @@ func ValidateIdentification(countrySlug string, values map[string]string) error 
 		if err != nil {
 			return fmt.Errorf("invalid pattern for %s", field.Key)
 		}
-		if !re.MatchString(value) {
+		matched := re.MatchString(value)
+		// #region agent log
+		if countrySlug == "nigeria" && field.Key == "registration_number" {
+			debugLogIdentification("identification_requirements.go:ValidateIdentification", "nigeria registration_number validation", map[string]any{
+				"hypothesisId": "A",
+				"value":        value,
+				"pattern":      field.Pattern,
+				"formatHint":   field.FormatHint,
+				"matched":      matched,
+			})
+		}
+		// #endregion
+		if !matched {
 			return fmt.Errorf("%s has invalid format", field.Key)
 		}
 	}
@@ -190,7 +205,46 @@ func PrimaryIdentificationNumber(countrySlug string, values map[string]string) s
 		return strings.TrimSpace(values["cin"])
 	case "european-union":
 		return strings.TrimSpace(values["vat_number"])
+	case "nigeria":
+		raw := strings.TrimSpace(values["registration_number"])
+		re := regexp.MustCompile(`(?i)^(?:RC\s?)?(\d{7})$`)
+		if m := re.FindStringSubmatch(raw); len(m) == 2 {
+			normalized := m[1]
+			// #region agent log
+			debugLogIdentification("identification_requirements.go:PrimaryIdentificationNumber", "nigeria bin_number normalized", map[string]any{
+				"hypothesisId": "C",
+				"raw":          raw,
+				"normalized":   normalized,
+			})
+			// #endregion
+			return normalized
+		}
+		return raw
 	default:
 		return strings.TrimSpace(values["registration_number"])
 	}
 }
+
+// #region agent log
+func debugLogIdentification(location, message string, data map[string]any) {
+	payload := map[string]any{
+		"sessionId":    "b69c38",
+		"location":     location,
+		"message":      message,
+		"data":         data,
+		"timestamp":    time.Now().UnixMilli(),
+		"runId":        "pre-fix",
+	}
+	line, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	f, err := os.OpenFile("/Users/mac/server/.cursor/debug-b69c38.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.Write(append(line, '\n'))
+}
+
+// #endregion

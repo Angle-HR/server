@@ -238,6 +238,17 @@ type ProductProfileRequest struct {
 	CompanyRoleID     *string `json:"company_role_id,omitempty" example:"60000000-0000-4000-8000-000000000001"`
 }
 
+// RegionReissue carries fresh JWTs when an onboarding step has just moved the
+// account out of the global holding region into a real regional deployment.
+// The client must swap these in immediately — the tokens it was using are
+// still valid JWTs but carry the now-stale "global" region claim, so every
+// subsequent call with the old pair will 401.
+type RegionReissue struct {
+	AccessToken  string `json:"access_token" example:"eyJhbGciOiJIUzI1NiIs..."`
+	RefreshToken string `json:"refresh_token" example:"eyJhbGciOiJIUzI1NiIs..."`
+	ExpiresIn    int    `json:"expires_in" example:"3600"`
+}
+
 // ProductProfileData is the profile step response payload.
 type ProductProfileData struct {
 	AccountType       string                    `json:"account_type" example:"business"`
@@ -249,6 +260,7 @@ type ProductProfileData struct {
 	CompanyRoleID     *string                   `json:"company_role_id,omitempty"`
 	Region            string                    `json:"region" example:"uk"`
 	Onboarding        OnboardingProgressSummary `json:"onboarding"`
+	Tokens            *RegionReissue            `json:"tokens,omitempty"`
 }
 
 // ProductProfileEnvelope is a successful profile upsert response.
@@ -283,6 +295,7 @@ type ProductAddressData struct {
 	Identification     map[string]string         `json:"identification,omitempty" swaggertype:"object,string"`
 	VerificationStatus string                    `json:"verification_status" example:"unverified" enums:"unverified,verified,failed"`
 	Onboarding         OnboardingProgressSummary `json:"onboarding"`
+	Tokens             *RegionReissue            `json:"tokens,omitempty"`
 }
 
 // ProductAddressEnvelope is a successful address upsert response.
@@ -446,15 +459,15 @@ type IdentificationRequirementsEnvelope struct {
 
 // ProductOnboardingStatusData is the full onboarding state.
 type ProductOnboardingStatusData struct {
-	Status         string                `json:"status" example:"in_progress" enums:"in_progress,completed"`
-	AccountType    *string               `json:"account_type,omitempty" example:"business"`
-	CurrentStep    *string               `json:"current_step,omitempty" example:"identification_address"`
-	CompletedSteps []string              `json:"completed_steps"`
-	NextStep       *string               `json:"next_step,omitempty" example:"compliance"`
-	Profile        *ProductProfileState  `json:"profile,omitempty"`
-	Address        *ProductAddressState  `json:"address,omitempty"`
+	Status         string                  `json:"status" example:"in_progress" enums:"in_progress,completed"`
+	AccountType    *string                 `json:"account_type,omitempty" example:"business"`
+	CurrentStep    *string                 `json:"current_step,omitempty" example:"identification_address"`
+	CompletedSteps []string                `json:"completed_steps"`
+	NextStep       *string                 `json:"next_step,omitempty" example:"compliance"`
+	Profile        *ProductProfileState    `json:"profile,omitempty"`
+	Address        *ProductAddressState    `json:"address,omitempty"`
 	Compliance     *ProductComplianceState `json:"compliance,omitempty"`
-	Business       *ProductBusinessState `json:"business,omitempty"` // deprecated: use compliance
+	Business       *ProductBusinessState   `json:"business,omitempty"` // deprecated: use compliance
 }
 
 // ProductOnboardingStatusEnvelope is a successful status response.
@@ -535,13 +548,14 @@ type IndividualRequest struct {
 
 // IndividualResponse is the individual onboarding response payload.
 type IndividualResponse struct {
-	UserID         string `json:"user_id"`
-	FirstName      string `json:"first_name"`
-	LastName       string `json:"last_name"`
-	CountryID      string `json:"country_id"`
-	BusinessTypeID string `json:"business_type_id"`
-	IndustryID     string `json:"industry_id"`
-	NoOfEmployees  int    `json:"no_of_employees"`
+	UserID         string         `json:"user_id"`
+	FirstName      string         `json:"first_name"`
+	LastName       string         `json:"last_name"`
+	CountryID      string         `json:"country_id"`
+	BusinessTypeID string         `json:"business_type_id"`
+	IndustryID     string         `json:"industry_id"`
+	NoOfEmployees  int            `json:"no_of_employees"`
+	Tokens         *RegionReissue `json:"tokens,omitempty"`
 }
 
 // IndividualEnvelope is a successful individual onboarding response.
@@ -564,15 +578,16 @@ type BusinessRequest struct {
 
 // BusinessResponse is the business onboarding response payload.
 type BusinessResponse struct {
-	UserID                    string `json:"user_id"`
-	LegalBusinessName         string `json:"legal_business_name"`
-	LegalFullName             string `json:"legal_full_name"`
-	CountryID                 string `json:"country_id"`
-	CompanyRoleID             string `json:"company_role_id"`
-	BINumber                  string `json:"bin_number"`
-	BusinessRegisteredAddress string `json:"business_registered_address"`
-	BusinessTypeID            string `json:"business_type_id"`
-	IndustryID                string `json:"industry_id"`
+	UserID                    string         `json:"user_id"`
+	LegalBusinessName         string         `json:"legal_business_name"`
+	LegalFullName             string         `json:"legal_full_name"`
+	CountryID                 string         `json:"country_id"`
+	CompanyRoleID             string         `json:"company_role_id"`
+	BINumber                  string         `json:"bin_number"`
+	BusinessRegisteredAddress string         `json:"business_registered_address"`
+	BusinessTypeID            string         `json:"business_type_id"`
+	IndustryID                string         `json:"industry_id"`
+	Tokens                    *RegionReissue `json:"tokens,omitempty"`
 }
 
 // BusinessEnvelope is a successful business onboarding response.

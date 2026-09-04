@@ -243,7 +243,6 @@ func testAuthRouter(
 		redisClient,
 		mustTestTokenService(t),
 		nil,
-		region.RegionUK,
 		crypto,
 	)
 

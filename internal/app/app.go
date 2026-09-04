@@ -106,17 +106,17 @@ func Run() error {
 
 	countriesHandler := handler.NewCountriesHandler(globalPool)
 	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, fluvioClient, cfg.AuthDefaultRegion)
-	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, cfg.AuthDefaultRegion, totpCrypto)
-	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient)
+	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, totpCrypto)
+	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient, tokenService)
 	if cfg.AddressVerifyMode == "passthrough" {
 		productOnboardingHandler.AddressProvider = onboarding.PassthroughAddressVerifier{}
 	}
 	if cfg.AddressSearchMode == "passthrough" {
 		productOnboardingHandler.AddressSearcher = onboarding.PassthroughAddressSearcher{}
 	}
-	individualOnboardingHandler := handler.NewIndividualOnboardingHandler(dbRouter, globalPool)
-	businessOnboardingHandler := handler.NewBusinessOnboardingHandler(dbRouter, globalPool)
-	adminHandler := handler.NewAdminHandler(adminStore, dbRouter, globalPool, tokenService, fluvioClient, fluvioClient)
+	individualOnboardingHandler := handler.NewIndividualOnboardingHandler(dbRouter, globalPool, tokenService)
+	businessOnboardingHandler := handler.NewBusinessOnboardingHandler(dbRouter, globalPool, tokenService)
+	adminHandler := handler.NewAdminHandler(adminStore, dbRouter, globalPool, redisClient, tokenService, fluvioClient, fluvioClient)
 
 	router := chi.NewRouter()
 	router.Use(func(next http.Handler) http.Handler {

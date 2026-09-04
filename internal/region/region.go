@@ -16,6 +16,18 @@ const (
 	RegionEU      Region = "eu"
 	RegionAsia    Region = "asia"
 	RegionUnknown Region = ""
+
+	// RegionGlobal is not a real deployment region — it has no entry in
+	// dbrouter's regional pool map and never appears in All(). It marks an
+	// account that has signed up (and may be fully authenticated) but hasn't
+	// yet told us where it is: its data lives in the global database's
+	// holding tables (accounts.pending_users / accounts.pending_onboarding_progress)
+	// until an onboarding step resolves a real region and migrates it.
+	// It's included in Valid() so JWTs and the auth context can carry it —
+	// pending accounts still need to log in and call protected onboarding
+	// endpoints — but callers that turn a region into a database pool must
+	// special-case it (see internal/handler.resolvePool).
+	RegionGlobal Region = "global"
 )
 
 type contextKey int
@@ -25,17 +37,19 @@ const (
 	regionSourceContextKey
 )
 
-// Valid reports whether r is one of the known regions.
+// Valid reports whether r is a recognized region value — one of the five real
+// deployment regions, or the RegionGlobal pending sentinel.
 func Valid(r Region) bool {
 	switch r {
-	case RegionUK, RegionUS, RegionAfrica, RegionEU, RegionAsia:
+	case RegionUK, RegionUS, RegionAfrica, RegionEU, RegionAsia, RegionGlobal:
 		return true
 	default:
 		return false
 	}
 }
 
-// All returns every configured deployment region.
+// All returns every configured deployment region. It deliberately excludes
+// RegionGlobal, which has no dedicated database and isn't a deployment.
 func All() []Region {
 	return []Region{RegionUK, RegionUS, RegionAfrica, RegionEU, RegionAsia}
 }

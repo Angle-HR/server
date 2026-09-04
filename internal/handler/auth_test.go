@@ -10,14 +10,13 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/Angle-HR/server/internal/auth"
-	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
 )
 
 func TestAuthSignup_invalidBody(t *testing.T) {
 	t.Parallel()
 
-	h := NewAuthHandler(nil, nil, nil, nil, nil, region.RegionUK, nil)
+	h := NewAuthHandler(nil, nil, nil, nil, nil, nil)
 	router := chi.NewRouter()
 	router.Route("/auth", h.RegisterRoutes)
 
@@ -71,7 +70,7 @@ func TestGenerateOTP_format(t *testing.T) {
 func TestProductOnboarding_verifyAddressNotImplemented(t *testing.T) {
 	t.Parallel()
 
-	h := NewProductOnboardingHandler(nil, nil, nil)
+	h := NewProductOnboardingHandler(nil, nil, nil, nil)
 	router := chi.NewRouter()
 	router.Post("/onboarding/address/verify", h.verifyAddress)
 

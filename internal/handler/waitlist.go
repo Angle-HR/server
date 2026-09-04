@@ -31,6 +31,10 @@ var _ = apidoc.ErrorEnvelope{}
 const (
 	regionSourceExplicit = "explicit"
 	regionSourceInferred = "inferred"
+	// regionSourcePending marks a users_registry row whose region is the
+	// global holding sentinel (region.RegionGlobal) rather than a real,
+	// user-chosen deployment region.
+	regionSourcePending = "pending"
 )
 
 type jobEnqueuer interface {

@@ -542,3 +542,181 @@ func LookupOrganizationByOwnerID(ownerUserID uuid.UUID) (string, []any, error) {
 		Where("owner_user_id", "=", ownerUserID).
 		ToSQL())
 }
+
+// ---------------------------------------------------------------------------
+// Pending accounts (global holding area, accounts.pending_users / accounts.
+// pending_organizations / accounts.pending_onboarding_progress in the global
+// database). An account lives here from signup until an onboarding step
+// resolves a real region and migrates it — see internal/handler/region_pending.go.
+// ---------------------------------------------------------------------------
+
+// pendingUserColumns lists the SELECT shape used for pending user lookups,
+// aligned column-for-column with the regional accounts.users shape scanned by
+// scanAccountUser (id, email, password_hash, email_verified_at,
+// onboarding_completed_at, account_type, first_name, last_name,
+// legal_full_name, country_id, totp_secret, totp_enabled_at), so pending and
+// regional rows can be scanned by the same code.
+const pendingUserColumns = `id, email, password_hash, email_verified_at,
+	NULL::timestamptz, account_type, NULL::text, NULL::text,
+	legal_full_name, NULL::uuid, NULL::text, NULL::timestamptz`
+
+// InsertPendingUser returns SQL to create an unverified pending account.
+func InsertPendingUser(email, passwordHash string) (string, []any, error) {
+	const sql = `
+		INSERT INTO pending_users (email, password_hash)
+		VALUES ($1, $2)
+		ON CONFLICT (email) DO NOTHING
+		RETURNING id`
+	return sql, []any{email, passwordHash}, nil
+}
+
+// LookupPendingUserByEmail returns SQL to load a pending account by email.
+func LookupPendingUserByEmail(email string) (string, []any, error) {
+	sql := fmt.Sprintf(`SELECT %s FROM pending_users WHERE email = $1 AND deleted_at IS NULL`, pendingUserColumns)
+	return sql, []any{email}, nil
+}
+
+// LookupPendingUserByID returns SQL to load a pending account by id.
+func LookupPendingUserByID(userID uuid.UUID) (string, []any, error) {
+	sql := fmt.Sprintf(`SELECT %s FROM pending_users WHERE id = $1 AND deleted_at IS NULL`, pendingUserColumns)
+	return sql, []any{userID}, nil
+}
+
+// UpdatePendingUserEmail returns SQL to change email on an unverified pending account.
+func UpdatePendingUserEmail(userID uuid.UUID, email string) (string, []any, error) {
+	const sql = `
+		UPDATE pending_users SET email = $2
+		WHERE id = $1 AND email_verified_at IS NULL AND deleted_at IS NULL
+		RETURNING id`
+	return sql, []any{userID, email}, nil
+}
+
+// SetPendingUserVerified returns SQL to mark a pending account's email verified.
+func SetPendingUserVerified(userID uuid.UUID) (string, []any, error) {
+	const sql = `
+		UPDATE pending_users SET email_verified_at = now()
+		WHERE id = $1 AND email_verified_at IS NULL
+		RETURNING id`
+	return sql, []any{userID}, nil
+}
+
+// UpdatePendingUserIndividualProfile returns SQL to save individual profile
+// fields on a still-pending account. In practice individual accounts give a
+// country at the same step, so this is only used defensively.
+func UpdatePendingUserIndividualProfile(userID uuid.UUID) (string, []any, error) {
+	const sql = `
+		UPDATE pending_users SET account_type = 'individual'
+		WHERE id = $1 AND deleted_at IS NULL
+		RETURNING id`
+	return sql, []any{userID}, nil
+}
+
+// UpdatePendingUserBusinessProfile returns SQL to save business profile
+// fields (legal full name) on a still-pending account.
+func UpdatePendingUserBusinessProfile(userID uuid.UUID, legalFullName string) (string, []any, error) {
+	const sql = `
+		UPDATE pending_users SET account_type = 'business', legal_full_name = $2
+		WHERE id = $1 AND deleted_at IS NULL
+		RETURNING id`
+	return sql, []any{userID, legalFullName}, nil
+}
+
+// UpsertPendingOrganizationProfile returns SQL to save the business-profile
+// organization fields (legal name, role) for a still-pending account.
+func UpsertPendingOrganizationProfile(ownerUserID uuid.UUID, legalName string, companyRoleID uuid.UUID) (string, []any, error) {
+	const sql = `
+		INSERT INTO pending_organizations (owner_user_id, legal_name, company_role_id)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (owner_user_id) DO UPDATE SET
+			legal_name = EXCLUDED.legal_name,
+			company_role_id = EXCLUDED.company_role_id
+		RETURNING id`
+	return sql, []any{ownerUserID, legalName, companyRoleID}, nil
+}
+
+// LookupPendingOrganizationByOwner returns SQL to load the pending
+// organization profile for a still-pending business account.
+func LookupPendingOrganizationByOwner(ownerUserID uuid.UUID) (string, []any, error) {
+	const sql = `SELECT id, legal_name, company_role_id FROM pending_organizations WHERE owner_user_id = $1`
+	return sql, []any{ownerUserID}, nil
+}
+
+// LookupPendingOrganizationByOwnerWide returns SQL to load the pending
+// organization profile in the same 6-column shape as LookupOrganizationByOwner
+// (id, legal_name, company_role_id, business_type_id, industry_id,
+// employee_count), so callers can scan either result the same way. The last
+// three columns are always NULL for a pending row — those fields only exist
+// once a region (and therefore a real organizations row) does.
+func LookupPendingOrganizationByOwnerWide(ownerUserID uuid.UUID) (string, []any, error) {
+	const sql = `
+		SELECT id, legal_name, company_role_id, NULL::uuid, NULL::uuid, NULL::integer
+		FROM pending_organizations WHERE owner_user_id = $1`
+	return sql, []any{ownerUserID}, nil
+}
+
+// UpsertPendingOnboardingProgress returns SQL to insert or update onboarding
+// progress for a still-pending account.
+func UpsertPendingOnboardingProgress(userID uuid.UUID, currentStep string, completedSteps []string) (string, []any, error) {
+	const sql = `
+		INSERT INTO pending_onboarding_progress (user_id, current_step, completed_steps)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (user_id) DO UPDATE SET
+			current_step = EXCLUDED.current_step,
+			completed_steps = EXCLUDED.completed_steps`
+	return sql, []any{userID, currentStep, completedSteps}, nil
+}
+
+// LookupPendingOnboardingProgress returns SQL to load progress for a pending account.
+func LookupPendingOnboardingProgress(userID uuid.UUID) (string, []any, error) {
+	const sql = `SELECT user_id, current_step, completed_steps FROM pending_onboarding_progress WHERE user_id = $1`
+	return sql, []any{userID}, nil
+}
+
+// DeletePendingOnboardingProgress removes a pending account's progress row
+// (used once it has been migrated into a real region).
+func DeletePendingOnboardingProgress(userID uuid.UUID) (string, []any, error) {
+	const sql = `DELETE FROM pending_onboarding_progress WHERE user_id = $1`
+	return sql, []any{userID}, nil
+}
+
+// DeletePendingOrganization removes a pending account's organization draft
+// (used once it has been migrated into a real region).
+func DeletePendingOrganization(ownerUserID uuid.UUID) (string, []any, error) {
+	const sql = `DELETE FROM pending_organizations WHERE owner_user_id = $1`
+	return sql, []any{ownerUserID}, nil
+}
+
+// DeletePendingUser removes a pending account row (used once it has been
+// migrated into a real region).
+func DeletePendingUser(userID uuid.UUID) (string, []any, error) {
+	const sql = `DELETE FROM pending_users WHERE id = $1`
+	return sql, []any{userID}, nil
+}
+
+// InsertMigratedAccountUser returns SQL to create the regional accounts.users
+// row for an account moving out of the global holding area, preserving its
+// original id. Idempotent: safe to retry if a prior attempt got this far but
+// failed before the global side of the migration committed.
+func InsertMigratedAccountUser(
+	id uuid.UUID,
+	email, passwordHash string,
+	emailVerifiedAt *time.Time,
+	accountType, legalFullName *string,
+) (string, []any, error) {
+	const sql = `
+		INSERT INTO users (id, email, password_hash, email_verified_at, account_type, legal_full_name)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (id) DO NOTHING`
+	return sql, []any{id, email, passwordHash, emailVerifiedAt, accountType, legalFullName}, nil
+}
+
+// InsertMigratedOrganization returns SQL to create the regional
+// accounts.organizations row for a business account moving out of the global
+// holding area. Idempotent for the same reason as InsertMigratedAccountUser.
+func InsertMigratedOrganization(ownerUserID uuid.UUID, legalName string, companyRoleID uuid.UUID) (string, []any, error) {
+	const sql = `
+		INSERT INTO organizations (owner_user_id, legal_name, company_role_id)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (owner_user_id) DO NOTHING`
+	return sql, []any{ownerUserID, legalName, companyRoleID}, nil
+}

@@ -90,8 +90,14 @@ func (h *AuthHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reg := invite.Region
-	if !region.Valid(reg) {
-		reg = h.DefaultRegion
+	if !region.Valid(reg) || reg == region.RegionGlobal {
+		// An invite always belongs to an already-onboarded organization,
+		// which by definition lives in a real region — this should be
+		// unreachable. There's no configured default region to fall back to
+		// anymore, so treat it as a data-integrity failure instead of
+		// guessing at a region.
+		response.Error(w, r, apperror.ErrInternal)
+		return
 	}
 	pool, err := h.Router.DB(reg)
 	if err != nil {

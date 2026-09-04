@@ -33,19 +33,41 @@ type ProductOnboardingHandler struct {
 	Router          *dbrouter.DBRouter
 	GlobalDB        globalDB
 	Enqueuer        jobEnqueuer
+	Tokens          *auth.TokenService
 	AddressProvider onboarding.AddressVerifier
 	AddressSearcher onboarding.AddressSearcher
 	validate        *validator.Validate
 }
 
-// NewProductOnboardingHandler returns a product onboarding handler.
-func NewProductOnboardingHandler(router *dbrouter.DBRouter, globalDB globalDB, enqueuer jobEnqueuer) *ProductOnboardingHandler {
+// NewProductOnboardingHandler returns a product onboarding handler. Tokens is
+// used to reissue JWTs when a step migrates the account out of the global
+// holding region into a real one.
+func NewProductOnboardingHandler(router *dbrouter.DBRouter, globalDB globalDB, enqueuer jobEnqueuer, tokens *auth.TokenService) *ProductOnboardingHandler {
 	return &ProductOnboardingHandler{
 		Router:   router,
 		GlobalDB: globalDB,
 		Enqueuer: enqueuer,
+		Tokens:   tokens,
 		validate: validator.New(),
 	}
+}
+
+// reissueIfMigrated returns fresh JWTs when reg differs from the account's
+// original region (i.e. this request just migrated it out of the global
+// holding area), or nil when no migration happened.
+func (h *ProductOnboardingHandler) reissueIfMigrated(userID uuid.UUID, originalReg, reg region.Region) (*RegionReissue, error) {
+	if originalReg == reg {
+		return nil, nil
+	}
+	tokens, err := h.Tokens.IssuePair(userID, reg, true)
+	if err != nil {
+		return nil, err
+	}
+	return &RegionReissue{
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		ExpiresIn:    tokens.ExpiresIn,
+	}, nil
 }
 
 type productProfileBody struct {
@@ -140,6 +162,7 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 		response.Error(w, r, apperror.ErrUnauthorized)
 		return
 	}
+	originalReg := reg
 
 	var req productProfileBody
 	if err := decodeJSON(r, &req); err != nil {
@@ -152,11 +175,6 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 	}
 
 	ctx := r.Context()
-	pool, err := h.Router.DB(reg)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
 
 	switch req.AccountType {
 	case onboarding.AccountIndividual:
@@ -167,6 +185,29 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 		countryID := uuid.MustParse(*req.CountryID)
 		if err := h.ensureActiveCountry(ctx, countryID); err != nil {
 			response.Error(w, r, err)
+			return
+		}
+
+		// Individual accounts always give their country at this step, so
+		// this is the point a still-global account migrates into a real
+		// region.
+		if reg == region.RegionGlobal {
+			target, err := h.countryRegion(ctx, countryID)
+			if err != nil || !region.Valid(target) || target == region.RegionGlobal {
+				response.Error(w, r, apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID))
+				return
+			}
+			newReg, err := migrateUserToRegion(ctx, h.Router, h.GlobalDB, userID, target)
+			if err != nil {
+				response.Error(w, r, apperror.ErrInternal)
+				return
+			}
+			reg = newReg
+		}
+
+		pool, err := resolvePool(h.Router, h.GlobalDB, reg)
+		if err != nil {
+			response.Error(w, r, apperror.ErrInternal)
 			return
 		}
 
@@ -203,6 +244,12 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 			return
 		}
 
+		tokens, err := h.reissueIfMigrated(userID, originalReg, reg)
+		if err != nil {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
+
 		next := onboarding.NextStep(req.AccountType, completed)
 		response.Success(w, r, http.StatusOK, ProductProfileData{
 			AccountType: req.AccountType,
@@ -216,6 +263,7 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 				CompletedSteps: completed,
 				NextStep:       &next,
 			},
+			Tokens: tokens,
 		})
 
 	case onboarding.AccountBusiness:
@@ -229,6 +277,14 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 			return
 		}
 
+		// Business accounts don't give a country until the address step, so
+		// this write may still land in the global holding area.
+		pool, err := resolvePool(h.Router, h.GlobalDB, reg)
+		if err != nil {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
+
 		tx, err := pool.Begin(ctx)
 		if err != nil {
 			response.Error(w, r, apperror.ErrInternal)
@@ -236,7 +292,7 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 		}
 		defer rollbackOnError(ctx, tx)
 
-		userSQL, userArgs, err := query.UpdateAccountUserBusinessProfile(userID, *req.LegalFullName)
+		userSQL, userArgs, err := updateBusinessProfileSQL(reg, userID, *req.LegalFullName)
 		if err != nil {
 			response.Error(w, r, apperror.ErrInternal)
 			return
@@ -246,7 +302,7 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		orgSQL, orgArgs, err := query.UpsertOrganizationProfile(userID, *req.LegalBusinessName, roleID)
+		orgSQL, orgArgs, err := upsertOrganizationProfileSQL(reg, userID, *req.LegalBusinessName, roleID)
 		if err != nil {
 			response.Error(w, r, apperror.ErrInternal)
 			return
@@ -306,6 +362,7 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 		response.Error(w, r, apperror.ErrUnauthorized)
 		return
 	}
+	originalReg := reg
 
 	var req productAddressBody
 	if err := decodeJSON(r, &req); err != nil {
@@ -328,13 +385,13 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	pool, err := h.Router.DB(reg)
+	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
 
-	accountType, err := h.loadAccountType(ctx, pool, userID)
+	accountType, err := h.loadAccountType(ctx, pool, reg, userID)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -342,6 +399,27 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 	if accountType != onboarding.AccountBusiness {
 		response.Error(w, r, apperror.New(apperror.CodeInvalidAccountBranch, apperror.MsgInvalidAccountTypeBranch))
 		return
+	}
+
+	// This is the first point a business account gives a country, so it's
+	// where a still-global account migrates into a real region.
+	if reg == region.RegionGlobal {
+		target, err := h.countryRegion(ctx, countryID)
+		if err != nil || !region.Valid(target) || target == region.RegionGlobal {
+			response.Error(w, r, apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID))
+			return
+		}
+		newReg, err := migrateUserToRegion(ctx, h.Router, h.GlobalDB, userID, target)
+		if err != nil {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
+		reg = newReg
+		pool, err = resolvePool(h.Router, h.GlobalDB, reg)
+		if err != nil {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
 	}
 
 	countrySlug, err := h.countrySlugByID(ctx, countryID)
@@ -408,6 +486,12 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	tokens, err := h.reissueIfMigrated(userID, originalReg, reg)
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
 	next := onboarding.NextStep(accountType, completed)
 	response.Success(w, r, http.StatusOK, ProductAddressData{
 		CountryID:          req.CountryID,
@@ -426,6 +510,7 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 			CompletedSteps: completed,
 			NextStep:       &next,
 		},
+		Tokens: tokens,
 	})
 }
 
@@ -635,14 +720,23 @@ func (h *ProductOnboardingHandler) putCompliance(w http.ResponseWriter, r *http.
 		return
 	}
 
+	if reg == region.RegionGlobal {
+		// Compliance always writes into the organization/user row for a real
+		// region. Individual accounts get a region at the profile step and
+		// business accounts at the address step, so reaching here while
+		// still global means an earlier step was skipped.
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, "complete the profile step before compliance"))
+		return
+	}
+
 	ctx := r.Context()
-	pool, err := h.Router.DB(reg)
+	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
 
-	accountType, err := h.loadAccountType(ctx, pool, userID)
+	accountType, err := h.loadAccountType(ctx, pool, reg, userID)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -760,14 +854,19 @@ func (h *ProductOnboardingHandler) complete(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if reg == region.RegionGlobal {
+		response.Error(w, r, apperror.New(apperror.CodeOnboardingIncomplete, apperror.MsgOnboardingStepIncomplete))
+		return
+	}
+
 	ctx := r.Context()
-	pool, err := h.Router.DB(reg)
+	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
 
-	userSQL, userArgs, err := query.LookupAccountUserByID(userID)
+	userSQL, userArgs, err := lookupUserByIDSQL(reg, userID)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -789,7 +888,7 @@ func (h *ProductOnboardingHandler) complete(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	progressSQL, progressArgs, err := query.LookupOnboardingProgress(userID)
+	progressSQL, progressArgs, err := lookupOnboardingProgressSQL(reg, userID)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -849,12 +948,12 @@ func (h *ProductOnboardingHandler) enqueueOnboardingComplete(ctx context.Context
 }
 
 func (h *ProductOnboardingHandler) loadStatus(ctx context.Context, reg region.Region, userID uuid.UUID) (ProductOnboardingStatusData, error) {
-	pool, err := h.Router.DB(reg)
+	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
 	if err != nil {
 		return ProductOnboardingStatusData{}, err
 	}
 
-	userSQL, userArgs, err := query.LookupAccountUserByID(userID)
+	userSQL, userArgs, err := lookupUserByIDSQL(reg, userID)
 	if err != nil {
 		return ProductOnboardingStatusData{}, err
 	}
@@ -877,7 +976,7 @@ func (h *ProductOnboardingHandler) loadStatus(ctx context.Context, reg region.Re
 		status = onboarding.StatusCompleted
 	}
 
-	progressSQL, progressArgs, err := query.LookupOnboardingProgress(userID)
+	progressSQL, progressArgs, err := lookupOnboardingProgressSQL(reg, userID)
 	if err != nil {
 		return ProductOnboardingStatusData{}, err
 	}
@@ -918,7 +1017,14 @@ func (h *ProductOnboardingHandler) loadStatus(ctx context.Context, reg region.Re
 			profile.LegalFullName = legalFullName
 		}
 		if *accountType == onboarding.AccountBusiness {
-			orgSQL, orgArgs, err := query.LookupOrganizationByOwner(userID)
+			var orgSQL string
+			var orgArgs []any
+			var err error
+			if reg == region.RegionGlobal {
+				orgSQL, orgArgs, err = query.LookupPendingOrganizationByOwnerWide(userID)
+			} else {
+				orgSQL, orgArgs, err = query.LookupOrganizationByOwner(userID)
+			}
 			if err == nil {
 				var legalName string
 				var roleID uuid.UUID
@@ -1148,8 +1254,8 @@ func (h *ProductOnboardingHandler) ensureCatalogRowByID(ctx context.Context, id 
 	return nil
 }
 
-func (h *ProductOnboardingHandler) loadAccountType(ctx context.Context, pool dbrouter.PgxPool, userID uuid.UUID) (string, error) {
-	sql, args, err := query.LookupAccountUserByID(userID)
+func (h *ProductOnboardingHandler) loadAccountType(ctx context.Context, pool dataPool, reg region.Region, userID uuid.UUID) (string, error) {
+	sql, args, err := lookupUserByIDSQL(reg, userID)
 	if err != nil {
 		return "", err
 	}

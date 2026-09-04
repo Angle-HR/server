@@ -19,6 +19,7 @@ import (
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/onboarding"
 	"github.com/Angle-HR/server/internal/query"
+	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
 )
@@ -29,14 +30,18 @@ var _ = apidoc.ErrorEnvelope{}
 type IndividualOnboardingHandler struct {
 	Router   *dbrouter.DBRouter
 	GlobalDB globalDB
+	Tokens   *auth.TokenService
 	validate *validator.Validate
 }
 
 // NewIndividualOnboardingHandler returns an individual onboarding handler.
-func NewIndividualOnboardingHandler(router *dbrouter.DBRouter, globalDB globalDB) *IndividualOnboardingHandler {
+// Tokens is used to reissue JWTs when this submission migrates the account
+// out of the global holding region (see NewProductOnboardingHandler).
+func NewIndividualOnboardingHandler(router *dbrouter.DBRouter, globalDB globalDB, tokens *auth.TokenService) *IndividualOnboardingHandler {
 	return &IndividualOnboardingHandler{
 		Router:   router,
 		GlobalDB: globalDB,
+		Tokens:   tokens,
 		validate: validator.New(),
 	}
 }
@@ -120,7 +125,29 @@ func (h *IndividualOnboardingHandler) submitIndividualOnboarding(w http.Response
 		return
 	}
 
-	pool, err := h.Router.DB(reg)
+	// This one-shot submission includes the country directly, so a still-
+	// global account migrates into its real region right here.
+	originalReg := reg
+	if reg == region.RegionGlobal {
+		countrySQL, countryArgs, err := query.LookupCountryByID(countryID)
+		if err != nil {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
+		var target string
+		if err := h.GlobalDB.QueryRow(ctx, countrySQL, countryArgs...).Scan(new(uuid.UUID), new(string), new(string), &target, new(*string)); err != nil {
+			response.Error(w, r, apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID))
+			return
+		}
+		newReg, err := migrateUserToRegion(ctx, h.Router, h.GlobalDB, userID, region.Region(target))
+		if err != nil {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
+		reg = newReg
+	}
+
+	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -187,6 +214,20 @@ func (h *IndividualOnboardingHandler) submitIndividualOnboarding(w http.Response
 		return
 	}
 
+	var tokens *RegionReissue
+	if originalReg != reg {
+		issued, err := h.Tokens.IssuePair(userID, reg, true)
+		if err != nil {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
+		tokens = &RegionReissue{
+			AccessToken:  issued.AccessToken,
+			RefreshToken: issued.RefreshToken,
+			ExpiresIn:    issued.ExpiresIn,
+		}
+	}
+
 	response.Success(w, r, http.StatusCreated, IndividualResponse{
 		UserID:         userID.String(),
 		FirstName:      req.FirstName,
@@ -195,6 +236,7 @@ func (h *IndividualOnboardingHandler) submitIndividualOnboarding(w http.Response
 		BusinessTypeID: req.BusinessTypeID,
 		IndustryID:     req.IndustryID,
 		NoOfEmployees:  req.NoOfEmployees,
+		Tokens:         tokens,
 	})
 }
 

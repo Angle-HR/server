@@ -2,9 +2,11 @@ package handler
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
+	goredis "github.com/redis/go-redis/v9"
 	fluvio "github.com/software78/fluvio"
 
 	"github.com/Angle-HR/server/internal/admin"
@@ -12,15 +14,24 @@ import (
 	"github.com/Angle-HR/server/internal/dbrouter"
 )
 
+// Admin login gets a longer window and lock than product login: fewer,
+// higher-value accounts, so it's worth being stricter once triggered.
+const (
+	adminPasswordLockoutMaxAttempts = 5
+	adminPasswordLockoutWindow      = 15 * time.Minute
+	adminPasswordLockoutDuration    = 30 * time.Minute
+)
+
 // AdminHandler serves /api/v1/admin endpoints.
 type AdminHandler struct {
-	Store    *admin.Store
-	Router   *dbrouter.DBRouter
-	GlobalDB globalDB
-	Tokens   *auth.TokenService
-	Jobs     *fluvio.Client
-	Enqueuer jobEnqueuer
-	validate *validator.Validate
+	Store           *admin.Store
+	Router          *dbrouter.DBRouter
+	GlobalDB        globalDB
+	Tokens          *auth.TokenService
+	Jobs            *fluvio.Client
+	Enqueuer        jobEnqueuer
+	PasswordLockout *auth.LoginLockout
+	validate        *validator.Validate
 }
 
 // NewAdminHandler returns an admin API handler.
@@ -28,6 +39,7 @@ func NewAdminHandler(
 	store *admin.Store,
 	router *dbrouter.DBRouter,
 	globalDB globalDB,
+	redisClient *goredis.Client,
 	tokens *auth.TokenService,
 	jobs *fluvio.Client,
 	enqueuer jobEnqueuer,
@@ -39,6 +51,8 @@ func NewAdminHandler(
 		Tokens:   tokens,
 		Jobs:     jobs,
 		Enqueuer: enqueuer,
+		PasswordLockout: auth.NewLoginLockout(redisClient, "admin_pwd",
+			adminPasswordLockoutMaxAttempts, adminPasswordLockoutWindow, adminPasswordLockoutDuration),
 		validate: validator.New(),
 	}
 }

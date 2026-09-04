@@ -133,11 +133,18 @@ func (h *AuthHandler) totpConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.TOTPLockout.Check(ctx, userID.String()); err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeTooManyAttempts, apperror.MsgTooManyAttempts))
+		return
+	}
+
 	secret, err := h.TOTPCrypto.Decrypt(*user.TOTPSecret)
 	if err != nil || !auth.ValidateTOTP(secret, req.Code) {
+		_, _ = h.TOTPLockout.RecordFailure(ctx, userID.String())
 		response.Error(w, r, apperror.New(apperror.CodeInvalidVerificationCode, "invalid authenticator code"))
 		return
 	}
+	_ = h.TOTPLockout.Reset(ctx, userID.String())
 
 	pool, err := h.Router.DB(reg)
 	if err != nil {
@@ -203,11 +210,18 @@ func (h *AuthHandler) totpDisable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.TOTPLockout.Check(ctx, userID.String()); err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeTooManyAttempts, apperror.MsgTooManyAttempts))
+		return
+	}
+
 	secret, err := h.TOTPCrypto.Decrypt(*user.TOTPSecret)
 	if err != nil || !auth.ValidateTOTP(secret, req.Code) {
+		_, _ = h.TOTPLockout.RecordFailure(ctx, userID.String())
 		response.Error(w, r, apperror.New(apperror.CodeInvalidVerificationCode, "invalid authenticator code"))
 		return
 	}
+	_ = h.TOTPLockout.Reset(ctx, userID.String())
 
 	pool, err := h.Router.DB(reg)
 	if err != nil {
@@ -279,11 +293,18 @@ func (h *AuthHandler) loginTOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.TOTPLockout.Check(ctx, userID.String()); err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeTooManyAttempts, apperror.MsgTooManyAttempts))
+		return
+	}
+
 	secret, err := h.TOTPCrypto.Decrypt(*user.TOTPSecret)
 	if err != nil || !auth.ValidateTOTP(secret, req.Code) {
+		_, _ = h.TOTPLockout.RecordFailure(ctx, userID.String())
 		response.Error(w, r, apperror.New(apperror.CodeInvalidVerificationCode, "invalid authenticator code"))
 		return
 	}
+	_ = h.TOTPLockout.Reset(ctx, userID.String())
 
 	h.respondAuthTokens(w, r, ctx, reg, user)
 }

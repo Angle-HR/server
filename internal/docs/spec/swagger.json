@@ -5699,7 +5699,7 @@
             "x-displayName": "Catalogs"
         },
         {
-            "description": "Fluvio job inspection and retry for email/upload queues.",
+            "description": "Fluvio job inspection and retry for the email queue.",
             "name": "admin/jobs",
             "x-displayName": "Jobs"
         },

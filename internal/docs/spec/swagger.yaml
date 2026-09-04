@@ -3721,7 +3721,7 @@ tags:
     - description: CMS for waitlist and product onboarding catalog tables.
       name: admin/catalogs
       x-displayName: Catalogs
-    - description: Fluvio job inspection and retry for email/upload queues.
+    - description: Fluvio job inspection and retry for the email queue.
       name: admin/jobs
       x-displayName: Jobs
     - description: Invite and manage admin staff users and role assignments.

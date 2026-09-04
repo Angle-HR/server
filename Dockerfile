@@ -9,7 +9,6 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /server ./cmd/server
 RUN CGO_ENABLED=0 GOOS=linux go build -o /email-worker ./cmd/email-worker
-RUN CGO_ENABLED=0 GOOS=linux go build -o /upload-worker ./cmd/upload-worker
 
 FROM alpine:3.21 AS server
 
@@ -28,11 +27,3 @@ RUN apk add --no-cache ca-certificates
 COPY --from=builder /email-worker /email-worker
 
 ENTRYPOINT ["/email-worker"]
-
-FROM alpine:3.21 AS upload-worker
-
-RUN apk add --no-cache ca-certificates
-
-COPY --from=builder /upload-worker /upload-worker
-
-ENTRYPOINT ["/upload-worker"]

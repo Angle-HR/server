@@ -111,7 +111,7 @@ var apiTagDefinitions = []map[string]any{
 	},
 	{
 		"name":          "admin/jobs",
-		"description":   "Fluvio job inspection and retry for email/upload queues.",
+		"description":   "Fluvio job inspection and retry for the email queue.",
 		"x-displayName": "Jobs",
 	},
 	{

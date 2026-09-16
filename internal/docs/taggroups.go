@@ -7,7 +7,6 @@ var waitlistTagGroup = map[string]any{
 	"tags": []any{
 		"waitlist/reference",
 		"waitlist/signup",
-		"waitlist/onboarding",
 	},
 }
 
@@ -18,6 +17,7 @@ var onboardingTagGroup = map[string]any{
 		"onboarding/reference",
 		"onboarding/profile",
 		"onboarding/address",
+		"onboarding/compliance",
 		"onboarding/business",
 		"onboarding/individual",
 		"onboarding/session",
@@ -41,52 +41,52 @@ var adminTagGroup = map[string]any{
 var apiTagDefinitions = []map[string]any{
 	{
 		"name":          "waitlist/reference",
-		"description":   "Reference data for waitlist forms: countries, industries, hiring tools, roles, and team sizes.",
+		"description":   "Reference data for waitlist and onboarding forms: countries.",
 		"x-displayName": "Reference",
 	},
 	{
 		"name":          "waitlist/signup",
-		"description":   "Initial waitlist registration. Creates a regional waitlist entry and global users_registry row.",
+		"description":   "Email-only waitlist registration. Creates a regional waitlist entry and global waitlist.registry row.",
 		"x-displayName": "Signup",
 	},
 	{
-		"name":          "waitlist/onboarding",
-		"description":   "Waitlist onboarding form submission after signup (distinct from product onboarding).",
-		"x-displayName": "Waitlist onboarding",
-	},
-	{
 		"name":          "auth",
-		"description":   "Product signup, 6-digit email verification (OTP expires in 300s, resend cooldown 30s), login, and token refresh.",
+		"description":   "Product signup, email verification OTP (not for passwordless login), password login, passwordless login OTP (/auth/login/otp/*), TOTP MFA, password reset, logout, /auth/me, and product org invites.",
 		"x-displayName": "Auth",
 	},
 	{
 		"name":          "onboarding/reference",
-		"description":   "Product onboarding catalog endpoints (business types, industries, company roles). Separate from waitlist reference data.",
+		"description":   "Product onboarding catalog endpoints (business types, industries, company roles, identification requirements). Separate from waitlist reference data.",
 		"x-displayName": "Reference",
 	},
 	{
 		"name":          "onboarding/profile",
-		"description":   "Account type (`individual` or `business`) and profile fields. Individual accounts set region from country_id.",
+		"description":   "Canonical profile step: account type (`individual` or `business`) and profile fields via PUT /onboarding/profile. Individual accounts set region from country_id.",
 		"x-displayName": "Profile",
 	},
 	{
 		"name":          "onboarding/address",
-		"description":   "Workspace address (search or manual entry). `POST /onboarding/address/verify` is reserved and returns 501.",
+		"description":   "Business identification and workspace address. POST /onboarding/address/search and POST /onboarding/address/verify accept payloads directly. Uses ADDRESS_SEARCH_MODE and ADDRESS_VERIFY_MODE passthrough in non-prod.",
 		"x-displayName": "Address",
 	},
 	{
+		"name":          "onboarding/compliance",
+		"description":   "Canonical compliance step: PUT /onboarding/compliance (business_type_id, industry_id, employee_count) for individual and business accounts.",
+		"x-displayName": "Compliance",
+	},
+	{
 		"name":          "onboarding/business",
-		"description":   "Business onboarding and compliance: legal business name, legal full name, country, company role, BIN number, registered address, business type, industry, and employee count. Business accounts only.",
+		"description":   "Deprecated alias for PUT /onboarding/compliance. POST /onboarding/business is deprecated (KYB-oriented one-shot).",
 		"x-displayName": "Business",
 	},
 	{
 		"name":          "onboarding/individual",
-		"description":   "Saves first name, last name, country, business type, industry, and number of employees for an individual account.",
+		"description":   "Deprecated one-shot POST /onboarding/individual. Prefer PUT /onboarding/profile with account_type individual.",
 		"x-displayName": "Individual",
 	},
 	{
 		"name":          "onboarding/session",
-		"description":   "Onboarding progress and completion. Individual: verify_email → profile → address. Business: also requires business step.",
+		"description":   "Onboarding progress and completion. Individual: verify_email → profile → compliance → complete. Business: verify_email → profile → identification_address → compliance → complete.",
 		"x-displayName": "Session",
 	},
 	{
@@ -111,7 +111,7 @@ var apiTagDefinitions = []map[string]any{
 	},
 	{
 		"name":          "admin/jobs",
-		"description":   "Fluvio job inspection and retry for email/upload queues.",
+		"description":   "Fluvio job inspection and retry for the email queue.",
 		"x-displayName": "Jobs",
 	},
 	{

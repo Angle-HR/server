@@ -26,9 +26,9 @@ var _ = apidoc.ErrorEnvelope{}
 
 type adminWaitlistItem struct {
 	UUID                  uuid.UUID       `json:"uuid"`
-	FullName              string          `json:"full_name"`
+	FullName              *string         `json:"full_name,omitempty"`
 	Email                 string          `json:"email"`
-	CountryID             uuid.UUID       `json:"country_id"`
+	CountryID             *uuid.UUID      `json:"country_id,omitempty"`
 	Region                string          `json:"region"`
 	RegionSource          string          `json:"region_source"`
 	Metadata              json.RawMessage `json:"metadata"`

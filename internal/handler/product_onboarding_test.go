@@ -28,7 +28,7 @@ func TestListBusinessTypes_emptyCatalog(t *testing.T) {
 		pgxmock.NewRows([]string{"id", "name", "slug"}),
 	)
 
-	h := NewProductOnboardingHandler(nil, mock, nil)
+	h := NewProductOnboardingHandler(nil, mock, nil, nil)
 	router := chi.NewRouter()
 	h.RegisterRoutes(router)
 

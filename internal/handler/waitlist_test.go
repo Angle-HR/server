@@ -30,9 +30,7 @@ func TestWaitlistSignup_valid(t *testing.T) {
 
 	router := testWaitlistRouter(t, regionalMock, globalMock)
 	rec := postWaitlist(t, router, `{
-		"full_name": "Jerry",
-		"email": "jane@acme.com",
-		"country_id": "`+testCountryID+`"
+		"email": "jane@acme.com"
 	}`)
 
 	assertStatus(t, rec, http.StatusCreated)
@@ -43,11 +41,8 @@ func TestWaitlistSignup_valid(t *testing.T) {
 	if data["region"] != "uk" {
 		t.Fatalf("region: got %q, want uk", data["region"])
 	}
-	if data["token"] == "" {
-		t.Fatal("token: expected non-empty")
-	}
-	if _, err := uuid.Parse(data["token"]); err != nil {
-		t.Fatalf("token: invalid uuid %q", data["token"])
+	if _, ok := data["token"]; ok {
+		t.Fatal("token: expected omitted from response")
 	}
 
 	assertMocksMet(t, regionalMock, globalMock)
@@ -64,7 +59,7 @@ func TestWaitlistSignup_duplicateEmail(t *testing.T) {
 
 	regionalMock.ExpectBegin()
 	waitlistSQL, waitlistArgs, err := query.InsertWaitlistSignup(
-		"Jerry", "dup@acme.com", uuid.MustParse(testCountryID), "uk", "explicit", []byte("{}"),
+		"dup@acme.com", "uk", "inferred", []byte("{}"),
 	)
 	if err != nil {
 		t.Fatalf("InsertWaitlistSignup: %v", err)
@@ -78,15 +73,12 @@ func TestWaitlistSignup_duplicateEmail(t *testing.T) {
 	}
 	t.Cleanup(func() { globalMock.Close() })
 
-	expectCountryLookup(t, globalMock, testCountryID)
 	globalMock.ExpectBegin()
 	globalMock.ExpectRollback()
 
 	router := testWaitlistRouter(t, regionalMock, globalMock)
 	rec := postWaitlist(t, router, `{
-		"full_name": "Jerry",
-		"email": "dup@acme.com",
-		"country_id": "`+testCountryID+`"
+		"email": "dup@acme.com"
 	}`)
 
 	assertStatus(t, rec, http.StatusConflict)
@@ -105,9 +97,7 @@ func TestWaitlistSignup_invalidEmail(t *testing.T) {
 	router := testWaitlistRouter(t, regionalMock, globalMock)
 
 	rec := postWaitlist(t, router, `{
-		"full_name": "Jerry",
-		"email": "not-an-email",
-		"country_id": "`+testCountryID+`"
+		"email": "not-an-email"
 	}`)
 
 	assertStatus(t, rec, http.StatusBadRequest)
@@ -115,58 +105,6 @@ func TestWaitlistSignup_invalidEmail(t *testing.T) {
 	fields := decodeDetailsFields(t, errBody)
 	if len(fields) == 0 || fields[0]["field"] != "email" {
 		t.Fatalf("fields: got %v, want first field=email", fields)
-	}
-
-	assertMocksMet(t, regionalMock, globalMock)
-}
-
-func TestWaitlistSignup_missingFullName(t *testing.T) {
-	t.Parallel()
-
-	regionalMock, globalMock := emptyMocks(t)
-	router := testWaitlistRouter(t, regionalMock, globalMock)
-
-	rec := postWaitlist(t, router, `{
-		"full_name": "",
-		"email": "jane@acme.com",
-		"country_id": "`+testCountryID+`"
-	}`)
-
-	assertStatus(t, rec, http.StatusBadRequest)
-	errBody := decodeError(t, rec)
-	fields := decodeDetailsFields(t, errBody)
-	if len(fields) == 0 || fields[0]["field"] != "full_name" {
-		t.Fatalf("fields: got %v, want first field=full_name", fields)
-	}
-
-	assertMocksMet(t, regionalMock, globalMock)
-}
-
-func TestWaitlistSignup_unknownCountry(t *testing.T) {
-	t.Parallel()
-
-	regionalMock, globalMock := emptyMocks(t)
-	lookupSQL, lookupArgs, err := query.LookupCountryByID(uuid.MustParse(testCountryID))
-	if err != nil {
-		t.Fatalf("LookupCountryByID: %v", err)
-	}
-	globalMock.ExpectQuery(lookupSQL).WithArgs(lookupArgs...).
-		WillReturnRows(pgxmock.NewRows([]string{"id", "name", "slug", "region", "icon_key"}))
-
-	router := testWaitlistRouter(t, regionalMock, globalMock)
-	rec := postWaitlist(t, router, `{
-		"full_name": "Jerry",
-		"email": "jane@acme.com",
-		"country_id": "`+testCountryID+`"
-	}`)
-
-	assertStatus(t, rec, http.StatusBadRequest)
-	errBody := decodeError(t, rec)
-	if errBody.Message != apperror.MsgInvalidCountryID {
-		t.Fatalf("message: got %q", errBody.Message)
-	}
-	if errBody.Details["field"] != "country_id" {
-		t.Fatalf("field: got %v, want country_id", errBody.Details["field"])
 	}
 
 	assertMocksMet(t, regionalMock, globalMock)
@@ -193,7 +131,7 @@ func TestSignup_duplicateDirect(t *testing.T) {
 
 	regionalMock.ExpectBegin()
 	waitlistSQL, waitlistArgs, err := query.InsertWaitlistSignup(
-		"Jerry", "dup@acme.com", uuid.MustParse(testCountryID), "uk", "explicit", []byte("{}"),
+		"dup@acme.com", "uk", "inferred", []byte("{}"),
 	)
 	if err != nil {
 		t.Fatalf("InsertWaitlistSignup: %v", err)
@@ -212,16 +150,9 @@ func TestSignup_duplicateDirect(t *testing.T) {
 
 	h := NewWaitlistHandler(dbrouter.NewWithPools(map[region.Region]dbrouter.PgxPool{
 		region.RegionUK: regionalMock,
-	}), globalMock, nil)
+	}), globalMock, nil, region.RegionUK)
 
-	country := Country{
-		ID:     uuid.MustParse(testCountryID),
-		Name:   "United Kingdom",
-		Slug:   "united-kingdom",
-		Region: region.RegionUK,
-	}
-
-	_, err = h.signup(context.Background(), country, "Jerry", "dup@acme.com")
+	err = h.signup(context.Background(), "dup@acme.com")
 	if !errors.Is(err, apperror.ErrConflict) {
 		t.Fatalf("signup: %v", err)
 	}
@@ -319,7 +250,7 @@ func expectSuccessfulSignup(t *testing.T) (pgxmock.PgxPoolIface, pgxmock.PgxPool
 
 	regionalMock.ExpectBegin()
 	waitlistSQL, waitlistArgs, err := query.InsertWaitlistSignup(
-		"Jerry", "jane@acme.com", uuid.MustParse(testCountryID), "uk", "explicit", []byte("{}"),
+		"jane@acme.com", "uk", "inferred", []byte("{}"),
 	)
 	if err != nil {
 		t.Fatalf("InsertWaitlistSignup: %v", err)
@@ -335,10 +266,8 @@ func expectSuccessfulSignup(t *testing.T) (pgxmock.PgxPoolIface, pgxmock.PgxPool
 	}
 	t.Cleanup(func() { globalMock.Close() })
 
-	expectCountryLookup(t, globalMock, testCountryID)
-
 	globalMock.ExpectBegin()
-	registrySQL, registryArgs, err := query.InsertWaitlistRegistry("jane@acme.com", "uk", "explicit", testToken)
+	registrySQL, registryArgs, err := query.InsertWaitlistRegistry("jane@acme.com", "uk", "inferred", testToken)
 	if err != nil {
 		t.Fatalf("InsertWaitlistRegistry: %v", err)
 	}
@@ -347,20 +276,6 @@ func expectSuccessfulSignup(t *testing.T) (pgxmock.PgxPoolIface, pgxmock.PgxPool
 	globalMock.ExpectCommit()
 
 	return regionalMock, globalMock
-}
-
-func expectCountryLookup(t *testing.T, globalMock pgxmock.PgxPoolIface, countryID string) {
-	t.Helper()
-
-	iconKey := "flag-uk"
-	lookupSQL, lookupArgs, err := query.LookupCountryByID(uuid.MustParse(countryID))
-	if err != nil {
-		t.Fatalf("LookupCountryByID: %v", err)
-	}
-	globalMock.ExpectQuery(lookupSQL).WithArgs(lookupArgs...).WillReturnRows(
-		pgxmock.NewRows([]string{"id", "name", "slug", "region", "icon_key"}).
-			AddRow(uuid.MustParse(countryID), "United Kingdom", "united-kingdom", region.RegionUK, &iconKey),
-	)
 }
 
 func emptyMocks(t *testing.T) (pgxmock.PgxPoolIface, pgxmock.PgxPoolIface) {
@@ -390,7 +305,7 @@ func testWaitlistRouter(
 
 	h := NewWaitlistHandler(dbrouter.NewWithPools(map[region.Region]dbrouter.PgxPool{
 		region.RegionUK: regionalMock,
-	}), globalMock, nil)
+	}), globalMock, nil, region.RegionUK)
 
 	router := chi.NewRouter()
 	router.Route("/api/v1", func(r chi.Router) {
@@ -465,7 +380,6 @@ func assertMocksMet(t *testing.T, mocks ...pgxmock.PgxPoolIface) {
 	}
 }
 
-
 func decodeDetailsFields(t *testing.T, body response.ErrorBody) []map[string]string {
 	t.Helper()
 
@@ -473,7 +387,6 @@ func decodeDetailsFields(t *testing.T, body response.ErrorBody) []map[string]str
 	if !ok {
 		t.Fatalf("details: missing \"fields\" key; got %v", body.Details)
 	}
-
 
 	rawSlice, ok := raw.([]any)
 	if !ok {

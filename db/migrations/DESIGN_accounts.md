@@ -232,9 +232,24 @@ CREATE TRIGGER accounts_onboarding_progress_set_updated_at
 |------------|---------|
 | `verify_email` | Email verified |
 | `profile` | Account type and names saved |
-| `address` | Address saved |
-| `business` | Business compliance saved |
+| `identification_address` | Business registry ID and address saved (business only) |
+| `compliance` | Business type, industry, and employee count saved |
 | `complete` | Ready for `POST /onboarding/complete` |
+
+Legacy step values `address` and `business` are normalized to `identification_address` and `compliance`.
+
+## KYB status (follow-up — not blocking onboarding)
+
+Before job publishing is gated, add to `accounts.organizations`:
+
+```sql
+kyb_status TEXT NOT NULL DEFAULT 'not_started'
+  CHECK (kyb_status IN ('not_started','pending','verified','failed')),
+kyb_failure_reason TEXT,
+kyb_checked_at TIMESTAMPTZ
+```
+
+Expose on `GET /onboarding/status` under `kyb` for business accounts. Onboarding completion remains ungated; job publish requires `kyb.status = verified`.
 
 ## Region assignment
 
@@ -249,8 +264,8 @@ CREATE TRIGGER accounts_onboarding_progress_set_updated_at
 | `POST /auth/signup` | — | INSERT `accounts.users` | SET OTP |
 | `POST /auth/verify-email` | INSERT/UPDATE `users_registry` | SET `email_verified_at`, INSERT `onboarding_progress` | DEL OTP |
 | `PUT /onboarding/profile` | UPDATE `users_registry.region` | UPDATE user + org | — |
-| `PUT /onboarding/address` | — | UPSERT address, UPDATE progress | — |
-| `PUT /onboarding/business` | — | UPDATE org, UPDATE progress | — |
+| `PUT /onboarding/address` | — | UPSERT address + org identification, UPDATE progress | — |
+| `PUT /onboarding/compliance` | — | UPDATE user/org compliance fields, UPDATE progress | — |
 | `POST /onboarding/complete` | — | SET `onboarding_completed_at` | — |
 
 ## What stays unchanged

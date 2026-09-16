@@ -16,6 +16,7 @@ import (
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/docs"
 	"github.com/Angle-HR/server/internal/handler"
+	"github.com/Angle-HR/server/internal/onboarding"
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/pkg/config"
 	"github.com/Angle-HR/server/pkg/db"
@@ -81,6 +82,10 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("create token service: %w", err)
 	}
+	totpCrypto, err := auth.NewTOTPCrypto(cfg.TOTPEncryptionKey)
+	if err != nil {
+		return fmt.Errorf("create totp crypto: %w", err)
+	}
 	authMiddleware := auth.NewMiddleware(tokenService)
 
 	adminStore := admin.NewStore(globalPool)
@@ -100,14 +105,18 @@ func Run() error {
 	adminMiddleware := auth.NewAdminMiddleware(tokenService, adminStore)
 
 	countriesHandler := handler.NewCountriesHandler(globalPool)
-	catalogHandler := handler.NewCatalogHandler(globalPool)
-	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, fluvioClient)
-	onboardingHandler := handler.NewOnboardingHandler(dbRouter, globalPool, fluvioClient)
-	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, cfg.AuthDefaultRegion)
-	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient)
-	individualOnboardingHandler := handler.NewIndividualOnboardingHandler(dbRouter, globalPool)
-	businessOnboardingHandler := handler.NewBusinessOnboardingHandler(dbRouter, globalPool)
-	adminHandler := handler.NewAdminHandler(adminStore, dbRouter, globalPool, tokenService, fluvioClient, fluvioClient)
+	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, fluvioClient, cfg.AuthDefaultRegion)
+	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, totpCrypto)
+	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient, tokenService)
+	if cfg.AddressVerifyMode == "passthrough" {
+		productOnboardingHandler.AddressProvider = onboarding.PassthroughAddressVerifier{}
+	}
+	if cfg.AddressSearchMode == "passthrough" {
+		productOnboardingHandler.AddressSearcher = onboarding.PassthroughAddressSearcher{}
+	}
+	individualOnboardingHandler := handler.NewIndividualOnboardingHandler(dbRouter, globalPool, tokenService)
+	businessOnboardingHandler := handler.NewBusinessOnboardingHandler(dbRouter, globalPool, tokenService)
+	adminHandler := handler.NewAdminHandler(adminStore, dbRouter, globalPool, redisClient, tokenService, fluvioClient, fluvioClient)
 
 	router := chi.NewRouter()
 	router.Use(func(next http.Handler) http.Handler {
@@ -142,13 +151,12 @@ func Run() error {
 
 	router.Route("/api/v1", func(r chi.Router) {
 		countriesHandler.RegisterRoutes(r)
-		catalogHandler.RegisterRoutes(r)
 		waitlistHandler.RegisterRoutes(r)
-		onboardingHandler.RegisterRoutes(r)
 		r.Route("/auth", authHandler.RegisterRoutes)
 		productOnboardingHandler.RegisterRoutes(r)
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.RequireAuth)
+			authHandler.RegisterProtectedRoutes(r)
 			productOnboardingHandler.RegisterProtectedRoutes(r)
 			individualOnboardingHandler.RegisterProtectedRoutes(r)
 			businessOnboardingHandler.RegisterProtectedRoutes(r)

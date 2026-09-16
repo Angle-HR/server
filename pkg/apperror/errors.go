@@ -35,6 +35,7 @@ const (
 	MsgEmailNotVerified                       = "email address not verified"
 	MsgOnboardingStepIncomplete               = "onboarding step incomplete"
 	MsgInvalidAccountTypeBranch               = "invalid account type for this endpoint"
+	MsgTooManyAttempts                        = "too many failed attempts, try again later"
 )
 
 var (
@@ -71,6 +72,7 @@ const (
 	CodeInvalidAccountBranch    = "invalid_account_type_branch"
 	CodePayloadTooLarge         = "PAYLOAD_TOO_LARGE"
 	CodeGone                    = "GONE"
+	CodeTooManyAttempts         = "too_many_attempts"
 )
 
 var httpStatusByCode = map[string]int{
@@ -91,6 +93,7 @@ var httpStatusByCode = map[string]int{
 	CodeInvalidAccountBranch:    http.StatusBadRequest,
 	CodePayloadTooLarge:         http.StatusRequestEntityTooLarge,
 	CodeGone:                    http.StatusGone,
+	CodeTooManyAttempts:         http.StatusTooManyRequests,
 }
 
 // AppError is a structured application error.
@@ -245,6 +248,8 @@ func publicMessageForCode(code string) string {
 		return MsgOnboardingStepIncomplete
 	case CodeInvalidAccountBranch:
 		return MsgInvalidAccountTypeBranch
+	case CodeTooManyAttempts:
+		return MsgTooManyAttempts
 	default:
 		return MsgInternalServerError
 	}

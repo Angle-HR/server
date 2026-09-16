@@ -18,6 +18,11 @@ const (
 	codeTTL                 = 300
 	resendCooldownSeconds   = 30
 	maxVerifyAttempts       = 5
+
+	// PurposeEmailVerify is signup / unverified-login email verification.
+	PurposeEmailVerify = "email_verify"
+	// PurposeLoginOTP is passwordless login OTP.
+	PurposeLoginOTP = "login_otp"
 )
 
 // VerificationStore persists OTP sessions in Redis.
@@ -30,7 +35,7 @@ func NewVerificationStore(client *goredis.Client) *VerificationStore {
 	return &VerificationStore{client: client}
 }
 
-// VerificationSession holds OTP state for an unverified signup.
+// VerificationSession holds OTP state for email verification or login OTP.
 type VerificationSession struct {
 	SessionID string    `json:"session_id"`
 	UserID    uuid.UUID `json:"user_id"`
@@ -38,6 +43,7 @@ type VerificationSession struct {
 	Region    string    `json:"region"`
 	Code      string    `json:"code"`
 	Attempts  int       `json:"attempts"`
+	Purpose   string    `json:"purpose,omitempty"`
 }
 
 // CreateSession stores a new verification session and returns its public ID.
@@ -116,9 +122,26 @@ func (s *VerificationStore) DeleteSession(ctx context.Context, sessionID string)
 
 // ValidateCode checks the OTP and increments attempts on failure.
 func (s *VerificationStore) ValidateCode(ctx context.Context, sessionID, code string) (VerificationSession, error) {
+	return s.ValidateCodeForPurpose(ctx, sessionID, code, "")
+}
+
+// ValidateCodeForPurpose checks the OTP and optionally enforces session purpose.
+// Empty wantPurpose accepts email_verify sessions (including legacy sessions with empty purpose).
+func (s *VerificationStore) ValidateCodeForPurpose(ctx context.Context, sessionID, code, wantPurpose string) (VerificationSession, error) {
 	session, err := s.GetSession(ctx, sessionID)
 	if err != nil {
 		return VerificationSession{}, err
+	}
+
+	purpose := session.Purpose
+	if purpose == "" {
+		purpose = PurposeEmailVerify
+	}
+	if wantPurpose == "" {
+		wantPurpose = PurposeEmailVerify
+	}
+	if purpose != wantPurpose {
+		return VerificationSession{}, ErrInvalidVerificationCode
 	}
 
 	if session.Attempts >= maxVerifyAttempts {

@@ -2,10 +2,8 @@ package handler
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -15,7 +13,6 @@ import (
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/query"
 	"github.com/Angle-HR/server/internal/region"
-	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
 )
 
@@ -56,7 +53,7 @@ func (h *CountriesHandler) RegisterRoutes(r chi.Router) {
 // list godoc
 //
 //	@Summary		List countries
-//	@Description	Returns active countries for the waitlist region dropdown.
+//	@Description	Returns active countries for product onboarding.
 //	@Tags			waitlist/reference
 //	@Produce		json
 //	@Success		200	{object}	handler.CountriesEnvelope
@@ -99,54 +96,6 @@ func (h *CountriesHandler) loadCountries(ctx context.Context) ([]Country, error)
 	}
 
 	return countries, nil
-}
-
-func lookupCountry(ctx context.Context, db globalDB, countryID uuid.UUID) (Country, error) {
-	sql, args, err := query.LookupCountryByID(countryID)
-	if err != nil {
-		return Country{}, fmt.Errorf("build lookup country query: %w", err)
-	}
-
-	row := db.QueryRow(ctx, sql, args...)
-
-	country, err := scanCountry(row)
-	if err != nil {
-		if isCountryNotFound(err) {
-			return Country{}, apperror.NewWithDetails(
-				apperror.CodeValidationError,
-				apperror.MsgInvalidCountryID,
-				map[string]any{"field": "country_id"},
-			)
-		}
-
-		return Country{}, err
-	}
-
-	if !region.Valid(country.Region) {
-		return Country{}, apperror.NewWithDetails(
-			apperror.CodeValidationError,
-			apperror.MsgInvalidRegion,
-			map[string]any{"field": "country_id"},
-		)
-	}
-
-	return country, nil
-}
-
-func isCountryNotFound(err error) bool {
-	for err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return true
-		}
-
-		if strings.Contains(strings.ToLower(err.Error()), "no rows") {
-			return true
-		}
-
-		err = errors.Unwrap(err)
-	}
-
-	return false
 }
 
 type countryScanner interface {

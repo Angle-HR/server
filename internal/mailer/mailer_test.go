@@ -14,7 +14,7 @@ func TestTemplatesRendering(t *testing.T) {
 	}
 
 	t.Run("waitlist_confirmation", func(t *testing.T) {
-		m, err := New(Config{AppURL: "https://app.anglehr.com"})
+		m, err := New(Config{})
 		if err != nil {
 			t.Fatalf("failed to create mailer: %v", err)
 		}
@@ -22,8 +22,6 @@ func TestTemplatesRendering(t *testing.T) {
 		args := EmailArgs{
 			Type:      TypeWaitlistConfirmation,
 			Recipient: "test@example.com",
-			FullName:  "John Doe",
-			Token:     "abc123",
 		}
 
 		var buf bytes.Buffer
@@ -37,12 +35,20 @@ func TestTemplatesRendering(t *testing.T) {
 		}
 
 		content := buf.String()
-		wantHref := `href="https://app.anglehr.com/survey?token=abc123"`
-		if !bytes.Contains(buf.Bytes(), []byte(wantHref)) {
-			t.Errorf("expected rendered content to contain %q, got: %s", wantHref, content)
+		if bytes.Contains(buf.Bytes(), []byte("/survey?token=")) {
+			t.Errorf("expected no survey CTA, got: %s", content)
 		}
-		if !bytes.Contains(buf.Bytes(), []byte("John Doe")) {
-			t.Errorf("expected rendered content to contain 'John Doe', got: %s", content)
+		if bytes.Contains(buf.Bytes(), []byte("Help shape our product")) {
+			t.Errorf("expected no survey button, got: %s", content)
+		}
+		if !bytes.Contains(buf.Bytes(), []byte("Hi,")) {
+			t.Errorf("expected generic greeting, got: %s", content)
+		}
+		if !bytes.Contains(buf.Bytes(), []byte("You're on")) {
+			t.Errorf("expected confirmation copy, got: %s", content)
+		}
+		if !bytes.Contains(buf.Bytes(), []byte("What happens next?")) {
+			t.Errorf("expected next-steps copy, got: %s", content)
 		}
 	})
 

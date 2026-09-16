@@ -1199,6 +1199,163 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/accept-invite": {
+            "post": {
+                "description": "Creates or links a product user, joins the organization, marks onboarding complete, and returns JWTs.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Accept product organization invite",
+                "parameters": [
+                    {
+                        "description": "Accept invite payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthAcceptInviteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthTokenEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "410": {
+                        "description": "Gone",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/forgot-password": {
+            "post": {
+                "description": "Always returns 200. When the email exists, enqueues a reset link (token TTL 1 hour).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Request password reset",
+                "parameters": [
+                    {
+                        "description": "Forgot password payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthForgotPasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthMessageEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/invite/{token}": {
+            "get": {
+                "description": "Returns invite preview for a raw invite token. Public; no JWT required.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Load product organization invite",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invite token",
+                        "name": "token",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthInviteEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "410": {
+                        "description": "Gone",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/login": {
             "post": {
                 "description": "Authenticates a verified user and returns JWT tokens. When credentials are valid but email is unverified, returns 403 with a new verification session in error.details.",
@@ -1250,6 +1407,251 @@ const docTemplate = `{
                     },
                     "429": {
                         "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/login/otp/request": {
+            "post": {
+                "description": "Sends a 6-digit sign-in code. Separate from signup email verification.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Request passwordless login OTP",
+                "parameters": [
+                    {
+                        "description": "Login OTP request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthLoginOTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthSignupEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/login/otp/verify": {
+            "post": {
+                "description": "Exchanges a login OTP for JWTs (or MFA challenge when TOTP is enabled).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Verify passwordless login OTP",
+                "parameters": [
+                    {
+                        "description": "Login OTP verify",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthLoginOTPVerifyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthTokenEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/login/totp": {
+            "post": {
+                "description": "Exchanges an MFA challenge token and authenticator code for JWTs.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Complete login with TOTP",
+                "parameters": [
+                    {
+                        "description": "Login TOTP payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthLoginTOTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthTokenEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/logout": {
+            "post": {
+                "description": "Revokes the provided refresh token. Idempotent.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Logout",
+                "parameters": [
+                    {
+                        "description": "Logout payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthLogoutRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthMessageEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the authenticated product user and onboarding progress.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Current product user",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthMeEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1367,6 +1769,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/reset-password": {
+            "post": {
+                "description": "Sets a new password using a forgot-password token and revokes existing refresh sessions.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Reset password",
+                "parameters": [
+                    {
+                        "description": "Reset password payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthResetPasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthMessageEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/signup": {
             "post": {
                 "description": "Creates an unverified user in AUTH_DEFAULT_REGION (default uk) and enqueues a 6-digit verification email. OTP expires in 300 seconds.",
@@ -1469,6 +1917,163 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/totp/confirm": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Validates a code from the authenticator app and enables TOTP.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Confirm TOTP enrollment",
+                "parameters": [
+                    {
+                        "description": "Confirm payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthTOTPConfirmRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthMessageEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/totp/disable": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Disables TOTP after validating password and current authenticator code.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Disable TOTP",
+                "parameters": [
+                    {
+                        "description": "Disable payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthTOTPDisableRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthMessageEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/totp/enroll": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generates a new TOTP secret and otpauth URI. Call confirm to enable.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Enroll TOTP authenticator",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthTOTPEnrollEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/verify-email": {
             "post": {
                 "description": "Validates the 6-digit OTP and returns JWT tokens with onboarding status.",
@@ -1549,7 +2154,7 @@ const docTemplate = `{
         },
         "/countries": {
             "get": {
-                "description": "Returns active countries for the waitlist region dropdown.",
+                "description": "Returns active countries for product onboarding.",
                 "produces": [
                     "application/json"
                 ],
@@ -1658,7 +2263,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Saves workspace address from search or manual entry.",
+                "description": "Saves business registry identification and workspace address. Business accounts only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1668,7 +2273,7 @@ const docTemplate = `{
                 "tags": [
                     "onboarding/address"
                 ],
-                "summary": "Upsert address",
+                "summary": "Upsert identification and address",
                 "parameters": [
                     {
                         "description": "Address payload",
@@ -1708,6 +2313,69 @@ const docTemplate = `{
                 }
             }
         },
+        "/onboarding/address/search": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns address autocomplete suggestions for a partial query and country.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "onboarding/address"
+                ],
+                "summary": "Search addresses",
+                "parameters": [
+                    {
+                        "description": "Address search payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AddressSearchRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AddressSearchEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "501": {
+                        "description": "Not Implemented",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/onboarding/address/verify": {
             "post": {
                 "security": [
@@ -1715,7 +2383,10 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Reserved for third-party address verification. Returns 501 until a provider is integrated.",
+                "description": "Verifies a search or manual address payload. Returns verification_status and optional failure_reason (not_verifiable shows manual entry).",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -1723,9 +2394,38 @@ const docTemplate = `{
                     "onboarding/address"
                 ],
                 "summary": "Verify address",
+                "parameters": [
+                    {
+                        "description": "Address verification payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.VerifyAddressRequest"
+                        }
+                    }
+                ],
                 "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.VerifyAddressEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1746,7 +2446,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Saves business type, industry, and employee count. Business accounts only.",
+                "description": "Deprecated: use PUT /onboarding/compliance. Saves business type, industry, and employee count.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1756,7 +2456,8 @@ const docTemplate = `{
                 "tags": [
                     "onboarding/business"
                 ],
-                "summary": "Upsert business compliance",
+                "summary": "Upsert business compliance (deprecated)",
+                "deprecated": true,
                 "parameters": [
                     {
                         "description": "Business payload",
@@ -1801,7 +2502,11 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+<<<<<<< HEAD
                 "description": "Saves legal business name, legal full name, country, company role, BIN number, registered address, business type, and industry type for a business account.",
+=======
+                "description": "Deprecated: prefer stepped PUT /onboarding/profile → address → PUT /onboarding/business (type/industry/employees) → complete. This one-shot includes KYB-oriented fields (BIN, registered address) and does not advance onboarding progress.",
+>>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "consumes": [
                     "application/json"
                 ],
@@ -1811,7 +2516,12 @@ const docTemplate = `{
                 "tags": [
                     "onboarding/business"
                 ],
+<<<<<<< HEAD
                 "summary": "Submit business onboarding",
+=======
+                "summary": "Submit business onboarding (deprecated)",
+                "deprecated": true,
+>>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "parameters": [
                     {
                         "description": "Business onboarding payload",
@@ -1952,6 +2662,113 @@ const docTemplate = `{
                 }
             }
         },
+<<<<<<< HEAD
+=======
+        "/onboarding/compliance": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Saves business type, industry, and employee count for individual or business accounts.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "onboarding/compliance"
+                ],
+                "summary": "Upsert compliance",
+                "parameters": [
+                    {
+                        "description": "Compliance payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ProductComplianceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.ProductComplianceEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/onboarding/identification-requirements": {
+            "get": {
+                "description": "Returns country-specific business identification field labels, formats, and validation patterns.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "onboarding/reference"
+                ],
+                "summary": "Get business identification requirements",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Country UUID",
+                        "name": "country_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.IdentificationRequirementsEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+>>>>>>> 661519092b0171635e01370358342be351cf59f9
         "/onboarding/individual": {
             "post": {
                 "security": [
@@ -1959,7 +2776,11 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+<<<<<<< HEAD
                 "description": "Saves first name, last name, country of residence, business type, industry type, and number of employees for an individual account.",
+=======
+                "description": "Deprecated: prefer the stepped flow PUT /onboarding/profile then address/complete. Saves first name, last name, country, business type, industry, and employee count on the user row only.",
+>>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "consumes": [
                     "application/json"
                 ],
@@ -1969,7 +2790,12 @@ const docTemplate = `{
                 "tags": [
                     "onboarding/individual"
                 ],
+<<<<<<< HEAD
                 "summary": "Submit individual onboarding",
+=======
+                "summary": "Submit individual onboarding (deprecated)",
+                "deprecated": true,
+>>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "parameters": [
                     {
                         "description": "Individual onboarding payload",
@@ -2129,6 +2955,69 @@ const docTemplate = `{
                 }
             }
         },
+        "/organizations/invites": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Organization owners invite a member by email. Sends an invite email with a token.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Create organization invite",
+                "parameters": [
+                    {
+                        "description": "Invite payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthCreateOrgInviteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AuthCreateOrgInviteEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/roles": {
             "get": {
                 "description": "Returns active role options for onboarding.",
@@ -2183,7 +3072,7 @@ const docTemplate = `{
         },
         "/waitlist": {
             "post": {
-                "description": "Registers a signup for the regional waitlist and global waitlist registry.",
+                "description": "Collects an email for the waitlist and writes regional plus global registry rows.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2214,64 +3103,6 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/waitlist/onboarding": {
-            "post": {
-                "description": "Saves the full onboarding form for a waitlist signup token.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "waitlist/onboarding"
-                ],
-                "summary": "Submit waitlist onboarding form",
-                "parameters": [
-                    {
-                        "description": "Onboarding payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.OnboardingRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.OnboardingEnvelope"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -2448,6 +3279,77 @@ const docTemplate = `{
                 "request_id": {
                     "type": "string",
                     "example": "abc123"
+                }
+            }
+        },
+        "internal_handler.AddressSearchData": {
+            "type": "object",
+            "properties": {
+                "suggestions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.AddressSuggestion"
+                    }
+                }
+            }
+        },
+        "internal_handler.AddressSearchEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.AddressSearchData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_handler.AddressSearchRequest": {
+            "type": "object",
+            "properties": {
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "query": {
+                    "type": "string",
+                    "example": "10 Downing"
+                }
+            }
+        },
+        "internal_handler.AddressSuggestion": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "example": "London"
+                },
+                "description": {
+                    "type": "string",
+                    "example": "10 Downing Street, London, UK"
+                },
+                "formatted_address": {
+                    "type": "string",
+                    "example": "10 Downing Street, London SW1A 2AA, UK"
+                },
+                "line_1": {
+                    "type": "string",
+                    "example": "10 Downing Street"
+                },
+                "line_2": {
+                    "type": "string"
+                },
+                "place_id": {
+                    "type": "string",
+                    "example": "ChIJ..."
+                },
+                "post_code": {
+                    "type": "string",
+                    "example": "SW1A 2AA"
+                },
+                "state_or_county": {
+                    "type": "string",
+                    "example": "Greater London"
                 }
             }
         },
@@ -2853,6 +3755,119 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_handler.AuthAcceptInviteRequest": {
+            "type": "object",
+            "properties": {
+                "first_name": {
+                    "type": "string",
+                    "example": "Jerry"
+                },
+                "last_name": {
+                    "type": "string",
+                    "example": "Oluwasegun"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "secure-password-here"
+                },
+                "token": {
+                    "type": "string",
+                    "example": "opaque-invite-token"
+                }
+            }
+        },
+        "internal_handler.AuthCreateOrgInviteData": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "member@example.com"
+                },
+                "expires_at": {
+                    "type": "string",
+                    "example": "2026-08-24T12:00:00Z"
+                }
+            }
+        },
+        "internal_handler.AuthCreateOrgInviteEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.AuthCreateOrgInviteData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_handler.AuthCreateOrgInviteRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "member@example.com"
+                }
+            }
+        },
+        "internal_handler.AuthForgotPasswordRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "jerry@example.com"
+                }
+            }
+        },
+        "internal_handler.AuthInviteData": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "member@example.com"
+                },
+                "expires_at": {
+                    "type": "string",
+                    "example": "2026-08-24T12:00:00Z"
+                },
+                "organization_name": {
+                    "type": "string",
+                    "example": "ANGLE"
+                }
+            }
+        },
+        "internal_handler.AuthInviteEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.AuthInviteData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_handler.AuthLoginOTPRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "jerry@example.com"
+                }
+            }
+        },
+        "internal_handler.AuthLoginOTPVerifyRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "224879"
+                },
+                "verification_session_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
         "internal_handler.AuthLoginRequest": {
             "type": "object",
             "properties": {
@@ -2863,6 +3878,103 @@ const docTemplate = `{
                 "password": {
                     "type": "string",
                     "example": "secure-password-here"
+                }
+            }
+        },
+        "internal_handler.AuthLoginTOTPRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "123456"
+                },
+                "mfa_token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIs..."
+                }
+            }
+        },
+        "internal_handler.AuthLogoutRequest": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIs..."
+                }
+            }
+        },
+        "internal_handler.AuthMeData": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string",
+                    "example": "business"
+                },
+                "country_id": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "jerry@example.com"
+                },
+                "email_verified": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "legal_full_name": {
+                    "type": "string"
+                },
+                "onboarding": {
+                    "$ref": "#/definitions/internal_handler.OnboardingProgressSummary"
+                },
+                "region": {
+                    "type": "string",
+                    "example": "uk"
+                },
+                "totp_enabled": {
+                    "type": "boolean",
+                    "example": false
+                }
+            }
+        },
+        "internal_handler.AuthMeEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.AuthMeData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_handler.AuthMessageData": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "example": "logged out"
+                }
+            }
+        },
+        "internal_handler.AuthMessageEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.AuthMessageData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
                 }
             }
         },
@@ -2905,6 +4017,19 @@ const docTemplate = `{
                 "verification_session_id": {
                     "type": "string",
                     "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "internal_handler.AuthResetPasswordRequest": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string",
+                    "example": "new-secure-password"
+                },
+                "token": {
+                    "type": "string",
+                    "example": "opaque-reset-token"
                 }
             }
         },
@@ -2963,6 +4088,52 @@ const docTemplate = `{
                 "password": {
                     "type": "string",
                     "example": "secure-password-here"
+                }
+            }
+        },
+        "internal_handler.AuthTOTPConfirmRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "123456"
+                }
+            }
+        },
+        "internal_handler.AuthTOTPDisableRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "123456"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "secure-password-here"
+                }
+            }
+        },
+        "internal_handler.AuthTOTPEnrollData": {
+            "type": "object",
+            "properties": {
+                "otpauth_url": {
+                    "type": "string",
+                    "example": "otpauth://totp/OpenHR:jerry@example.com?secret=..."
+                },
+                "secret": {
+                    "type": "string",
+                    "example": "JBSWY3DPEHPK3PXP"
+                }
+            }
+        },
+        "internal_handler.AuthTOTPEnrollEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.AuthTOTPEnrollData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
                 }
             }
         },
@@ -3264,6 +4435,68 @@ const docTemplate = `{
                 }
             }
         },
+<<<<<<< HEAD
+=======
+        "internal_handler.IdentificationRequirementField": {
+            "type": "object",
+            "properties": {
+                "format_hint": {
+                    "type": "string",
+                    "example": "8 digits, or SC/NI prefix + 6 digits"
+                },
+                "key": {
+                    "type": "string",
+                    "example": "registration_number"
+                },
+                "label": {
+                    "type": "string",
+                    "example": "Company Registration Number (CRN)"
+                },
+                "pattern": {
+                    "type": "string",
+                    "example": "^(\\d{8}|(SC|NI)\\d{6})$"
+                },
+                "placeholder": {
+                    "type": "string",
+                    "example": "12345678"
+                },
+                "required": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "internal_handler.IdentificationRequirementsData": {
+            "type": "object",
+            "properties": {
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "country_slug": {
+                    "type": "string",
+                    "example": "united-kingdom"
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.IdentificationRequirementField"
+                    }
+                }
+            }
+        },
+        "internal_handler.IdentificationRequirementsEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.IdentificationRequirementsData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+>>>>>>> 661519092b0171635e01370358342be351cf59f9
         "internal_handler.IndividualEnvelope": {
             "type": "object",
             "properties": {
@@ -3361,26 +4594,6 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_handler.OnboardingData": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "example": "Thanks for telling us more!"
-                }
-            }
-        },
-        "internal_handler.OnboardingEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.OnboardingData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
         "internal_handler.OnboardingIndustry": {
             "type": "object",
             "properties": {
@@ -3435,7 +4648,7 @@ const docTemplate = `{
                 },
                 "next_step": {
                     "type": "string",
-                    "example": "address"
+                    "example": "compliance"
                 },
                 "status": {
                     "type": "string",
@@ -3444,54 +4657,6 @@ const docTemplate = `{
                         "completed"
                     ],
                     "example": "in_progress"
-                }
-            }
-        },
-        "internal_handler.OnboardingRequest": {
-            "type": "object",
-            "properties": {
-                "frustration_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "industry_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "other_frustration": {
-                    "type": "string"
-                },
-                "other_industry": {
-                    "type": "string"
-                },
-                "other_tool": {
-                    "type": "string"
-                },
-                "role_id": {
-                    "type": "string"
-                },
-                "team_size_id": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "tool_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "wants_early_access": {
-                    "type": "boolean"
-                },
-                "wants_user_testing": {
-                    "type": "boolean"
                 }
             }
         },
@@ -3509,6 +4674,12 @@ const docTemplate = `{
                 },
                 "formatted_address": {
                     "type": "string"
+                },
+                "identification": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 },
                 "line_1": {
                     "type": "string"
@@ -3569,6 +4740,12 @@ const docTemplate = `{
                 "formatted_address": {
                     "type": "string"
                 },
+                "identification": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
                 "line_1": {
                     "type": "string",
                     "example": "10 Downing Street"
@@ -3600,6 +4777,12 @@ const docTemplate = `{
                 },
                 "formatted_address": {
                     "type": "string"
+                },
+                "identification": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 },
                 "line_1": {
                     "type": "string"
@@ -3677,6 +4860,65 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_handler.ProductComplianceData": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "type": "string"
+                },
+                "employee_count": {
+                    "type": "integer"
+                },
+                "industry_id": {
+                    "type": "string"
+                },
+                "onboarding": {
+                    "$ref": "#/definitions/internal_handler.OnboardingProgressSummary"
+                }
+            }
+        },
+        "internal_handler.ProductComplianceEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.ProductComplianceData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_handler.ProductComplianceRequest": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "type": "string",
+                    "example": "61000000-0000-4000-8000-000000000001"
+                },
+                "employee_count": {
+                    "type": "integer",
+                    "example": 25
+                },
+                "industry_id": {
+                    "type": "string",
+                    "example": "62000000-0000-4000-8000-000000000001"
+                }
+            }
+        },
+        "internal_handler.ProductComplianceState": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "type": "string"
+                },
+                "employee_count": {
+                    "type": "integer"
+                },
+                "industry_id": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_handler.ProductOnboardingCompleteData": {
             "type": "object",
             "properties": {
@@ -3715,7 +4957,12 @@ const docTemplate = `{
                     "$ref": "#/definitions/internal_handler.ProductAddressState"
                 },
                 "business": {
-                    "$ref": "#/definitions/internal_handler.ProductBusinessState"
+                    "description": "deprecated: use compliance",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/internal_handler.ProductBusinessState"
+                        }
+                    ]
                 },
                 "completed_steps": {
                     "type": "array",
@@ -3723,13 +4970,16 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "compliance": {
+                    "$ref": "#/definitions/internal_handler.ProductComplianceState"
+                },
                 "current_step": {
                     "type": "string",
-                    "example": "address"
+                    "example": "identification_address"
                 },
                 "next_step": {
                     "type": "string",
-                    "example": "address"
+                    "example": "compliance"
                 },
                 "profile": {
                     "$ref": "#/definitions/internal_handler.ProductProfileState"
@@ -3917,10 +5167,6 @@ const docTemplate = `{
                 "region": {
                     "type": "string",
                     "example": "uk"
-                },
-                "token": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
                 }
             }
         },
@@ -3938,17 +5184,9 @@ const docTemplate = `{
         "internal_handler.SignupRequest": {
             "type": "object",
             "properties": {
-                "country_id": {
-                    "type": "string",
-                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-                },
                 "email": {
                     "type": "string",
                     "example": "jerry@example.com"
-                },
-                "full_name": {
-                    "type": "string",
-                    "example": "Jerry"
                 }
             }
         },
@@ -3983,6 +5221,119 @@ const docTemplate = `{
                 }
             }
         },
+<<<<<<< HEAD
+=======
+        "internal_handler.VerifyAddressEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.VerifyAddressResponse"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_handler.VerifyAddressRequest": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "example": "London"
+                },
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "entry_mode": {
+                    "type": "string",
+                    "enum": [
+                        "search",
+                        "manual"
+                    ],
+                    "example": "search"
+                },
+                "formatted_address": {
+                    "type": "string"
+                },
+                "line_1": {
+                    "type": "string",
+                    "example": "10 Downing Street"
+                },
+                "line_2": {
+                    "type": "string"
+                },
+                "place_id": {
+                    "type": "string",
+                    "example": "ChIJ..."
+                },
+                "post_code": {
+                    "type": "string",
+                    "example": "SW1A 2AA"
+                },
+                "state_or_county": {
+                    "type": "string",
+                    "example": "Greater London"
+                }
+            }
+        },
+        "internal_handler.VerifyAddressResponse": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "example": "London"
+                },
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "entry_mode": {
+                    "type": "string",
+                    "enum": [
+                        "search",
+                        "manual"
+                    ],
+                    "example": "search"
+                },
+                "failure_reason": {
+                    "type": "string",
+                    "enum": [
+                        "not_verifiable",
+                        "invalid_address"
+                    ],
+                    "example": "not_verifiable"
+                },
+                "formatted_address": {
+                    "type": "string"
+                },
+                "line_1": {
+                    "type": "string",
+                    "example": "10 Downing Street"
+                },
+                "line_2": {
+                    "type": "string"
+                },
+                "post_code": {
+                    "type": "string",
+                    "example": "SW1A 2AA"
+                },
+                "state_or_county": {
+                    "type": "string",
+                    "example": "Greater London"
+                },
+                "verification_status": {
+                    "type": "string",
+                    "enum": [
+                        "verified",
+                        "failed",
+                        "unverified"
+                    ],
+                    "example": "verified"
+                }
+            }
+        },
+>>>>>>> 661519092b0171635e01370358342be351cf59f9
         "internal_handler.WaitlistBusinessType": {
             "type": "object",
             "properties": {

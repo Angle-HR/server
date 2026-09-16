@@ -40,7 +40,6 @@ func TestEmailWorker_Work_Success(t *testing.T) {
 		Args: mailer.EmailArgs{
 			Type:      "waitlist_confirmation",
 			Recipient: "recipient@acme.com",
-			FullName:  "Jerry",
 		},
 	}
 

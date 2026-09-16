@@ -21,6 +21,9 @@ const (
 	TypeEmailVerification    = "email_verification"
 	TypeOnboardingComplete   = "onboarding_complete"
 	TypeAdminInvite          = "admin_invite"
+	TypePasswordReset        = "password_reset"
+	TypeLoginOTP             = "login_otp"
+	TypeOrgInvite            = "org_invite"
 )
 
 // EmailArgs defines job queue arguments for email notifications.
@@ -28,6 +31,7 @@ type EmailArgs struct {
 	Type             string `json:"type"`
 	Recipient        string `json:"recipient"`
 	FullName         string `json:"full_name"`
+	OrganizationName string `json:"organization_name,omitempty"`
 	Token            string `json:"token,omitempty"`
 	Code             string `json:"code,omitempty"`
 	ExpiresInSeconds int    `json:"expires_in_seconds,omitempty"`
@@ -94,13 +98,8 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 
 	switch args.Type {
 	case TypeWaitlistConfirmation:
-		if m.cfg.AppURL == "" {
-			err := fmt.Errorf("APP_URL is required for waitlist_confirmation emails")
-			m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
-			return err
-		}
 		templateName = "waitlist_confirmation.html"
-		subject = "You're on the Angle HR waitlist"
+		subject = "You're on the OpenHR waitlist"
 	case TypeMoreInfoAck:
 		templateName = "more_info_ack.html"
 		subject = "Thanks for sharing more about yourself"
@@ -124,6 +123,25 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 		baseURL = m.cfg.AdminAppURL
 		templateName = "admin_invite.html"
 		subject = "You're invited to Open HR Admin"
+	case TypePasswordReset:
+		if m.cfg.AppURL == "" {
+			err := fmt.Errorf("APP_URL is required for password_reset emails")
+			m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
+			return err
+		}
+		templateName = "password_reset.html"
+		subject = "Reset your Open HR password"
+	case TypeLoginOTP:
+		templateName = "login_otp.html"
+		subject = "Your Open HR sign-in code"
+	case TypeOrgInvite:
+		if m.cfg.AppURL == "" {
+			err := fmt.Errorf("APP_URL is required for org_invite emails")
+			m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
+			return err
+		}
+		templateName = "org_invite.html"
+		subject = "You're invited to Open HR"
 	default:
 		err := fmt.Errorf("unknown email type: %s", args.Type)
 		m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)

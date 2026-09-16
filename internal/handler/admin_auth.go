@@ -55,15 +55,23 @@ func (h *AdminHandler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.Store.GetUserByEmail(r.Context(), req.Email)
+	ctx := r.Context()
+	if err := h.PasswordLockout.Check(ctx, req.Email); err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeTooManyAttempts, apperror.MsgTooManyAttempts))
+		return
+	}
+
+	user, err := h.Store.GetUserByEmail(ctx, req.Email)
 	if err != nil {
 		response.Error(w, r, apperror.ErrUnauthorized)
 		return
 	}
 	if !user.IsActive || user.PasswordHash == nil || !auth.CheckPassword(*user.PasswordHash, req.Password) {
+		_, _ = h.PasswordLockout.RecordFailure(ctx, req.Email)
 		response.Error(w, r, apperror.ErrUnauthorized)
 		return
 	}
+	_ = h.PasswordLockout.Reset(ctx, req.Email)
 
 	pair, err := h.Tokens.IssueAdminPair(user.ID)
 	if err != nil {

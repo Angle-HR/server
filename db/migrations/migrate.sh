@@ -13,6 +13,12 @@ fi
 
 direction="${1:-up}"
 migrations_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=ensure-database.sh
+source "$migrations_dir/ensure-database.sh"
+
+if [[ "$direction" == "up" ]]; then
+	ensure_database "$DB_URL"
+fi
 
 case "$direction" in
 up | down)

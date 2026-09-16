@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- Product auth session APIs: `GET /auth/me`, `POST /auth/logout` (refresh `jti` denylist + per-user session revoke in Redis).
+- Password reset: `POST /auth/forgot-password`, `POST /auth/reset-password` with email template.
+- Passwordless login OTP: `POST /auth/login/otp/request`, `POST /auth/login/otp/verify` (separate from signup verification).
+- TOTP MFA: enroll/confirm/disable plus `POST /auth/login/totp` MFA challenge after password or OTP login.
+- Product organization invites: `GET /auth/invite/{token}`, `POST /auth/accept-invite`, `POST /organizations/invites` with membership tables (`000002_auth_features`).
+- Non-prod passthrough address verifier via `ADDRESS_VERIFY_MODE=passthrough`.
 - Product onboarding API: auth (`/auth/signup`, verify, login, refresh), onboarding steps (`/onboarding/profile`, `/address`, `/business`, `/status`, `/complete`), and product reference catalog endpoints.
 - Accounts schema (`000002_accounts`) in regional databases and onboarding catalog migration (`000002_onboarding_catalogs`) in the global registry.
 - JWT auth middleware, Redis-backed email verification (6-digit OTP), and Fluvio email jobs (`email_verification`, `onboarding_complete`).
@@ -19,8 +25,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Object storage now uses Cloudflare R2 instead of self-hosted MinIO. Environment variables are renamed from `ANGLEHR_*_MINIO_*` to `ANGLEHR_*_R2_*`. `DBRouter.MinIO()` is now `DBRouter.R2()`. R2 credentials are shared via `R2_ACCESS_KEY` and `R2_SECRET_KEY`; `R2_ENDPOINT` is the default S3 API host with optional per-region `ANGLEHR_*_R2_ENDPOINT` overrides.
 - Email verification OTP expiry increased from 60 seconds to 5 minutes (300 seconds).
 - Removed redundant Markdown API docs under `docs/`; API reference is OpenAPI only (Scalar at `/`).
+- Canonical onboarding docs: stepped PUT flow; OpenAPI marks POST `/onboarding/individual` and POST `/onboarding/business` as deprecated.
 
 ### Deprecated
+- `POST /onboarding/individual` and `POST /onboarding/business` one-shot endpoints (prefer stepped PUT flow).
+
 ### Removed
 - In-cluster MinIO StatefulSets, `minio_setup` docker-compose service, and `minio-setup` Kubernetes Job. Startup no longer checks or creates R2 buckets.
 

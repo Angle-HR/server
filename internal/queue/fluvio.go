@@ -13,8 +13,7 @@ import (
 const DefaultMaxAttempts int16 = 10
 
 const (
-	QueueEmail  = "email"
-	QueueUpload = "upload"
+	QueueEmail = "email"
 )
 
 // EmailEnqueueOptions returns enqueue options for email jobs.
@@ -25,25 +24,10 @@ func EmailEnqueueOptions() []fluvio.EnqueueOption {
 	}
 }
 
-// UploadEnqueueOptions returns enqueue options for upload jobs.
-func UploadEnqueueOptions() []fluvio.EnqueueOption {
-	return []fluvio.EnqueueOption{
-		fluvio.WithQueue(QueueUpload),
-		fluvio.WithMaxAttempts(DefaultMaxAttempts),
-	}
-}
-
 // EmailWorkerQueues returns the queue config for the email worker.
 func EmailWorkerQueues() map[string]fluvio.QueueConfig {
 	return map[string]fluvio.QueueConfig{
 		QueueEmail: {MaxWorkers: 10},
-	}
-}
-
-// UploadWorkerQueues returns the queue config for the upload worker.
-func UploadWorkerQueues() map[string]fluvio.QueueConfig {
-	return map[string]fluvio.QueueConfig{
-		QueueUpload: {MaxWorkers: 10},
 	}
 }
 

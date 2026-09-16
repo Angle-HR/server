@@ -44,10 +44,10 @@ curl -s -X PUT "$BASE/onboarding/profile" -H "$AUTH" -H 'Content-Type: applicati
 
 step "6. PUT /onboarding/address"
 curl -s -X PUT "$BASE/onboarding/address" -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"country_id\":\"$UK_COUNTRY\",\"entry_mode\":\"manual\",\"line_1\":\"10 Downing Street\",\"city\":\"London\",\"state_or_county\":\"Greater London\",\"post_code\":\"SW1A 2AA\"}" | pretty
+  -d "{\"country_id\":\"$UK_COUNTRY\",\"entry_mode\":\"manual\",\"line_1\":\"10 Downing Street\",\"city\":\"London\",\"state_or_county\":\"Greater London\",\"post_code\":\"SW1A 2AA\",\"identification\":{\"registration_number\":\"12345678\"}}" | pretty
 
-step "7. PUT /onboarding/business"
-curl -s -X PUT "$BASE/onboarding/business" -H "$AUTH" -H 'Content-Type: application/json' \
+step "7. PUT /onboarding/compliance"
+curl -s -X PUT "$BASE/onboarding/compliance" -H "$AUTH" -H 'Content-Type: application/json' \
   -d "{\"business_type_id\":\"$BUSINESS_TYPE\",\"industry_id\":\"$INDUSTRY\",\"employee_count\":25}" | pretty
 
 step "8. POST /onboarding/complete"
@@ -62,6 +62,13 @@ curl -s -X POST "$BASE/auth/login" -H 'Content-Type: application/json' \
 
 step "11. POST /auth/refresh"
 curl -s -X POST "$BASE/auth/refresh" -H 'Content-Type: application/json' \
+  -d "{\"refresh_token\":\"$REFRESH\"}" | pretty
+
+step "12. GET /auth/me"
+curl -s "$BASE/auth/me" -H "$AUTH" | pretty
+
+step "13. POST /auth/logout"
+curl -s -X POST "$BASE/auth/logout" -H 'Content-Type: application/json' \
   -d "{\"refresh_token\":\"$REFRESH\"}" | pretty
 
 echo ""

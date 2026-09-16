@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Software78/sql-go-query-builder/builder"
 	"github.com/google/uuid"
@@ -79,6 +80,7 @@ func LookupAccountUserByEmail(email string) (string, []any, error) {
 	return mustSQL(postgres.Select(
 		"id", "email", "password_hash", "email_verified_at", "onboarding_completed_at",
 		"account_type", "first_name", "last_name", "legal_full_name", "country_id",
+		"totp_secret", "totp_enabled_at",
 	).
 		From("users").
 		Where("email", "=", email).
@@ -91,6 +93,7 @@ func LookupAccountUserByID(userID uuid.UUID) (string, []any, error) {
 	return mustSQL(postgres.Select(
 		"id", "email", "password_hash", "email_verified_at", "onboarding_completed_at",
 		"account_type", "first_name", "last_name", "legal_full_name", "country_id",
+		"totp_secret", "totp_enabled_at",
 	).
 		From("users").
 		Where("id", "=", userID).
@@ -193,6 +196,37 @@ func UpsertOrganizationProfile(
 		DoUpdate("company_role_id", companyRoleID).
 		Back().
 		Returning("id").
+		ToSQL())
+}
+
+// UpdateOrganizationIdentification saves registry identification fields on the organization row.
+func UpdateOrganizationIdentification(
+	ownerUserID uuid.UUID,
+	binNumber string,
+	identificationPayload []byte,
+) (string, []any, error) {
+	return mustSQL(postgres.Update("organizations").
+		Set("bin_number", binNumber).
+		Set("identification_payload", identificationPayload).
+		Where("owner_user_id", "=", ownerUserID).
+		Returning("id").
+		ToSQL())
+}
+
+// LookupOrganizationIdentification returns SQL to load identification fields for an organization owner.
+func LookupOrganizationIdentification(ownerUserID uuid.UUID) (string, []any, error) {
+	return mustSQL(postgres.Select("bin_number", "identification_payload").
+		From("organizations").
+		Where("owner_user_id", "=", ownerUserID).
+		ToSQL())
+}
+
+// LookupIndividualUserCompliance returns SQL to load individual compliance fields from the user row.
+func LookupIndividualUserCompliance(userID uuid.UUID) (string, []any, error) {
+	return mustSQL(postgres.Select("business_type_id", "industry_id", "employee_count").
+		From("users").
+		Where("id", "=", userID).
+		WhereNull("deleted_at").
 		ToSQL())
 }
 
@@ -403,4 +437,286 @@ func UpdateIndividualUserBusinessDetails(
 		WhereNull("deleted_at").
 		Returning("id").
 		ToSQL())
+}
+
+// UpdateAccountUserPassword returns SQL to set a new password hash.
+func UpdateAccountUserPassword(userID uuid.UUID, passwordHash string) (string, []any, error) {
+	return mustSQL(postgres.Update("users").
+		Set("password_hash", passwordHash).
+		Where("id", "=", userID).
+		WhereNull("deleted_at").
+		Returning("id").
+		ToSQL())
+}
+
+// SetAccountUserTOTPSecret stores an encrypted pending TOTP secret (not yet enabled).
+func SetAccountUserTOTPSecret(userID uuid.UUID, encryptedSecret string) (string, []any, error) {
+	return mustSQL(postgres.Update("users").
+		Set("totp_secret", encryptedSecret).
+		Where("id", "=", userID).
+		WhereNull("deleted_at").
+		WhereNull("totp_enabled_at").
+		Returning("id").
+		ToSQL())
+}
+
+// EnableAccountUserTOTP marks TOTP as enabled after confirm.
+func EnableAccountUserTOTP(userID uuid.UUID) (string, []any, error) {
+	return mustSQL(postgres.Update("users").
+		SetRaw("totp_enabled_at", "now()").
+		Where("id", "=", userID).
+		WhereNull("deleted_at").
+		WhereNotNull("totp_secret").
+		Returning("id").
+		ToSQL())
+}
+
+// DisableAccountUserTOTP clears TOTP secret and enabled timestamp.
+func DisableAccountUserTOTP(userID uuid.UUID) (string, []any, error) {
+	return mustSQL(postgres.Update("users").
+		Set("totp_secret", nil).
+		Set("totp_enabled_at", nil).
+		Where("id", "=", userID).
+		WhereNull("deleted_at").
+		Returning("id").
+		ToSQL())
+}
+
+// CompleteAccountUserOnboarding marks onboarding complete for invitees.
+func CompleteAccountUserOnboarding(userID uuid.UUID) (string, []any, error) {
+	sql := `
+		UPDATE users
+		SET onboarding_completed_at = COALESCE(onboarding_completed_at, now()),
+		    email_verified_at = COALESCE(email_verified_at, now())
+		WHERE id = $1 AND deleted_at IS NULL
+		RETURNING id
+	`
+	return normalizeSQL(sql), []any{userID}, nil
+}
+
+// InsertOrganizationMember adds a membership row.
+func InsertOrganizationMember(orgID, userID uuid.UUID, role string) (string, []any, error) {
+	sql := `
+		INSERT INTO organization_members (organization_id, user_id, role)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (organization_id, user_id) DO NOTHING
+		RETURNING id
+	`
+	return normalizeSQL(sql), []any{orgID, userID, role}, nil
+}
+
+// InsertOrganizationInvite stores a hashed invite token.
+func InsertOrganizationInvite(orgID uuid.UUID, email, tokenHash string, invitedBy uuid.UUID, expiresAt time.Time) (string, []any, error) {
+	return mustSQL(postgres.Insert("organization_invites").
+		Columns("organization_id", "email", "token_hash", "invited_by", "expires_at").
+		Values(orgID, email, tokenHash, invitedBy, expiresAt).
+		Returning("id").
+		ToSQL())
+}
+
+// LookupOrganizationInviteByTokenHash loads a pending invite by token hash.
+func LookupOrganizationInviteByTokenHash(tokenHash string) (string, []any, error) {
+	sql := `
+		SELECT i.id, i.organization_id, i.email, i.expires_at, i.accepted_at, o.legal_name
+		FROM organization_invites i
+		INNER JOIN organizations o ON o.id = i.organization_id
+		WHERE i.token_hash = $1
+	`
+	return sql, []any{tokenHash}, nil
+}
+
+// AcceptOrganizationInvite marks invite accepted.
+func AcceptOrganizationInvite(inviteID uuid.UUID) (string, []any, error) {
+	return mustSQL(postgres.Update("organization_invites").
+		SetRaw("accepted_at", "now()").
+		Where("id", "=", inviteID).
+		WhereNull("accepted_at").
+		Returning("id").
+		ToSQL())
+}
+
+// LookupOrganizationByOwnerID loads org id and legal name for an owner.
+func LookupOrganizationByOwnerID(ownerUserID uuid.UUID) (string, []any, error) {
+	return mustSQL(postgres.Select("id", "legal_name").
+		From("organizations").
+		Where("owner_user_id", "=", ownerUserID).
+		ToSQL())
+}
+
+// ---------------------------------------------------------------------------
+// Pending accounts (global holding area, accounts.pending_users / accounts.
+// pending_organizations / accounts.pending_onboarding_progress in the global
+// database). An account lives here from signup until an onboarding step
+// resolves a real region and migrates it — see internal/handler/region_pending.go.
+// ---------------------------------------------------------------------------
+
+// pendingUserColumns lists the SELECT shape used for pending user lookups,
+// aligned column-for-column with the regional accounts.users shape scanned by
+// scanAccountUser (id, email, password_hash, email_verified_at,
+// onboarding_completed_at, account_type, first_name, last_name,
+// legal_full_name, country_id, totp_secret, totp_enabled_at), so pending and
+// regional rows can be scanned by the same code.
+const pendingUserColumns = `id, email, password_hash, email_verified_at,
+	NULL::timestamptz, account_type, NULL::text, NULL::text,
+	legal_full_name, NULL::uuid, NULL::text, NULL::timestamptz`
+
+// InsertPendingUser returns SQL to create an unverified pending account.
+func InsertPendingUser(email, passwordHash string) (string, []any, error) {
+	const sql = `
+		INSERT INTO pending_users (email, password_hash)
+		VALUES ($1, $2)
+		ON CONFLICT (email) DO NOTHING
+		RETURNING id`
+	return sql, []any{email, passwordHash}, nil
+}
+
+// LookupPendingUserByEmail returns SQL to load a pending account by email.
+func LookupPendingUserByEmail(email string) (string, []any, error) {
+	sql := fmt.Sprintf(`SELECT %s FROM pending_users WHERE email = $1 AND deleted_at IS NULL`, pendingUserColumns)
+	return sql, []any{email}, nil
+}
+
+// LookupPendingUserByID returns SQL to load a pending account by id.
+func LookupPendingUserByID(userID uuid.UUID) (string, []any, error) {
+	sql := fmt.Sprintf(`SELECT %s FROM pending_users WHERE id = $1 AND deleted_at IS NULL`, pendingUserColumns)
+	return sql, []any{userID}, nil
+}
+
+// UpdatePendingUserEmail returns SQL to change email on an unverified pending account.
+func UpdatePendingUserEmail(userID uuid.UUID, email string) (string, []any, error) {
+	const sql = `
+		UPDATE pending_users SET email = $2
+		WHERE id = $1 AND email_verified_at IS NULL AND deleted_at IS NULL
+		RETURNING id`
+	return sql, []any{userID, email}, nil
+}
+
+// SetPendingUserVerified returns SQL to mark a pending account's email verified.
+func SetPendingUserVerified(userID uuid.UUID) (string, []any, error) {
+	const sql = `
+		UPDATE pending_users SET email_verified_at = now()
+		WHERE id = $1 AND email_verified_at IS NULL
+		RETURNING id`
+	return sql, []any{userID}, nil
+}
+
+// UpdatePendingUserIndividualProfile returns SQL to save individual profile
+// fields on a still-pending account. In practice individual accounts give a
+// country at the same step, so this is only used defensively.
+func UpdatePendingUserIndividualProfile(userID uuid.UUID) (string, []any, error) {
+	const sql = `
+		UPDATE pending_users SET account_type = 'individual'
+		WHERE id = $1 AND deleted_at IS NULL
+		RETURNING id`
+	return sql, []any{userID}, nil
+}
+
+// UpdatePendingUserBusinessProfile returns SQL to save business profile
+// fields (legal full name) on a still-pending account.
+func UpdatePendingUserBusinessProfile(userID uuid.UUID, legalFullName string) (string, []any, error) {
+	const sql = `
+		UPDATE pending_users SET account_type = 'business', legal_full_name = $2
+		WHERE id = $1 AND deleted_at IS NULL
+		RETURNING id`
+	return sql, []any{userID, legalFullName}, nil
+}
+
+// UpsertPendingOrganizationProfile returns SQL to save the business-profile
+// organization fields (legal name, role) for a still-pending account.
+func UpsertPendingOrganizationProfile(ownerUserID uuid.UUID, legalName string, companyRoleID uuid.UUID) (string, []any, error) {
+	const sql = `
+		INSERT INTO pending_organizations (owner_user_id, legal_name, company_role_id)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (owner_user_id) DO UPDATE SET
+			legal_name = EXCLUDED.legal_name,
+			company_role_id = EXCLUDED.company_role_id
+		RETURNING id`
+	return sql, []any{ownerUserID, legalName, companyRoleID}, nil
+}
+
+// LookupPendingOrganizationByOwner returns SQL to load the pending
+// organization profile for a still-pending business account.
+func LookupPendingOrganizationByOwner(ownerUserID uuid.UUID) (string, []any, error) {
+	const sql = `SELECT id, legal_name, company_role_id FROM pending_organizations WHERE owner_user_id = $1`
+	return sql, []any{ownerUserID}, nil
+}
+
+// LookupPendingOrganizationByOwnerWide returns SQL to load the pending
+// organization profile in the same 6-column shape as LookupOrganizationByOwner
+// (id, legal_name, company_role_id, business_type_id, industry_id,
+// employee_count), so callers can scan either result the same way. The last
+// three columns are always NULL for a pending row — those fields only exist
+// once a region (and therefore a real organizations row) does.
+func LookupPendingOrganizationByOwnerWide(ownerUserID uuid.UUID) (string, []any, error) {
+	const sql = `
+		SELECT id, legal_name, company_role_id, NULL::uuid, NULL::uuid, NULL::integer
+		FROM pending_organizations WHERE owner_user_id = $1`
+	return sql, []any{ownerUserID}, nil
+}
+
+// UpsertPendingOnboardingProgress returns SQL to insert or update onboarding
+// progress for a still-pending account.
+func UpsertPendingOnboardingProgress(userID uuid.UUID, currentStep string, completedSteps []string) (string, []any, error) {
+	const sql = `
+		INSERT INTO pending_onboarding_progress (user_id, current_step, completed_steps)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (user_id) DO UPDATE SET
+			current_step = EXCLUDED.current_step,
+			completed_steps = EXCLUDED.completed_steps`
+	return sql, []any{userID, currentStep, completedSteps}, nil
+}
+
+// LookupPendingOnboardingProgress returns SQL to load progress for a pending account.
+func LookupPendingOnboardingProgress(userID uuid.UUID) (string, []any, error) {
+	const sql = `SELECT user_id, current_step, completed_steps FROM pending_onboarding_progress WHERE user_id = $1`
+	return sql, []any{userID}, nil
+}
+
+// DeletePendingOnboardingProgress removes a pending account's progress row
+// (used once it has been migrated into a real region).
+func DeletePendingOnboardingProgress(userID uuid.UUID) (string, []any, error) {
+	const sql = `DELETE FROM pending_onboarding_progress WHERE user_id = $1`
+	return sql, []any{userID}, nil
+}
+
+// DeletePendingOrganization removes a pending account's organization draft
+// (used once it has been migrated into a real region).
+func DeletePendingOrganization(ownerUserID uuid.UUID) (string, []any, error) {
+	const sql = `DELETE FROM pending_organizations WHERE owner_user_id = $1`
+	return sql, []any{ownerUserID}, nil
+}
+
+// DeletePendingUser removes a pending account row (used once it has been
+// migrated into a real region).
+func DeletePendingUser(userID uuid.UUID) (string, []any, error) {
+	const sql = `DELETE FROM pending_users WHERE id = $1`
+	return sql, []any{userID}, nil
+}
+
+// InsertMigratedAccountUser returns SQL to create the regional accounts.users
+// row for an account moving out of the global holding area, preserving its
+// original id. Idempotent: safe to retry if a prior attempt got this far but
+// failed before the global side of the migration committed.
+func InsertMigratedAccountUser(
+	id uuid.UUID,
+	email, passwordHash string,
+	emailVerifiedAt *time.Time,
+	accountType, legalFullName *string,
+) (string, []any, error) {
+	const sql = `
+		INSERT INTO users (id, email, password_hash, email_verified_at, account_type, legal_full_name)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (id) DO NOTHING`
+	return sql, []any{id, email, passwordHash, emailVerifiedAt, accountType, legalFullName}, nil
+}
+
+// InsertMigratedOrganization returns SQL to create the regional
+// accounts.organizations row for a business account moving out of the global
+// holding area. Idempotent for the same reason as InsertMigratedAccountUser.
+func InsertMigratedOrganization(ownerUserID uuid.UUID, legalName string, companyRoleID uuid.UUID) (string, []any, error) {
+	const sql = `
+		INSERT INTO organizations (owner_user_id, legal_name, company_role_id)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (owner_user_id) DO NOTHING`
+	return sql, []any{ownerUserID, legalName, companyRoleID}, nil
 }

@@ -233,7 +233,7 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepProfile)
+		completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepProfile)
 		if err != nil {
 			response.Error(w, r, apperror.ErrInternal)
 			return
@@ -312,7 +312,7 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepProfile)
+		completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepProfile)
 		if err != nil {
 			response.Error(w, r, apperror.ErrInternal)
 			return
@@ -475,7 +475,7 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepIdentificationAddress)
+	completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepIdentificationAddress)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -790,7 +790,7 @@ func (h *ProductOnboardingHandler) putCompliance(w http.ResponseWriter, r *http.
 		return
 	}
 
-	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepCompliance)
+	completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepCompliance)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -1117,8 +1117,8 @@ func (h *ProductOnboardingHandler) loadStatus(ctx context.Context, reg region.Re
 	return data, nil
 }
 
-func (h *ProductOnboardingHandler) advanceProgress(ctx context.Context, tx pgx.Tx, userID uuid.UUID, step string) ([]string, string, error) {
-	progressSQL, progressArgs, err := query.LookupOnboardingProgress(userID)
+func (h *ProductOnboardingHandler) advanceProgress(ctx context.Context, tx pgx.Tx, reg region.Region, userID uuid.UUID, step string) ([]string, string, error) {
+	progressSQL, progressArgs, err := lookupOnboardingProgressSQL(reg, userID)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1135,7 +1135,7 @@ func (h *ProductOnboardingHandler) advanceProgress(ctx context.Context, tx pgx.T
 
 	completed = onboarding.AdvanceCompleted(completed, step)
 	currentStep = normalizeStep(step)
-	upsertSQL, upsertArgs, err := query.UpsertOnboardingProgress(userID, currentStep, completed)
+	upsertSQL, upsertArgs, err := upsertOnboardingProgressSQL(reg, userID, currentStep, completed)
 	if err != nil {
 		return nil, "", err
 	}

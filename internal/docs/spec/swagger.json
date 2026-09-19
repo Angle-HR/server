@@ -1132,6 +1132,9 @@
                 "legal_full_name": {
                     "type": "string"
                 },
+                "tokens": {
+                    "$ref": "#/definitions/internal_handler.RegionReissue"
+                },
                 "user_id": {
                     "type": "string"
                 }
@@ -1431,6 +1434,9 @@
                 "no_of_employees": {
                     "type": "integer"
                 },
+                "tokens": {
+                    "$ref": "#/definitions/internal_handler.RegionReissue"
+                },
                 "user_id": {
                     "type": "string"
                 }
@@ -1568,6 +1574,9 @@
                 },
                 "state_or_county": {
                     "type": "string"
+                },
+                "tokens": {
+                    "$ref": "#/definitions/internal_handler.RegionReissue"
                 },
                 "verification_status": {
                     "enum": [
@@ -1909,6 +1918,9 @@
                 "region": {
                     "example": "uk",
                     "type": "string"
+                },
+                "tokens": {
+                    "$ref": "#/definitions/internal_handler.RegionReissue"
                 }
             },
             "type": "object"
@@ -1995,6 +2007,23 @@
                 },
                 "slug": {
                     "example": "angle",
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.RegionReissue": {
+            "properties": {
+                "access_token": {
+                    "example": "eyJhbGciOiJIUzI1NiIs...",
+                    "type": "string"
+                },
+                "expires_in": {
+                    "example": 3600,
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "example": "eyJhbGciOiJIUzI1NiIs...",
                     "type": "string"
                 }
             },
@@ -4384,7 +4413,7 @@
                 "consumes": [
                     "application/json"
                 ],
-                "description": "Creates an unverified user in AUTH_DEFAULT_REGION (default uk) and enqueues a 6-digit verification email. OTP expires in 300 seconds.",
+                "description": "Creates an unverified account in the global holding area (no regional database yet) and enqueues a 6-digit verification email. The account is assigned a real region once onboarding is given a country. OTP expires in 300 seconds.",
                 "parameters": [
                     {
                         "description": "Signup payload",

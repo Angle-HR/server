@@ -755,6 +755,8 @@ definitions:
                 type: string
             legal_full_name:
                 type: string
+            tokens:
+                $ref: '#/definitions/internal_handler.RegionReissue'
             user_id:
                 type: string
         type: object
@@ -876,8 +878,6 @@ definitions:
             meta:
                 $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
         type: object
-<<<<<<< HEAD
-=======
     internal_handler.IdentificationRequirementField:
         properties:
             format_hint:
@@ -919,7 +919,6 @@ definitions:
             meta:
                 $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
         type: object
->>>>>>> 661519092b0171635e01370358342be351cf59f9
     internal_handler.IndividualEnvelope:
         properties:
             data:
@@ -962,6 +961,8 @@ definitions:
                 type: string
             no_of_employees:
                 type: integer
+            tokens:
+                $ref: '#/definitions/internal_handler.RegionReissue'
             user_id:
                 type: string
         type: object
@@ -1055,6 +1056,8 @@ definitions:
                 type: string
             state_or_county:
                 type: string
+            tokens:
+                $ref: '#/definitions/internal_handler.RegionReissue'
             verification_status:
                 enum:
                     - unverified
@@ -1284,6 +1287,8 @@ definitions:
             region:
                 example: uk
                 type: string
+            tokens:
+                $ref: '#/definitions/internal_handler.RegionReissue'
         type: object
     internal_handler.ProductProfileEnvelope:
         properties:
@@ -1343,6 +1348,18 @@ definitions:
                 type: string
             slug:
                 example: angle
+                type: string
+        type: object
+    internal_handler.RegionReissue:
+        properties:
+            access_token:
+                example: eyJhbGciOiJIUzI1NiIs...
+                type: string
+            expires_in:
+                example: 3600
+                type: integer
+            refresh_token:
+                example: eyJhbGciOiJIUzI1NiIs...
                 type: string
         type: object
     internal_handler.Role:
@@ -1407,8 +1424,6 @@ definitions:
             meta:
                 $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
         type: object
-<<<<<<< HEAD
-=======
     internal_handler.VerifyAddressEnvelope:
         properties:
             data:
@@ -1488,7 +1503,6 @@ definitions:
                 example: verified
                 type: string
         type: object
->>>>>>> 661519092b0171635e01370358342be351cf59f9
     internal_handler.WaitlistBusinessType:
         properties:
             id:
@@ -2887,7 +2901,7 @@ paths:
         post:
             consumes:
                 - application/json
-            description: Creates an unverified user in AUTH_DEFAULT_REGION (default uk) and enqueues a 6-digit verification email. OTP expires in 300 seconds.
+            description: Creates an unverified account in the global holding area (no regional database yet) and enqueues a 6-digit verification email. The account is assigned a real region once onboarding is given a country. OTP expires in 300 seconds.
             parameters:
                 - description: Signup payload
                   in: body
@@ -3255,12 +3269,8 @@ paths:
         post:
             consumes:
                 - application/json
-<<<<<<< HEAD
-            description: Saves legal business name, legal full name, country, company role, BIN number, registered address, business type, and industry type for a business account.
-=======
             deprecated: true
             description: 'Deprecated: prefer stepped PUT /onboarding/profile → address → PUT /onboarding/business (type/industry/employees) → complete. This one-shot includes KYB-oriented fields (BIN, registered address) and does not advance onboarding progress.'
->>>>>>> 661519092b0171635e01370358342be351cf59f9
             parameters:
                 - description: Business onboarding payload
                   in: body
@@ -3289,11 +3299,7 @@ paths:
                         $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
             security:
                 - BearerAuth: []
-<<<<<<< HEAD
-            summary: Submit business onboarding
-=======
             summary: Submit business onboarding (deprecated)
->>>>>>> 661519092b0171635e01370358342be351cf59f9
             tags:
                 - onboarding/business
         put:
@@ -3397,8 +3403,6 @@ paths:
             summary: Complete onboarding
             tags:
                 - onboarding/session
-<<<<<<< HEAD
-=======
     /onboarding/compliance:
         put:
             consumes:
@@ -3466,17 +3470,12 @@ paths:
             summary: Get business identification requirements
             tags:
                 - onboarding/reference
->>>>>>> 661519092b0171635e01370358342be351cf59f9
     /onboarding/individual:
         post:
             consumes:
                 - application/json
-<<<<<<< HEAD
-            description: Saves first name, last name, country of residence, business type, industry type, and number of employees for an individual account.
-=======
             deprecated: true
             description: 'Deprecated: prefer the stepped flow PUT /onboarding/profile then address/complete. Saves first name, last name, country, business type, industry, and employee count on the user row only.'
->>>>>>> 661519092b0171635e01370358342be351cf59f9
             parameters:
                 - description: Individual onboarding payload
                   in: body
@@ -3505,11 +3504,7 @@ paths:
                         $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
             security:
                 - BearerAuth: []
-<<<<<<< HEAD
-            summary: Submit individual onboarding
-=======
             summary: Submit individual onboarding (deprecated)
->>>>>>> 661519092b0171635e01370358342be351cf59f9
             tags:
                 - onboarding/individual
     /onboarding/industries:
@@ -3722,15 +3717,6 @@ tags:
     - description: Business identification and workspace address. POST /onboarding/address/search and POST /onboarding/address/verify accept payloads directly. Uses ADDRESS_SEARCH_MODE and ADDRESS_VERIFY_MODE passthrough in non-prod.
       name: onboarding/address
       x-displayName: Address
-<<<<<<< HEAD
-    - description: 'Business onboarding and compliance: legal business name, legal full name, country, company role, BIN number, registered address, business type, industry, and employee count. Business accounts only.'
-      name: onboarding/business
-      x-displayName: Business
-    - description: Saves first name, last name, country, business type, industry, and number of employees for an individual account.
-      name: onboarding/individual
-      x-displayName: Individual
-    - description: 'Onboarding progress and completion. Individual: verify_email → profile → address. Business: also requires business step.'
-=======
     - description: 'Canonical compliance step: PUT /onboarding/compliance (business_type_id, industry_id, employee_count) for individual and business accounts.'
       name: onboarding/compliance
       x-displayName: Compliance
@@ -3741,7 +3727,6 @@ tags:
       name: onboarding/individual
       x-displayName: Individual
     - description: 'Onboarding progress and completion. Individual: verify_email → profile → compliance → complete. Business: verify_email → profile → identification_address → compliance → complete.'
->>>>>>> 661519092b0171635e01370358342be351cf59f9
       name: onboarding/session
       x-displayName: Session
     - description: Admin console login, invite acceptance, token refresh, and current admin profile with RBAC permissions.

@@ -1132,6 +1132,9 @@
                 "legal_full_name": {
                     "type": "string"
                 },
+                "tokens": {
+                    "$ref": "#/definitions/internal_handler.RegionReissue"
+                },
                 "user_id": {
                     "type": "string"
                 }
@@ -1312,8 +1315,6 @@
             },
             "type": "object"
         },
-<<<<<<< HEAD
-=======
         "internal_handler.IdentificationRequirementField": {
             "properties": {
                 "format_hint": {
@@ -1373,7 +1374,6 @@
             },
             "type": "object"
         },
->>>>>>> 661519092b0171635e01370358342be351cf59f9
         "internal_handler.IndividualEnvelope": {
             "properties": {
                 "data": {
@@ -1433,6 +1433,9 @@
                 },
                 "no_of_employees": {
                     "type": "integer"
+                },
+                "tokens": {
+                    "$ref": "#/definitions/internal_handler.RegionReissue"
                 },
                 "user_id": {
                     "type": "string"
@@ -1571,6 +1574,9 @@
                 },
                 "state_or_county": {
                     "type": "string"
+                },
+                "tokens": {
+                    "$ref": "#/definitions/internal_handler.RegionReissue"
                 },
                 "verification_status": {
                     "enum": [
@@ -1912,6 +1918,9 @@
                 "region": {
                     "example": "uk",
                     "type": "string"
+                },
+                "tokens": {
+                    "$ref": "#/definitions/internal_handler.RegionReissue"
                 }
             },
             "type": "object"
@@ -1998,6 +2007,23 @@
                 },
                 "slug": {
                     "example": "angle",
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.RegionReissue": {
+            "properties": {
+                "access_token": {
+                    "example": "eyJhbGciOiJIUzI1NiIs...",
+                    "type": "string"
+                },
+                "expires_in": {
+                    "example": 3600,
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "example": "eyJhbGciOiJIUzI1NiIs...",
                     "type": "string"
                 }
             },
@@ -2098,8 +2124,6 @@
             },
             "type": "object"
         },
-<<<<<<< HEAD
-=======
         "internal_handler.VerifyAddressEnvelope": {
             "properties": {
                 "data": {
@@ -2210,7 +2234,6 @@
             },
             "type": "object"
         },
->>>>>>> 661519092b0171635e01370358342be351cf59f9
         "internal_handler.WaitlistBusinessType": {
             "properties": {
                 "id": {
@@ -4390,7 +4413,7 @@
                 "consumes": [
                     "application/json"
                 ],
-                "description": "Creates an unverified user in AUTH_DEFAULT_REGION (default uk) and enqueues a 6-digit verification email. OTP expires in 300 seconds.",
+                "description": "Creates an unverified account in the global holding area (no regional database yet) and enqueues a 6-digit verification email. The account is assigned a real region once onboarding is given a country. OTP expires in 300 seconds.",
                 "parameters": [
                     {
                         "description": "Signup payload",
@@ -4964,12 +4987,8 @@
                 "consumes": [
                     "application/json"
                 ],
-<<<<<<< HEAD
-                "description": "Saves legal business name, legal full name, country, company role, BIN number, registered address, business type, and industry type for a business account.",
-=======
                 "deprecated": true,
                 "description": "Deprecated: prefer stepped PUT /onboarding/profile → address → PUT /onboarding/business (type/industry/employees) → complete. This one-shot includes KYB-oriented fields (BIN, registered address) and does not advance onboarding progress.",
->>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "parameters": [
                     {
                         "description": "Business onboarding payload",
@@ -5015,11 +5034,7 @@
                         "BearerAuth": []
                     }
                 ],
-<<<<<<< HEAD
-                "summary": "Submit business onboarding",
-=======
                 "summary": "Submit business onboarding (deprecated)",
->>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "tags": [
                     "onboarding/business"
                 ]
@@ -5182,8 +5197,6 @@
                 ]
             }
         },
-<<<<<<< HEAD
-=======
         "/onboarding/compliance": {
             "put": {
                 "consumes": [
@@ -5288,18 +5301,13 @@
                 ]
             }
         },
->>>>>>> 661519092b0171635e01370358342be351cf59f9
         "/onboarding/individual": {
             "post": {
                 "consumes": [
                     "application/json"
                 ],
-<<<<<<< HEAD
-                "description": "Saves first name, last name, country of residence, business type, industry type, and number of employees for an individual account.",
-=======
                 "deprecated": true,
                 "description": "Deprecated: prefer the stepped flow PUT /onboarding/profile then address/complete. Saves first name, last name, country, business type, industry, and employee count on the user row only.",
->>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "parameters": [
                     {
                         "description": "Individual onboarding payload",
@@ -5345,11 +5353,7 @@
                         "BearerAuth": []
                     }
                 ],
-<<<<<<< HEAD
-                "summary": "Submit individual onboarding",
-=======
                 "summary": "Submit individual onboarding (deprecated)",
->>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "tags": [
                     "onboarding/individual"
                 ]
@@ -5684,34 +5688,22 @@
             "x-displayName": "Address"
         },
         {
-<<<<<<< HEAD
-            "description": "Business onboarding and compliance: legal business name, legal full name, country, company role, BIN number, registered address, business type, industry, and employee count. Business accounts only.",
-=======
             "description": "Canonical compliance step: PUT /onboarding/compliance (business_type_id, industry_id, employee_count) for individual and business accounts.",
             "name": "onboarding/compliance",
             "x-displayName": "Compliance"
         },
         {
             "description": "Deprecated alias for PUT /onboarding/compliance. POST /onboarding/business is deprecated (KYB-oriented one-shot).",
->>>>>>> 661519092b0171635e01370358342be351cf59f9
             "name": "onboarding/business",
             "x-displayName": "Business"
         },
         {
-<<<<<<< HEAD
-            "description": "Saves first name, last name, country, business type, industry, and number of employees for an individual account.",
-=======
             "description": "Deprecated one-shot POST /onboarding/individual. Prefer PUT /onboarding/profile with account_type individual.",
->>>>>>> 661519092b0171635e01370358342be351cf59f9
             "name": "onboarding/individual",
             "x-displayName": "Individual"
         },
         {
-<<<<<<< HEAD
-            "description": "Onboarding progress and completion. Individual: verify_email → profile → address. Business: also requires business step.",
-=======
             "description": "Onboarding progress and completion. Individual: verify_email → profile → compliance → complete. Business: verify_email → profile → identification_address → compliance → complete.",
->>>>>>> 661519092b0171635e01370358342be351cf59f9
             "name": "onboarding/session",
             "x-displayName": "Session"
         },

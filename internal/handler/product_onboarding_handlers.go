@@ -28,13 +28,6 @@ import (
 
 var _ = apidoc.ErrorEnvelope{}
 
-// AddressVerifier checks a saved address against a third-party verification
-// provider. No implementation is wired up yet; once one exists, set it on
-// ProductOnboardingHandler.AddressProvider to enable POST /onboarding/address/verify.
-type AddressVerifier interface {
-	Verify(ctx context.Context, addr ProductAddressState) (status string, err error)
-}
-
 // ProductOnboardingHandler handles product onboarding endpoints.
 type ProductOnboardingHandler struct {
 	Router          *dbrouter.DBRouter
@@ -240,7 +233,7 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepProfile)
+		completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepProfile)
 		if err != nil {
 			response.Error(w, r, apperror.ErrInternal)
 			return
@@ -319,7 +312,7 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepProfile)
+		completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepProfile)
 		if err != nil {
 			response.Error(w, r, apperror.ErrInternal)
 			return
@@ -482,7 +475,7 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepIdentificationAddress)
+	completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepIdentificationAddress)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -518,101 +511,6 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 			NextStep:       &next,
 		},
 		Tokens: tokens,
-	})
-}
-// verifyAddress godoc
-//
-//	@Summary		Verify address
-//	@Description	Verifies the saved workspace address against a third-party provider. Returns 501 until a provider is integrated (see ProductOnboardingHandler.AddressProvider).
-//	@Tags			onboarding/address
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Success		200	{object}	handler.VerifyAddressEnvelope
-//	@Failure		400	{object}	apidoc.ErrorEnvelope
-//	@Failure		401	{object}	apidoc.ErrorEnvelope
-//	@Failure		500	{object}	apidoc.ErrorEnvelope
-//	@Failure		501	{object}	apidoc.ErrorEnvelope
-//	@Router			/onboarding/address/verify [post]
-func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.Request) {
-	// TODO: remove this gate once AddressProvider has a real third-party
-	// implementation wired up (e.g. in NewProductOnboardingHandler). Everything
-	// below is already wired to load the saved address, call the provider, and
-	// persist its result.
-	if h.AddressProvider == nil {
-		response.Error(w, r, apperror.New(apperror.CodeNotImplemented, apperror.MsgNotImplemented))
-		return
-	}
-
-	userID, reg, ok := auth.UserFromContext(r.Context())
-	if !ok {
-		response.Error(w, r, apperror.ErrUnauthorized)
-		return
-	}
-	ctx := r.Context()
-
-	pool, err := h.Router.DB(reg)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	addrSQL, addrArgs, err := query.LookupAccountAddressByUser(userID)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	var addr ProductAddressState
-	var addressID, countryID uuid.UUID
-	if err := pool.QueryRow(ctx, addrSQL, addrArgs...).Scan(
-		&addressID, &countryID, &addr.EntryMode, &addr.Line1, &addr.Line2,
-		&addr.City, &addr.StateOrCounty, &addr.PostCode, &addr.FormattedAddress, &addr.VerificationStatus,
-	); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			response.Error(w, r, apperror.New(apperror.CodeValidationError, "complete address step before verification"))
-			return
-		}
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	addr.CountryID = countryID.String()
-
-	status, err := h.AddressProvider.Verify(ctx, addr)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	defer rollbackOnError(ctx, tx)
-
-	updSQL, updArgs, err := query.UpdateAccountAddressVerificationStatus(userID, status)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if _, err := tx.Exec(ctx, updSQL, updArgs...); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	response.Success(w, r, http.StatusOK, VerifyAddressResponse{
-		CountryID:          addr.CountryID,
-		Line1:              addr.Line1,
-		Line2:              addr.Line2,
-		City:               addr.City,
-		StateOrCounty:      addr.StateOrCounty,
-		PostCode:           addr.PostCode,
-		VerificationStatus: status,
 	})
 }
 
@@ -892,7 +790,7 @@ func (h *ProductOnboardingHandler) putCompliance(w http.ResponseWriter, r *http.
 		return
 	}
 
-	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepCompliance)
+	completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepCompliance)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -1219,8 +1117,8 @@ func (h *ProductOnboardingHandler) loadStatus(ctx context.Context, reg region.Re
 	return data, nil
 }
 
-func (h *ProductOnboardingHandler) advanceProgress(ctx context.Context, tx pgx.Tx, userID uuid.UUID, step string) ([]string, string, error) {
-	progressSQL, progressArgs, err := query.LookupOnboardingProgress(userID)
+func (h *ProductOnboardingHandler) advanceProgress(ctx context.Context, tx pgx.Tx, reg region.Region, userID uuid.UUID, step string) ([]string, string, error) {
+	progressSQL, progressArgs, err := lookupOnboardingProgressSQL(reg, userID)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1237,7 +1135,7 @@ func (h *ProductOnboardingHandler) advanceProgress(ctx context.Context, tx pgx.T
 
 	completed = onboarding.AdvanceCompleted(completed, step)
 	currentStep = normalizeStep(step)
-	upsertSQL, upsertArgs, err := query.UpsertOnboardingProgress(userID, currentStep, completed)
+	upsertSQL, upsertArgs, err := upsertOnboardingProgressSQL(reg, userID, currentStep, completed)
 	if err != nil {
 		return nil, "", err
 	}

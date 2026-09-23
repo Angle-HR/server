@@ -285,7 +285,7 @@ func jsonFieldName(structField string) string {
 
 func validationMessage(fe validator.FieldError) string {
 	switch fe.Tag() {
-	case "required":
+	case "required", "required_if":
 		return jsonFieldName(fe.Field()) + " is required"
 	case "email":
 		return "invalid email format"

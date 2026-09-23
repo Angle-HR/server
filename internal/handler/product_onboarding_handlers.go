@@ -83,11 +83,11 @@ type productProfileBody struct {
 type productAddressBody struct {
 	CountryID        string            `json:"country_id" validate:"required,uuid"`
 	EntryMode        string            `json:"entry_mode" validate:"required,oneof=search manual"`
-	Line1            string            `json:"line_1" validate:"required,max=200"`
+	Line1            string            `json:"line_1" validate:"required_if=EntryMode manual,max=200"`
 	Line2            *string           `json:"line_2"`
 	City             string            `json:"city" validate:"required,max=100"`
 	StateOrCounty    string            `json:"state_or_county" validate:"required,max=100"`
-	PostCode         string            `json:"post_code" validate:"required,max=20"`
+	PostCode         string            `json:"post_code" validate:"required_if=EntryMode manual,max=20"`
 	FormattedAddress *string           `json:"formatted_address"`
 	Identification   map[string]string `json:"identification"`
 }

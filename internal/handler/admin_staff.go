@@ -15,7 +15,7 @@ import (
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
 )
-
+ 
 var _ = apidoc.ErrorEnvelope{}
 
 type createStaffBody struct {

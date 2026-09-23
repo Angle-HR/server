@@ -42,6 +42,10 @@ func TestAuthLogin_wrongPassword(t *testing.T) {
 		t.Fatalf("code: got %q want %q", errBody.Code, apperror.CodeUnauthorized)
 	}
 
+	if errBody.Message != "wrong email or password" {
+		t.Fatalf("message: got %q want %q", errBody.Message, "wrong email or password")
+	}
+
 	assertMocksMet(t, globalMock, regionalMock)
 }
 
@@ -151,19 +155,19 @@ func expectUnverifiedLoginMocks(t *testing.T, emailVerifiedAt *time.Time) (pgxmo
 	}
 	t.Cleanup(func() { regionalMock.Close() })
 
-	emailSQL, emailArgs, err := query.LookupAccountUserByEmail(testLoginEmail)
+	emailSQL, emailArgs, err := query.LookupPendingUserByEmail(testLoginEmail)
 	if err != nil {
 		t.Fatalf("LookupAccountUserByEmail: %v", err)
 	}
-	regionalMock.ExpectQuery(emailSQL).WithArgs(emailArgs...).WillReturnRows(
+	globalMock.ExpectQuery(emailSQL).WithArgs(emailArgs...).WillReturnRows(
 		userAccountRows(passwordHash, emailVerifiedAt),
 	)
 
-	idSQL, idArgs, err := query.LookupAccountUserByID(testLoginUserID)
+	idSQL, idArgs, err := query.LookupPendingUserByID(testLoginUserID)
 	if err != nil {
 		t.Fatalf("LookupAccountUserByID: %v", err)
 	}
-	regionalMock.ExpectQuery(idSQL).WithArgs(idArgs...).WillReturnRows(
+	globalMock.ExpectQuery(idSQL).WithArgs(idArgs...).WillReturnRows(
 		userAccountRows(passwordHash, emailVerifiedAt),
 	)
 
@@ -203,9 +207,8 @@ func expectVerifiedLoginMocks(t *testing.T, emailVerifiedAt *time.Time) (pgxmock
 	if err != nil {
 		t.Fatalf("LookupAccountUserByID: %v", err)
 	}
-	rows := userAccountRows(passwordHash, emailVerifiedAt)
-	regionalMock.ExpectQuery(userSQL).WithArgs(userArgs...).WillReturnRows(rows)
-	regionalMock.ExpectQuery(userSQL).WithArgs(userArgs...).WillReturnRows(rows)
+	regionalMock.ExpectQuery(userSQL).WithArgs(userArgs...).WillReturnRows(userAccountRows(passwordHash, emailVerifiedAt))
+	regionalMock.ExpectQuery(userSQL).WithArgs(userArgs...).WillReturnRows(userAccountRows(passwordHash, emailVerifiedAt))
 
 	return globalMock, regionalMock
 }

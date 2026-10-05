@@ -94,8 +94,14 @@ func mustSubmit(t *testing.T, f *fixture, in *SubmitInput) *Record {
 }
 
 func ukInput() *SubmitInput {
-	return &SubmitInput{OrganizationID: "org1", CountryCode: "gb", RegistrationNumber: "12345678", LegalName: "Acme Ltd",
-		Address: Address{Line1: "1 High Street", PostCode: "EC1A 1BB"}, ActorID: "user1"}
+	return &SubmitInput{
+		OrganizationID:     "org1",
+		CountryCode:        "gb",
+		RegistrationNumber: "12345678",
+		LegalName:          "Acme Ltd",
+		Address:            Address{Line1: "1 High Street", PostCode: "EC1A 1BB"},
+		ActorID:            "user1",
+	}
 }
 
 func TestSubmitVerifiedTier1(t *testing.T) {
@@ -105,7 +111,8 @@ func TestSubmitVerifiedTier1(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rec.Status != StatusVerified || rec.VerifiedAt == nil || rec.Tier != Tier1 || rec.CountryCode != "GB" || rec.Attempts != 1 {
+	if rec.Status != StatusVerified || rec.VerifiedAt == nil || rec.Tier != Tier1 || rec.CountryCode != "GB" ||
+		rec.Attempts != 1 {
 		t.Fatalf("unexpected record %+v", rec)
 	}
 	if !rec.Status.CanPublish() || len(f.n.sent) != 0 || len(f.q.pending) != 0 {
@@ -175,7 +182,8 @@ func TestNameMismatchConfirmNameReRunsCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.stub.last.LegalName != registryTradingName || rec.LegalName != registryTradingName || rec.Status != StatusVerified {
+	if f.stub.last.LegalName != registryTradingName || rec.LegalName != registryTradingName ||
+		rec.Status != StatusVerified {
 		t.Fatalf("confirm-name should re-check with the registry name, got %+v / %+v", f.stub.last, rec)
 	}
 }
@@ -193,7 +201,8 @@ func TestAddressMismatchIsSoftWarning(t *testing.T) {
 	f := newFixture()
 	f.stub.res = Result{Outcome: OutcomeFailed, Reason: ReasonAddressMismatch}
 	rec := mustSubmit(t, f, ukInput())
-	if rec.FailureReason != ReasonAddressMismatch || DisplayState(rec.Status, rec.FailureReason) != DisplayActionRequired {
+	if rec.FailureReason != ReasonAddressMismatch ||
+		DisplayState(rec.Status, rec.FailureReason) != DisplayActionRequired {
 		t.Fatalf("got %+v", rec)
 	}
 	if _, err := f.svc.ConfirmAddress(context.Background(), "org1", "home", "u"); !errors.Is(err, ErrInvalidInput) {

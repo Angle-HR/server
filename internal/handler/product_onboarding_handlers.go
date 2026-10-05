@@ -23,6 +23,7 @@ import (
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/response"
 )
 
@@ -42,7 +43,12 @@ type ProductOnboardingHandler struct {
 // NewProductOnboardingHandler returns a product onboarding handler. Tokens is
 // used to reissue JWTs when a step migrates the account out of the global
 // holding region into a real one.
-func NewProductOnboardingHandler(router *dbrouter.DBRouter, globalDB globalDB, enqueuer jobEnqueuer, tokens *auth.TokenService) *ProductOnboardingHandler {
+func NewProductOnboardingHandler(
+	router *dbrouter.DBRouter,
+	globalDB globalDB,
+	enqueuer jobEnqueuer,
+	tokens *auth.TokenService,
+) *ProductOnboardingHandler {
 	return &ProductOnboardingHandler{
 		Router:   router,
 		GlobalDB: globalDB,
@@ -55,7 +61,10 @@ func NewProductOnboardingHandler(router *dbrouter.DBRouter, globalDB globalDB, e
 // reissueIfMigrated returns fresh JWTs when reg differs from the account's
 // original region (i.e. this request just migrated it out of the global
 // holding area), or nil when no migration happened.
-func (h *ProductOnboardingHandler) reissueIfMigrated(userID uuid.UUID, originalReg, reg region.Region) (*RegionReissue, error) {
+func (h *ProductOnboardingHandler) reissueIfMigrated(
+	userID uuid.UUID,
+	originalReg, reg region.Region,
+) (*RegionReissue, error) {
 	if originalReg == reg {
 		return nil, nil
 	}
@@ -162,8 +171,6 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 		response.Error(w, r, apperror.ErrUnauthorized)
 		return
 	}
-	originalReg := reg
-
 	var req productProfileBody
 	if err := decodeJSON(r, &req); err != nil {
 		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
@@ -176,170 +183,176 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 
 	ctx := r.Context()
 
+	var (
+		data ProductProfileData
+		err  error
+	)
 	switch req.AccountType {
 	case onboarding.AccountIndividual:
-		if err := h.validateIndividualProfile(req); err != nil {
-			response.Error(w, r, err)
-			return
-		}
-		countryID := uuid.MustParse(*req.CountryID)
-		if err := h.ensureActiveCountry(ctx, countryID); err != nil {
-			response.Error(w, r, err)
-			return
-		}
-
-		// Individual accounts always give their country at this step, so
-		// this is the point a still-global account migrates into a real
-		// region.
-		if reg == region.RegionGlobal {
-			target, err := h.countryRegion(ctx, countryID)
-			if err != nil || !region.Valid(target) || target == region.RegionGlobal {
-				response.Error(w, r, apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID))
-				return
-			}
-			newReg, err := migrateUserToRegion(ctx, h.Router, h.GlobalDB, userID, target)
-			if err != nil {
-				response.Error(w, r, apperror.ErrInternal)
-				return
-			}
-			reg = newReg
-		}
-
-		pool, err := resolvePool(h.Router, h.GlobalDB, reg)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-
-		tx, err := pool.Begin(ctx)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		defer rollbackOnError(ctx, tx)
-
-		sql, args, err := query.UpdateAccountUserIndividualProfile(userID, *req.FirstName, *req.LastName, countryID)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		if _, err := tx.Exec(ctx, sql, args...); err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-
-		if _, err := tx.Exec(ctx, `DELETE FROM organizations WHERE owner_user_id = $1`, userID); err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-
-		completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepProfile)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-
-		if err := tx.Commit(ctx); err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-
-		tokens, err := h.reissueIfMigrated(userID, originalReg, reg)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-
-		next := onboarding.NextStep(req.AccountType, completed)
-		response.Success(w, r, http.StatusOK, ProductProfileData{
-			AccountType: req.AccountType,
-			FirstName:   req.FirstName,
-			LastName:    req.LastName,
-			CountryID:   req.CountryID,
-			Region:      string(reg),
-			Onboarding: OnboardingProgressSummary{
-				Status:         onboarding.StatusInProgress,
-				CurrentStep:    &currentStep,
-				CompletedSteps: completed,
-				NextStep:       &next,
-			},
-			Tokens: tokens,
-		})
-
+		data, err = h.saveIndividualProfile(ctx, userID, reg, &req)
 	case onboarding.AccountBusiness:
-		if err := h.validateBusinessProfile(req); err != nil {
-			response.Error(w, r, err)
-			return
-		}
-		roleID := uuid.MustParse(*req.CompanyRoleID)
-		if err := h.ensureActiveCompanyRole(ctx, roleID); err != nil {
-			response.Error(w, r, err)
-			return
-		}
-
-		// Business accounts don't give a country until the address step, so
-		// this write may still land in the global holding area.
-		pool, err := resolvePool(h.Router, h.GlobalDB, reg)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-
-		tx, err := pool.Begin(ctx)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		defer rollbackOnError(ctx, tx)
-
-		userSQL, userArgs, err := updateBusinessProfileSQL(reg, userID, *req.LegalFullName)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		if _, err := tx.Exec(ctx, userSQL, userArgs...); err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-
-		orgSQL, orgArgs, err := upsertOrganizationProfileSQL(reg, userID, *req.LegalBusinessName, roleID)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		if _, err := tx.Exec(ctx, orgSQL, orgArgs...); err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-
-		completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepProfile)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-
-		if err := tx.Commit(ctx); err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-
-		next := onboarding.NextStep(req.AccountType, completed)
-		response.Success(w, r, http.StatusOK, ProductProfileData{
-			AccountType:       req.AccountType,
-			LegalBusinessName: req.LegalBusinessName,
-			LegalFullName:     req.LegalFullName,
-			CompanyRoleID:     req.CompanyRoleID,
-			Region:            string(reg),
-			Onboarding: OnboardingProgressSummary{
-				Status:         onboarding.StatusInProgress,
-				CurrentStep:    &currentStep,
-				CompletedSteps: completed,
-				NextStep:       &next,
-			},
-		})
+		data, err = h.saveBusinessProfile(ctx, userID, reg, &req)
 	default:
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequest))
+		err = apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequest)
 	}
+	if err != nil {
+		response.Error(w, r, err)
+		return
+	}
+	response.Success(w, r, http.StatusOK, data)
+}
+
+// saveIndividualProfile stores an individual's profile and, for a still-global
+// account, migrates it into the region of the chosen country.
+func (h *ProductOnboardingHandler) saveIndividualProfile(
+	ctx context.Context,
+	userID uuid.UUID,
+	reg region.Region,
+	reqp *productProfileBody,
+) (ProductProfileData, error) {
+	req := *reqp
+	originalReg := reg
+	if err := h.validateIndividualProfile(req); err != nil {
+		return ProductProfileData{}, err
+	}
+	countryID := uuid.MustParse(*req.CountryID)
+	if err := h.ensureActiveCountry(ctx, countryID); err != nil {
+		return ProductProfileData{}, err
+	}
+
+	// Individual accounts always give their country at this step, so
+	// this is the point a still-global account migrates into a real
+	// region.
+	if reg == region.RegionGlobal {
+		newReg, err := h.moveToCountryRegion(ctx, userID, countryID)
+		if err != nil {
+			return ProductProfileData{}, err
+		}
+		reg = newReg
+	}
+
+	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
+	if err != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+	defer rollbackOnError(ctx, tx)
+
+	sql, args, err := query.UpdateAccountUserIndividualProfile(userID, *req.FirstName, *req.LastName, countryID)
+	if err != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+	if _, execErr := tx.Exec(ctx, sql, args...); execErr != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+
+	if _, execErr := tx.Exec(ctx, `DELETE FROM organizations WHERE owner_user_id = $1`, userID); execErr != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+
+	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepProfile)
+	if err != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+
+	tokens, err := h.reissueIfMigrated(userID, originalReg, reg)
+	if err != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+
+	next := onboarding.NextStep(req.AccountType, completed)
+	return ProductProfileData{
+		AccountType: req.AccountType,
+		FirstName:   req.FirstName,
+		LastName:    req.LastName,
+		CountryID:   req.CountryID,
+		Region:      string(reg),
+		Onboarding: OnboardingProgressSummary{
+			Status:         onboarding.StatusInProgress,
+			CurrentStep:    &currentStep,
+			CompletedSteps: completed,
+			NextStep:       &next,
+		},
+		Tokens: tokens,
+	}, nil
+}
+
+// saveBusinessProfile stores a business owner's profile and company details.
+func (h *ProductOnboardingHandler) saveBusinessProfile(
+	ctx context.Context,
+	userID uuid.UUID,
+	reg region.Region,
+	reqp *productProfileBody,
+) (ProductProfileData, error) {
+	req := *reqp
+	if err := h.validateBusinessProfile(req); err != nil {
+		return ProductProfileData{}, err
+	}
+	roleID := uuid.MustParse(*req.CompanyRoleID)
+	if err := h.ensureActiveCompanyRole(ctx, roleID); err != nil {
+		return ProductProfileData{}, err
+	}
+
+	// Business accounts don't give a country until the address step, so
+	// this write may still land in the global holding area.
+	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
+	if err != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+	defer rollbackOnError(ctx, tx)
+
+	userSQL, userArgs, err := updateBusinessProfileSQL(reg, userID, *req.LegalFullName)
+	if err != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+	if _, execErr := tx.Exec(ctx, userSQL, userArgs...); execErr != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+
+	orgSQL, orgArgs, err := upsertOrganizationProfileSQL(reg, userID, *req.LegalBusinessName, roleID)
+	if err != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+	if _, execErr := tx.Exec(ctx, orgSQL, orgArgs...); execErr != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+
+	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepProfile)
+	if err != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+
+	next := onboarding.NextStep(req.AccountType, completed)
+	return ProductProfileData{
+		AccountType:       req.AccountType,
+		LegalBusinessName: req.LegalBusinessName,
+		LegalFullName:     req.LegalFullName,
+		CompanyRoleID:     req.CompanyRoleID,
+		Region:            string(reg),
+		Onboarding: OnboardingProgressSummary{
+			Status:         onboarding.StatusInProgress,
+			CurrentStep:    &currentStep,
+			CompletedSteps: completed,
+			NextStep:       &next,
+		},
+	}, nil
 }
 
 // putAddress godoc
@@ -362,8 +375,6 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 		response.Error(w, r, apperror.ErrUnauthorized)
 		return
 	}
-	originalReg := reg
-
 	var req productAddressBody
 	if err := decodeJSON(r, &req); err != nil {
 		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
@@ -373,127 +384,94 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 		response.Error(w, r, validationError(err))
 		return
 	}
-	if req.EntryMode == "search" && (req.FormattedAddress == nil || strings.TrimSpace(*req.FormattedAddress) == "") {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, "formatted_address is required when entry_mode is search"))
-		return
-	}
-
-	ctx := r.Context()
-	countryID := uuid.MustParse(req.CountryID)
-	if err := h.ensureActiveCountry(ctx, countryID); err != nil {
+	if err := requireFormattedAddress(req.EntryMode, req.FormattedAddress); err != nil {
 		response.Error(w, r, err)
 		return
 	}
 
+	ctx := r.Context()
+	data, err := h.saveAddress(ctx, userID, reg, &req)
+	if err != nil {
+		response.Error(w, r, err)
+		return
+	}
+	response.Success(w, r, http.StatusOK, data)
+}
+
+// moveToCountryRegion migrates a still-global account into the region that serves
+// the given country and returns the new region.
+func (h *ProductOnboardingHandler) moveToCountryRegion(
+	ctx context.Context,
+	userID, countryID uuid.UUID,
+) (region.Region, error) {
+	target, err := h.countryRegion(ctx, countryID)
+	if err != nil || !region.Valid(target) || target == region.RegionGlobal {
+		return region.RegionUnknown, apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID)
+	}
+	newReg, err := migrateUserToRegion(ctx, h.Router, h.GlobalDB, userID, target)
+	if err != nil {
+		return region.RegionUnknown, apperror.ErrInternal
+	}
+	return newReg, nil
+}
+
+// saveAddress validates and stores a business's identification and address.
+func (h *ProductOnboardingHandler) saveAddress(
+	ctx context.Context,
+	userID uuid.UUID,
+	reg region.Region,
+	reqp *productAddressBody,
+) (ProductAddressData, error) {
+	req := *reqp
+	originalReg := reg
+	countryID := uuid.MustParse(req.CountryID)
+	if err := h.ensureActiveCountry(ctx, countryID); err != nil {
+		return ProductAddressData{}, err
+	}
+
 	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
 	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
+		return ProductAddressData{}, apperror.ErrInternal
 	}
 
 	accountType, err := h.loadAccountType(ctx, pool, reg, userID)
 	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
+		return ProductAddressData{}, apperror.ErrInternal
 	}
 	if accountType != onboarding.AccountBusiness {
-		response.Error(w, r, apperror.New(apperror.CodeInvalidAccountBranch, apperror.MsgInvalidAccountTypeBranch))
-		return
+		return ProductAddressData{}, apperror.New(apperror.CodeInvalidAccountBranch, apperror.MsgInvalidAccountTypeBranch)
 	}
 
 	// This is the first point a business account gives a country, so it's
 	// where a still-global account migrates into a real region.
 	if reg == region.RegionGlobal {
-		target, err := h.countryRegion(ctx, countryID)
-		if err != nil || !region.Valid(target) || target == region.RegionGlobal {
-			response.Error(w, r, apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID))
-			return
-		}
-		newReg, err := migrateUserToRegion(ctx, h.Router, h.GlobalDB, userID, target)
+		reg, err = h.moveToCountryRegion(ctx, userID, countryID)
 		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
+			return ProductAddressData{}, err
 		}
-		reg = newReg
 		pool, err = resolvePool(h.Router, h.GlobalDB, reg)
 		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
+			return ProductAddressData{}, apperror.ErrInternal
 		}
 	}
 
-	countrySlug, err := h.countrySlugByID(ctx, countryID)
+	identificationPayload, binNumber, err := h.checkIdentification(ctx, countryID, req.Identification)
 	if err != nil {
-		response.Error(w, r, err)
-		return
-	}
-	if err := onboarding.ValidateIdentification(countrySlug, req.Identification); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, err.Error()))
-		return
-	}
-	identificationPayload, err := json.Marshal(req.Identification)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	binNumber := onboarding.PrimaryIdentificationNumber(countrySlug, req.Identification)
-
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	defer rollbackOnError(ctx, tx)
-
-	id, err := h.loadOrganizationID(ctx, tx, userID)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	orgID := &id
-
-	idSQL, idArgs, err := query.UpdateOrganizationIdentification(userID, binNumber, identificationPayload)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if _, err := tx.Exec(ctx, idSQL, idArgs...); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
+		return ProductAddressData{}, err
 	}
 
-	addrSQL, addrArgs, err := query.UpsertAccountAddress(
-		userID, orgID, countryID, req.EntryMode, req.Line1, req.Line2,
-		req.City, req.StateOrCounty, req.PostCode, req.FormattedAddress,
-	)
+	completed, currentStep, err := h.persistAddress(ctx, pool, userID, countryID, &req, identificationPayload, binNumber)
 	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if _, err := tx.Exec(ctx, addrSQL, addrArgs...); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepIdentificationAddress)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
+		return ProductAddressData{}, err
 	}
 
 	tokens, err := h.reissueIfMigrated(userID, originalReg, reg)
 	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
+		return ProductAddressData{}, apperror.ErrInternal
 	}
 
 	next := onboarding.NextStep(accountType, completed)
-	response.Success(w, r, http.StatusOK, ProductAddressData{
+	return ProductAddressData{
 		CountryID:          req.CountryID,
 		EntryMode:          req.EntryMode,
 		Line1:              req.Line1,
@@ -511,7 +489,80 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 			NextStep:       &next,
 		},
 		Tokens: tokens,
-	})
+	}, nil
+}
+
+// checkIdentification validates the registry identification for the country and
+// returns its JSON payload and the primary registry number for storage.
+func (h *ProductOnboardingHandler) checkIdentification(
+	ctx context.Context,
+	countryID uuid.UUID,
+	identification map[string]string,
+) (payload []byte, binNumber string, err error) {
+	countrySlug, err := h.countrySlugByID(ctx, countryID)
+	if err != nil {
+		return nil, "", err
+	}
+	if validateErr := onboarding.ValidateIdentification(countrySlug, identification); validateErr != nil {
+		return nil, "", apperror.New(apperror.CodeValidationError, validateErr.Error())
+	}
+	payload, err = json.Marshal(identification)
+	if err != nil {
+		return nil, "", apperror.ErrInternal
+	}
+	return payload, onboarding.PrimaryIdentificationNumber(countrySlug, identification), nil
+}
+
+// persistAddress writes the organization identification and address and advances
+// onboarding progress in one transaction.
+func (h *ProductOnboardingHandler) persistAddress(
+	ctx context.Context,
+	pool dataPool,
+	userID, countryID uuid.UUID,
+	req *productAddressBody,
+	identificationPayload []byte,
+	binNumber string,
+) (completed []string, currentStep string, err error) {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return nil, "", apperror.ErrInternal
+	}
+	defer rollbackOnError(ctx, tx)
+
+	id, err := h.loadOrganizationID(ctx, tx, userID)
+	if err != nil {
+		return nil, "", apperror.ErrInternal
+	}
+	orgID := &id
+
+	idSQL, idArgs, err := query.UpdateOrganizationIdentification(userID, binNumber, identificationPayload)
+	if err != nil {
+		return nil, "", apperror.ErrInternal
+	}
+	if _, execErr := tx.Exec(ctx, idSQL, idArgs...); execErr != nil {
+		return nil, "", apperror.ErrInternal
+	}
+
+	addrSQL, addrArgs, err := query.UpsertAccountAddress(
+		userID, orgID, countryID, req.EntryMode, req.Line1, req.Line2,
+		req.City, req.StateOrCounty, req.PostCode, req.FormattedAddress,
+	)
+	if err != nil {
+		return nil, "", apperror.ErrInternal
+	}
+	if _, execErr := tx.Exec(ctx, addrSQL, addrArgs...); execErr != nil {
+		return nil, "", apperror.ErrInternal
+	}
+
+	completed, currentStep, err = h.advanceProgress(ctx, tx, userID, onboarding.StepIdentificationAddress)
+	if err != nil {
+		return nil, "", apperror.ErrInternal
+	}
+
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		return nil, "", apperror.ErrInternal
+	}
+	return completed, currentStep, nil
 }
 
 // searchAddress godoc
@@ -617,8 +668,8 @@ func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.
 		response.Error(w, r, validationError(err))
 		return
 	}
-	if req.EntryMode == "search" && (req.FormattedAddress == nil || strings.TrimSpace(*req.FormattedAddress) == "") {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, "formatted_address is required when entry_mode is search"))
+	if err := requireFormattedAddress(req.EntryMode, req.FormattedAddress); err != nil {
+		response.Error(w, r, err)
 		return
 	}
 
@@ -652,25 +703,8 @@ func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.
 	}
 
 	if result.Status == onboarding.VerificationStatusVerified {
-		tx, err := pool.Begin(ctx)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		defer rollbackOnError(ctx, tx)
-
-		updSQL, updArgs, err := query.UpdateAccountAddressVerificationStatus(userID, result.Status)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		if _, err := tx.Exec(ctx, updSQL, updArgs...); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-
-		if err := tx.Commit(ctx); err != nil {
-			response.Error(w, r, apperror.ErrInternal)
+		if err := storeVerifiedAddress(ctx, pool, userID, result.Status); err != nil {
+			response.Error(w, r, err)
 			return
 		}
 	}
@@ -687,6 +721,70 @@ func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.
 		VerificationStatus: result.Status,
 		FailureReason:      result.FailureReason,
 	})
+}
+
+// requireFormattedAddress checks that a search-mode address carries the formatted address.
+func requireFormattedAddress(entryMode string, formatted *string) error {
+	if entryMode == "search" && (formatted == nil || strings.TrimSpace(*formatted) == "") {
+		return apperror.New(apperror.CodeValidationError, "formatted_address is required when entry_mode is search")
+	}
+	return nil
+}
+
+// storeVerifiedAddress records the verification status on the user's address.
+func storeVerifiedAddress(ctx context.Context, pool dataPool, userID uuid.UUID, status string) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	defer rollbackOnError(ctx, tx)
+
+	sql, args, err := query.UpdateAccountAddressVerificationStatus(userID, status)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	if _, execErr := tx.Exec(ctx, sql, args...); execErr != nil && !errors.Is(execErr, pgx.ErrNoRows) {
+		return apperror.ErrInternal
+	}
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		return apperror.ErrInternal
+	}
+	return nil
+}
+
+// writeComplianceDetails stores business type, industry and employee count on the
+// individual's user row or on the business's organization row.
+func writeComplianceDetails(
+	ctx context.Context,
+	tx pgx.Tx,
+	accountType string,
+	userID, businessTypeID, industryID uuid.UUID,
+	req *productBusinessBody,
+) error {
+	switch accountType {
+	case onboarding.AccountIndividual:
+		sql, args, err := query.UpdateIndividualUserBusinessDetails(userID, businessTypeID, industryID, req.EmployeeCount)
+		if err != nil {
+			return apperror.ErrInternal
+		}
+		if _, execErr := tx.Exec(ctx, sql, args...); execErr != nil {
+			return apperror.ErrInternal
+		}
+	case onboarding.AccountBusiness:
+		sql, args, err := query.UpdateOrganizationBusiness(userID, businessTypeID, industryID, req.EmployeeCount)
+		if err != nil {
+			return apperror.ErrInternal
+		}
+		if scanErr := tx.QueryRow(ctx, sql, args...).Scan(new(uuid.UUID)); scanErr != nil {
+			if errors.Is(scanErr, pgx.ErrNoRows) {
+				return apperror.New(apperror.CodeValidationError, "complete profile before compliance step")
+			}
+			return apperror.ErrInternal
+		}
+	default:
+		return apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequest)
+	}
+	return nil
 }
 
 // putCompliance godoc
@@ -744,12 +842,18 @@ func (h *ProductOnboardingHandler) putCompliance(w http.ResponseWriter, r *http.
 
 	businessTypeID := uuid.MustParse(req.BusinessTypeID)
 	industryID := uuid.MustParse(req.IndustryID)
-	if err := h.ensureActiveBusinessType(ctx, businessTypeID); err != nil {
-		response.Error(w, r, err)
+	if ensureActiveBusinessTypeErr := h.ensureActiveBusinessType(
+		ctx,
+		businessTypeID,
+	); ensureActiveBusinessTypeErr != nil {
+		response.Error(w, r, ensureActiveBusinessTypeErr)
 		return
 	}
-	if err := h.ensureActiveOnboardingIndustry(ctx, industryID); err != nil {
-		response.Error(w, r, err)
+	if ensureActiveOnboardingIndustryErr := h.ensureActiveOnboardingIndustry(
+		ctx,
+		industryID,
+	); ensureActiveOnboardingIndustryErr != nil {
+		response.Error(w, r, ensureActiveOnboardingIndustryErr)
 		return
 	}
 
@@ -760,33 +864,8 @@ func (h *ProductOnboardingHandler) putCompliance(w http.ResponseWriter, r *http.
 	}
 	defer rollbackOnError(ctx, tx)
 
-	switch accountType {
-	case onboarding.AccountIndividual:
-		bizSQL, bizArgs, err := query.UpdateIndividualUserBusinessDetails(userID, businessTypeID, industryID, req.EmployeeCount)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		if _, err := tx.Exec(ctx, bizSQL, bizArgs...); err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-	case onboarding.AccountBusiness:
-		bizSQL, bizArgs, err := query.UpdateOrganizationBusiness(userID, businessTypeID, industryID, req.EmployeeCount)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		if err := tx.QueryRow(ctx, bizSQL, bizArgs...).Scan(new(uuid.UUID)); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				response.Error(w, r, apperror.New(apperror.CodeValidationError, "complete profile before compliance step"))
-				return
-			}
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-	default:
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequest))
+	if err = writeComplianceDetails(ctx, tx, accountType, userID, businessTypeID, industryID, &req); err != nil {
+		response.Error(w, r, err)
 		return
 	}
 
@@ -875,11 +954,11 @@ func (h *ProductOnboardingHandler) complete(w http.ResponseWriter, r *http.Reque
 	var completedAt *time.Time
 	var accountType *string
 	var email string
-	if err := pool.QueryRow(ctx, userSQL, userArgs...).Scan(
+	if scanErr := pool.QueryRow(ctx, userSQL, userArgs...).Scan(
 		&userID, &email, new(string), new(*time.Time), &completedAt,
 		&accountType, new(*string), new(*string), new(*string), new(*uuid.UUID),
 		new(*string), new(*time.Time),
-	); err != nil {
+	); scanErr != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
@@ -895,7 +974,8 @@ func (h *ProductOnboardingHandler) complete(w http.ResponseWriter, r *http.Reque
 	}
 	var currentStep string
 	var completed []string
-	if err := pool.QueryRow(ctx, progressSQL, progressArgs...).Scan(&userID, &currentStep, &completed); err != nil {
+	if scanErr := pool.QueryRow(ctx, progressSQL, progressArgs...).
+		Scan(&userID, &currentStep, &completed); scanErr != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
@@ -940,184 +1020,251 @@ func (h *ProductOnboardingHandler) enqueueOnboardingComplete(ctx context.Context
 		return
 	}
 	defer rollbackOnError(ctx, tx)
-	_, _ = h.Enqueuer.EnqueueTx(ctx, tx, mailer.EmailArgs{
+	_, enqueueErr := h.Enqueuer.EnqueueTx(ctx, tx, mailer.EmailArgs{
 		Type:      mailer.TypeOnboardingComplete,
 		Recipient: email,
 	}, queue.EmailEnqueueOptions()...)
-	_ = tx.Commit(ctx)
+	besteffort.Log(ctx, "Enqueuer.EnqueueTx", enqueueErr)
+	besteffort.Log(ctx, "tx.Commit", tx.Commit(ctx))
 }
 
-func (h *ProductOnboardingHandler) loadStatus(ctx context.Context, reg region.Region, userID uuid.UUID) (ProductOnboardingStatusData, error) {
+func (h *ProductOnboardingHandler) loadStatus(
+	ctx context.Context,
+	reg region.Region,
+	userID uuid.UUID,
+) (ProductOnboardingStatusData, error) {
 	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
 	if err != nil {
 		return ProductOnboardingStatusData{}, err
 	}
 
-	userSQL, userArgs, err := lookupUserByIDSQL(reg, userID)
+	user, err := loadStatusUser(ctx, pool, reg, userID)
 	if err != nil {
 		return ProductOnboardingStatusData{}, err
 	}
-
-	var email string
-	var completedAt *time.Time
-	var accountType *string
-	var firstName, lastName, legalFullName *string
-	var countryID *uuid.UUID
-	if err := pool.QueryRow(ctx, userSQL, userArgs...).Scan(
-		&userID, &email, new(string), new(*time.Time), &completedAt,
-		&accountType, &firstName, &lastName, &legalFullName, &countryID,
-		new(*string), new(*time.Time),
-	); err != nil {
-		return ProductOnboardingStatusData{}, err
-	}
-
 	status := onboarding.StatusInProgress
-	if completedAt != nil {
+	if user.completedAt != nil {
 		status = onboarding.StatusCompleted
 	}
 
-	progressSQL, progressArgs, err := lookupOnboardingProgressSQL(reg, userID)
+	currentStep, completed, err := loadStatusProgress(ctx, pool, reg, userID)
 	if err != nil {
 		return ProductOnboardingStatusData{}, err
 	}
 
-	var currentStep string
-	var completed []string
-	if err := pool.QueryRow(ctx, progressSQL, progressArgs...).Scan(&userID, &currentStep, &completed); err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return ProductOnboardingStatusData{}, err
-		}
-		currentStep, completed = onboarding.InitialProgress()
-	}
-	completed = onboarding.NormalizeCompletedSteps(completed)
-	currentStep = normalizeCurrentStep(currentStep)
-
-	next := onboarding.NextStep(stringValue(accountType), completed)
+	next := onboarding.NextStep(stringValue(user.accountType), completed)
 	data := ProductOnboardingStatusData{
 		Status:         status,
-		AccountType:    accountType,
+		AccountType:    user.accountType,
 		CurrentStep:    &currentStep,
 		CompletedSteps: completed,
 		NextStep:       &next,
 	}
 
-	if accountType != nil {
-		profile := &ProductProfileState{AccountType: *accountType}
-		if firstName != nil {
-			profile.FirstName = firstName
-		}
-		if lastName != nil {
-			profile.LastName = lastName
-		}
-		if countryID != nil {
-			s := countryID.String()
-			profile.CountryID = &s
-		}
-		if legalFullName != nil {
-			profile.LegalFullName = legalFullName
-		}
-		if *accountType == onboarding.AccountBusiness {
-			var orgSQL string
-			var orgArgs []any
-			var err error
-			if reg == region.RegionGlobal {
-				orgSQL, orgArgs, err = query.LookupPendingOrganizationByOwnerWide(userID)
-			} else {
-				orgSQL, orgArgs, err = query.LookupOrganizationByOwner(userID)
-			}
-			if err == nil {
-				var legalName string
-				var roleID uuid.UUID
-				var businessTypeID, industryID *uuid.UUID
-				var employeeCount *int
-				if err := pool.QueryRow(ctx, orgSQL, orgArgs...).Scan(
-					new(uuid.UUID), &legalName, &roleID, &businessTypeID, &industryID, &employeeCount,
-				); err == nil {
-					profile.LegalBusinessName = &legalName
-					role := roleID.String()
-					profile.CompanyRoleID = &role
-				}
-			}
-		}
-		data.Profile = profile
+	if user.accountType != nil {
+		data.Profile = loadProfileState(ctx, pool, reg, userID, &user)
 	}
+	data.Address = loadAddressState(ctx, pool, userID)
 
-	addrSQL, addrArgs, err := query.LookupAccountAddressByUser(userID)
-	if err == nil {
-		var country uuid.UUID
-		var entryMode, line1, city, state, postCode, verification string
-		var line2, formatted *string
-		if err := pool.QueryRow(ctx, addrSQL, addrArgs...).Scan(
-			new(uuid.UUID), &country, &entryMode, &line1, &line2, &city, &state, &postCode, &formatted, &verification,
-		); err == nil {
-			cid := country.String()
-			addrState := &ProductAddressState{
-				CountryID:          cid,
-				EntryMode:          entryMode,
-				Line1:              line1,
-				Line2:              line2,
-				City:               city,
-				StateOrCounty:      state,
-				PostCode:           postCode,
-				FormattedAddress:   formatted,
-				VerificationStatus: verification,
-			}
-			idSQL, idArgs, err := query.LookupOrganizationIdentification(userID)
-			if err == nil {
-				var binNumber *string
-				var payload []byte
-				if err := pool.QueryRow(ctx, idSQL, idArgs...).Scan(&binNumber, &payload); err == nil && len(payload) > 0 {
-					var identification map[string]string
-					if err := json.Unmarshal(payload, &identification); err == nil {
-						addrState.Identification = identification
-					}
-				}
-			}
-			data.Address = addrState
-		}
+	if compliance := loadComplianceState(ctx, pool, userID, user.accountType); compliance != nil {
+		data.Compliance = compliance
+		data.Business = compliance
 	}
-
-	if accountType != nil && *accountType == onboarding.AccountIndividual {
-		complianceSQL, complianceArgs, err := query.LookupIndividualUserCompliance(userID)
-		if err == nil {
-			var businessTypeID, industryID *uuid.UUID
-			var employeeCount *int
-			if err := pool.QueryRow(ctx, complianceSQL, complianceArgs...).Scan(&businessTypeID, &industryID, &employeeCount); err == nil &&
-				businessTypeID != nil && industryID != nil && employeeCount != nil {
-				compliance := &ProductComplianceState{
-					BusinessTypeID: businessTypeID.String(),
-					IndustryID:     industryID.String(),
-					EmployeeCount:  *employeeCount,
-				}
-				data.Compliance = compliance
-				data.Business = compliance
-			}
-		}
-	}
-
-	if accountType != nil && *accountType == onboarding.AccountBusiness {
-		orgSQL, orgArgs, err := query.LookupOrganizationByOwner(userID)
-		if err == nil {
-			var businessTypeID, industryID *uuid.UUID
-			var employeeCount *int
-			if err := pool.QueryRow(ctx, orgSQL, orgArgs...).Scan(
-				new(uuid.UUID), new(string), new(uuid.UUID), &businessTypeID, &industryID, &employeeCount,
-			); err == nil && businessTypeID != nil && industryID != nil && employeeCount != nil {
-				compliance := &ProductComplianceState{
-					BusinessTypeID: businessTypeID.String(),
-					IndustryID:     industryID.String(),
-					EmployeeCount:  *employeeCount,
-				}
-				data.Compliance = compliance
-				data.Business = compliance
-			}
-		}
-	}
-
 	return data, nil
 }
 
-func (h *ProductOnboardingHandler) advanceProgress(ctx context.Context, tx pgx.Tx, userID uuid.UUID, step string) ([]string, string, error) {
+// statusUser is the part of the user row the onboarding status needs.
+type statusUser struct {
+	email         string
+	completedAt   *time.Time
+	accountType   *string
+	firstName     *string
+	lastName      *string
+	legalFullName *string
+	countryID     *uuid.UUID
+}
+
+func loadStatusUser(ctx context.Context, pool dataPool, reg region.Region, userID uuid.UUID) (statusUser, error) {
+	sql, args, err := lookupUserByIDSQL(reg, userID)
+	if err != nil {
+		return statusUser{}, err
+	}
+	var u statusUser
+	if scanErr := pool.QueryRow(ctx, sql, args...).Scan(
+		new(uuid.UUID), &u.email, new(string), new(*time.Time), &u.completedAt,
+		&u.accountType, &u.firstName, &u.lastName, &u.legalFullName, &u.countryID,
+		new(*string), new(*time.Time),
+	); scanErr != nil {
+		return statusUser{}, scanErr
+	}
+	return u, nil
+}
+
+// loadStatusProgress returns the normalized onboarding progress, or the initial
+// progress when none is stored yet.
+func loadStatusProgress(
+	ctx context.Context,
+	pool dataPool,
+	reg region.Region,
+	userID uuid.UUID,
+) (currentStep string, completed []string, err error) {
+	sql, args, err := lookupOnboardingProgressSQL(reg, userID)
+	if err != nil {
+		return "", nil, err
+	}
+	if scanErr := pool.QueryRow(ctx, sql, args...).Scan(new(uuid.UUID), &currentStep, &completed); scanErr != nil {
+		if !errors.Is(scanErr, pgx.ErrNoRows) {
+			return "", nil, scanErr
+		}
+		currentStep, completed = onboarding.InitialProgress()
+	}
+	return normalizeCurrentStep(currentStep), onboarding.NormalizeCompletedSteps(completed), nil
+}
+
+// loadProfileState builds the saved profile for the status response. Business
+// accounts also get their organization name and company role when present.
+func loadProfileState(
+	ctx context.Context,
+	pool dataPool,
+	reg region.Region,
+	userID uuid.UUID,
+	user *statusUser,
+) *ProductProfileState {
+	profile := &ProductProfileState{
+		AccountType:   *user.accountType,
+		FirstName:     user.firstName,
+		LastName:      user.lastName,
+		LegalFullName: user.legalFullName,
+	}
+	if user.countryID != nil {
+		s := user.countryID.String()
+		profile.CountryID = &s
+	}
+	if *user.accountType != onboarding.AccountBusiness {
+		return profile
+	}
+
+	var (
+		sql  string
+		args []any
+		err  error
+	)
+	if reg == region.RegionGlobal {
+		sql, args, err = query.LookupPendingOrganizationByOwnerWide(userID)
+	} else {
+		sql, args, err = query.LookupOrganizationByOwner(userID)
+	}
+	if err != nil {
+		return profile
+	}
+	var legalName string
+	var roleID uuid.UUID
+	if scanErr := pool.QueryRow(ctx, sql, args...).Scan(
+		new(uuid.UUID), &legalName, &roleID, new(*uuid.UUID), new(*uuid.UUID), new(*int),
+	); scanErr == nil {
+		profile.LegalBusinessName = &legalName
+		role := roleID.String()
+		profile.CompanyRoleID = &role
+	}
+	return profile
+}
+
+// loadAddressState returns the saved address, with registry identification when
+// present, or nil when the user has no saved address. Lookup failures are treated as absent.
+func loadAddressState(ctx context.Context, pool dataPool, userID uuid.UUID) *ProductAddressState {
+	sql, args, err := query.LookupAccountAddressByUser(userID)
+	if err != nil {
+		return nil
+	}
+	var country uuid.UUID
+	var entryMode, line1, city, state, postCode, verification string
+	var line2, formatted *string
+	if scanErr := pool.QueryRow(ctx, sql, args...).Scan(
+		new(uuid.UUID), &country, &entryMode, &line1, &line2, &city, &state, &postCode, &formatted, &verification,
+	); scanErr != nil {
+		return nil
+	}
+	return &ProductAddressState{
+		CountryID:          country.String(),
+		EntryMode:          entryMode,
+		Line1:              line1,
+		Line2:              line2,
+		City:               city,
+		StateOrCounty:      state,
+		PostCode:           postCode,
+		FormattedAddress:   formatted,
+		VerificationStatus: verification,
+		Identification:     loadIdentification(ctx, pool, userID),
+	}
+}
+
+func loadIdentification(ctx context.Context, pool dataPool, userID uuid.UUID) map[string]string {
+	sql, args, err := query.LookupOrganizationIdentification(userID)
+	if err != nil {
+		return nil
+	}
+	var payload []byte
+	if scanErr := pool.QueryRow(ctx, sql, args...).Scan(new(*string), &payload); scanErr != nil || len(payload) == 0 {
+		return nil
+	}
+	var identification map[string]string
+	if json.Unmarshal(payload, &identification) != nil {
+		return nil
+	}
+	return identification
+}
+
+// loadComplianceState returns the saved compliance details, or nil when the
+// account type has none or they are incomplete.
+func loadComplianceState(
+	ctx context.Context,
+	pool dataPool,
+	userID uuid.UUID,
+	accountType *string,
+) *ProductComplianceState {
+	if accountType == nil {
+		return nil
+	}
+	var businessTypeID, industryID *uuid.UUID
+	var employeeCount *int
+	switch *accountType {
+	case onboarding.AccountIndividual:
+		sql, args, err := query.LookupIndividualUserCompliance(userID)
+		if err != nil {
+			return nil
+		}
+		if pool.QueryRow(ctx, sql, args...).Scan(&businessTypeID, &industryID, &employeeCount) != nil {
+			return nil
+		}
+	case onboarding.AccountBusiness:
+		sql, args, err := query.LookupOrganizationByOwner(userID)
+		if err != nil {
+			return nil
+		}
+		if pool.QueryRow(ctx, sql, args...).Scan(
+			new(uuid.UUID), new(string), new(uuid.UUID), &businessTypeID, &industryID, &employeeCount,
+		) != nil {
+			return nil
+		}
+	default:
+		return nil
+	}
+	if businessTypeID == nil || industryID == nil || employeeCount == nil {
+		return nil
+	}
+	return &ProductComplianceState{
+		BusinessTypeID: businessTypeID.String(),
+		IndustryID:     industryID.String(),
+		EmployeeCount:  *employeeCount,
+	}
+}
+
+func (h *ProductOnboardingHandler) advanceProgress(
+	ctx context.Context,
+	tx pgx.Tx,
+	userID uuid.UUID,
+	step string,
+) ([]string, string, error) {
 	progressSQL, progressArgs, err := query.LookupOnboardingProgress(userID)
 	if err != nil {
 		return nil, "", err
@@ -1125,9 +1272,10 @@ func (h *ProductOnboardingHandler) advanceProgress(ctx context.Context, tx pgx.T
 
 	var currentStep string
 	var completed []string
-	if err := tx.QueryRow(ctx, progressSQL, progressArgs...).Scan(&userID, &currentStep, &completed); err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return nil, "", err
+	if scanErr := tx.QueryRow(ctx, progressSQL, progressArgs...).
+		Scan(&userID, &currentStep, &completed); scanErr != nil {
+		if !errors.Is(scanErr, pgx.ErrNoRows) {
+			return nil, "", scanErr
 		}
 		currentStep, completed = onboarding.InitialProgress()
 	}
@@ -1178,7 +1326,8 @@ func (h *ProductOnboardingHandler) countrySlugByID(ctx context.Context, countryI
 		return "", apperror.ErrInternal
 	}
 	var slug string
-	if err := h.GlobalDB.QueryRow(ctx, sql, args...).Scan(new(uuid.UUID), new(string), &slug, new(string), new(*string)); err != nil {
+	if err := h.GlobalDB.QueryRow(ctx, sql, args...).
+		Scan(new(uuid.UUID), new(string), &slug, new(string), new(*string)); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID)
 		}
@@ -1207,7 +1356,8 @@ func (h *ProductOnboardingHandler) ensureActiveCountry(ctx context.Context, coun
 	if err != nil {
 		return apperror.ErrInternal
 	}
-	if err := h.GlobalDB.QueryRow(ctx, sql, args...).Scan(new(uuid.UUID), new(string), new(string), new(string), new(*string)); err != nil {
+	if err := h.GlobalDB.QueryRow(ctx, sql, args...).
+		Scan(new(uuid.UUID), new(string), new(string), new(string), new(*string)); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID)
 		}
@@ -1222,7 +1372,8 @@ func (h *ProductOnboardingHandler) countryRegion(ctx context.Context, countryID 
 		return region.RegionUnknown, apperror.ErrInternal
 	}
 	var reg string
-	if err := h.GlobalDB.QueryRow(ctx, sql, args...).Scan(new(uuid.UUID), new(string), new(string), &reg, new(*string)); err != nil {
+	if err := h.GlobalDB.QueryRow(ctx, sql, args...).
+		Scan(new(uuid.UUID), new(string), new(string), &reg, new(*string)); err != nil {
 		return region.RegionUnknown, apperror.ErrInternal
 	}
 	return region.Region(reg), nil
@@ -1240,7 +1391,11 @@ func (h *ProductOnboardingHandler) ensureActiveOnboardingIndustry(ctx context.Co
 	return h.ensureCatalogRowByID(ctx, id, query.OnboardingIndustryByID)
 }
 
-func (h *ProductOnboardingHandler) ensureCatalogRowByID(ctx context.Context, id uuid.UUID, builder func(uuid.UUID) (string, []any, error)) error {
+func (h *ProductOnboardingHandler) ensureCatalogRowByID(
+	ctx context.Context,
+	id uuid.UUID,
+	builder func(uuid.UUID) (string, []any, error),
+) error {
 	sql, args, err := builder(id)
 	if err != nil {
 		return apperror.ErrInternal
@@ -1254,7 +1409,12 @@ func (h *ProductOnboardingHandler) ensureCatalogRowByID(ctx context.Context, id 
 	return nil
 }
 
-func (h *ProductOnboardingHandler) loadAccountType(ctx context.Context, pool dataPool, reg region.Region, userID uuid.UUID) (string, error) {
+func (h *ProductOnboardingHandler) loadAccountType(
+	ctx context.Context,
+	pool dataPool,
+	reg region.Region,
+	userID uuid.UUID,
+) (string, error) {
 	sql, args, err := lookupUserByIDSQL(reg, userID)
 	if err != nil {
 		return "", err
@@ -1273,27 +1433,21 @@ func (h *ProductOnboardingHandler) loadAccountType(ctx context.Context, pool dat
 	return *accountType, nil
 }
 
-func (h *ProductOnboardingHandler) loadOrganizationID(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (uuid.UUID, error) {
+func (h *ProductOnboardingHandler) loadOrganizationID(
+	ctx context.Context,
+	tx pgx.Tx,
+	userID uuid.UUID,
+) (uuid.UUID, error) {
 	sql, args, err := query.LookupOrganizationByOwner(userID)
 	if err != nil {
 		return uuid.Nil, err
 	}
 	var id uuid.UUID
-	if err := tx.QueryRow(ctx, sql, args...).Scan(&id, new(string), new(uuid.UUID), new(*uuid.UUID), new(*uuid.UUID), new(*int)); err != nil {
+	if err := tx.QueryRow(ctx, sql, args...).
+		Scan(&id, new(string), new(uuid.UUID), new(*uuid.UUID), new(*uuid.UUID), new(*int)); err != nil {
 		return uuid.Nil, err
 	}
 	return id, nil
-}
-
-func emailFromUser(ctx context.Context, pool dbrouter.PgxPool, userID uuid.UUID) string {
-	sql, args, _ := query.LookupAccountUserByID(userID)
-	var email string
-	_ = pool.QueryRow(ctx, sql, args...).Scan(
-		&userID, &email, new(string), new(*time.Time), new(*time.Time),
-		new(*string), new(*string), new(*string), new(*string), new(*uuid.UUID),
-		new(*string), new(*time.Time),
-	)
-	return email
 }
 
 var slugSanitizer = regexp.MustCompile(`[^a-z0-9]+`)

@@ -14,6 +14,7 @@ import (
 	"github.com/Angle-HR/server/internal/mailer"
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/response"
 )
 
@@ -124,7 +125,7 @@ func (h *AdminHandler) enqueueAdminInvite(r *http.Request, email, name, rawToken
 		slog.Error("admin invite email begin failed", "email", email, "error", err)
 		return
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() { besteffort.Log(ctx, "tx.Rollback", tx.Rollback(ctx)) }()
 
 	displayName := name
 	if displayName == "" {
@@ -165,7 +166,7 @@ func (h *AdminHandler) patchStaff(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body patchStaffBody
-	if err := decodeJSON(r, &body); err != nil {
+	if decodeJSONErr := decodeJSON(r, &body); decodeJSONErr != nil {
 		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
 		return
 	}
@@ -203,8 +204,8 @@ func (h *AdminHandler) listAuditLogs(w http.ResponseWriter, r *http.Request) {
 		}
 		actorID = &id
 	}
-	limit := parseLimit(r.URL.Query().Get("limit"), 50, 100)
-	offset := parseLimit(r.URL.Query().Get("offset"), 0, 100000)
+	limit := parseLimit(r.URL.Query().Get("limit"), defaultPageLimit, maxPageLimit)
+	offset := parseLimit(r.URL.Query().Get("offset"), 0, maxPageOffset)
 	if r.URL.Query().Get("offset") == "" {
 		offset = 0
 	}

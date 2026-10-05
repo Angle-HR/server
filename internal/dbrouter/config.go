@@ -47,6 +47,8 @@ func envSuffix(reg region.Region) string {
 		return "EU"
 	case region.RegionAsia:
 		return "ASIA"
+	case region.RegionUnknown, region.RegionGlobal:
+		return strings.ToUpper(string(reg))
 	default:
 		return strings.ToUpper(string(reg))
 	}

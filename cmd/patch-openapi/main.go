@@ -19,19 +19,22 @@ func main() {
 	}
 }
 
+// specFileMode keeps the generated API spec world-readable.
+const specFileMode = 0o644
+
 func run() error {
 	specDir := filepath.Join("internal", "docs", "spec")
 	jsonPath := filepath.Join(specDir, "swagger.json")
 	yamlPath := filepath.Join(specDir, "swagger.yaml")
 
-	jsonContent, err := os.ReadFile(jsonPath)
+	jsonContent, err := os.ReadFile(jsonPath) //nolint:gosec // G304: fixed in-repo path built from constants
 	if err != nil {
 		return fmt.Errorf("read %s: %w", jsonPath, err)
 	}
 
 	var doc map[string]any
-	if err := json.Unmarshal(jsonContent, &doc); err != nil {
-		return fmt.Errorf("unmarshal %s: %w", jsonPath, err)
+	if unmarshalErr := json.Unmarshal(jsonContent, &doc); unmarshalErr != nil {
+		return fmt.Errorf("unmarshal %s: %w", jsonPath, unmarshalErr)
 	}
 
 	docs.ApplyAPITagGroups(doc)
@@ -41,18 +44,18 @@ func run() error {
 		return fmt.Errorf("marshal %s: %w", jsonPath, err)
 	}
 	patchedJSON = append(patchedJSON, '\n')
-	if err := os.WriteFile(jsonPath, patchedJSON, 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", jsonPath, err)
+	if writeErr := os.WriteFile(jsonPath, patchedJSON, specFileMode); writeErr != nil {
+		return fmt.Errorf("write %s: %w", jsonPath, writeErr)
 	}
 
-	yamlContent, err := os.ReadFile(yamlPath)
+	yamlContent, err := os.ReadFile(yamlPath) //nolint:gosec // G304: fixed in-repo path built from constants
 	if err != nil {
 		return fmt.Errorf("read %s: %w", yamlPath, err)
 	}
 
 	var yamlDoc map[string]any
-	if err := yaml.Unmarshal(yamlContent, &yamlDoc); err != nil {
-		return fmt.Errorf("unmarshal %s: %w", yamlPath, err)
+	if unmarshalErr := yaml.Unmarshal(yamlContent, &yamlDoc); unmarshalErr != nil {
+		return fmt.Errorf("unmarshal %s: %w", yamlPath, unmarshalErr)
 	}
 
 	docs.ApplyAPITagGroups(yamlDoc)
@@ -61,8 +64,8 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("marshal %s: %w", yamlPath, err)
 	}
-	if err := os.WriteFile(yamlPath, patchedYAML, 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", yamlPath, err)
+	if writeErr := os.WriteFile(yamlPath, patchedYAML, specFileMode); writeErr != nil {
+		return fmt.Errorf("write %s: %w", yamlPath, writeErr)
 	}
 
 	return nil

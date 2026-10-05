@@ -14,6 +14,7 @@ import (
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/response"
 )
 
@@ -114,7 +115,11 @@ func (h *AuthHandler) loginOTPVerify(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, auth.ErrInvalidVerificationCode) {
-			response.Error(w, r, apperror.New(apperror.CodeInvalidVerificationCode, apperror.MsgInvalidVerificationCode))
+			response.Error(
+				w,
+				r,
+				apperror.New(apperror.CodeInvalidVerificationCode, apperror.MsgInvalidVerificationCode),
+			)
 			return
 		}
 		response.Error(w, r, apperror.ErrNotFound)
@@ -176,11 +181,12 @@ func (h *AuthHandler) enqueueLoginOTPEmail(ctx context.Context, email, code stri
 	}
 	defer rollbackOnError(ctx, tx)
 
-	_, _ = h.Enqueuer.EnqueueTx(ctx, tx, mailer.EmailArgs{
+	_, enqueueErr := h.Enqueuer.EnqueueTx(ctx, tx, mailer.EmailArgs{
 		Type:             mailer.TypeLoginOTP,
 		Recipient:        email,
 		Code:             code,
 		ExpiresInSeconds: auth.CodeExpiresInSeconds(),
 	}, queue.EmailEnqueueOptions()...)
-	_ = tx.Commit(ctx)
+	besteffort.Log(ctx, "Enqueuer.EnqueueTx", enqueueErr)
+	besteffort.Log(ctx, "tx.Commit", tx.Commit(ctx))
 }

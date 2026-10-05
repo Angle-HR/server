@@ -27,10 +27,16 @@ func TestRequestLoggerLogsBodiesAtDebug(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"access_token":"abc","ok":true}`))
+		if _, err := w.Write([]byte(`{"access_token":"abc","ok":true}`)); err != nil {
+			t.Errorf("write: %v", err)
+		}
 	}))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login?x=1", strings.NewReader(`{"email":"a@b.com","password":"secret"}`))
+	req := httptest.NewRequestWithContext(t.Context(),
+		http.MethodPost,
+		"/api/v1/auth/login?x=1",
+		strings.NewReader(`{"email":"a@b.com","password":"secret"}`),
+	)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -48,7 +54,7 @@ func TestRequestLoggerLogsBodiesAtDebug(t *testing.T) {
 	if entry["response_body"] != `{"access_token":"[redacted]","ok":true}` {
 		t.Fatalf("response_body = %v", entry["response_body"])
 	}
-	if int(entry["status"].(float64)) != http.StatusOK {
+	if status, isNumber := entry["status"].(float64); !isNumber || int(status) != http.StatusOK {
 		t.Fatalf("status = %v", entry["status"])
 	}
 }
@@ -63,7 +69,7 @@ func TestRequestLoggerOmitsBodiesAboveDebug(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	req := httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(`{"password":"secret"}`))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/x", strings.NewReader(`{"password":"secret"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)

@@ -26,10 +26,13 @@ func AdminFromContext(ctx context.Context) (uuid.UUID, string, []string, bool) {
 		return uuid.Nil, "", nil, false
 	}
 
-	email, _ := ctx.Value(adminEmailKey).(string)
-	perms, _ := ctx.Value(adminPermissionsKey).([]string)
-	if perms == nil {
-		perms = []string{}
+	email := ""
+	if v, isString := ctx.Value(adminEmailKey).(string); isString {
+		email = v
+	}
+	perms := []string{}
+	if v, isSlice := ctx.Value(adminPermissionsKey).([]string); isSlice && v != nil {
+		perms = v
 	}
 	return userID, email, perms, true
 }

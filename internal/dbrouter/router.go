@@ -14,6 +14,9 @@ import (
 	"github.com/Angle-HR/server/internal/region"
 )
 
+// poolHealthCheckPeriod is how often idle pool connections are health-checked.
+const poolHealthCheckPeriod = 30 * time.Second
+
 var (
 	// ErrUnknownRegion indicates the region is not configured on this router.
 	ErrUnknownRegion = errors.New("dbrouter: unknown region")
@@ -125,7 +128,7 @@ func newPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	cfg.MaxConns = 10
 	cfg.MinConns = 2
 	cfg.MaxConnLifetime = time.Hour
-	cfg.HealthCheckPeriod = 30 * time.Second
+	cfg.HealthCheckPeriod = poolHealthCheckPeriod
 	if cfg.ConnConfig.RuntimeParams == nil {
 		cfg.ConnConfig.RuntimeParams = map[string]string{}
 	}

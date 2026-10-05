@@ -33,7 +33,11 @@ type BusinessOnboardingHandler struct {
 // NewBusinessOnboardingHandler returns a business onboarding handler. Tokens
 // is used to reissue JWTs when this submission migrates the account out of
 // the global holding region (see NewProductOnboardingHandler).
-func NewBusinessOnboardingHandler(router *dbrouter.DBRouter, globalDB globalDB, tokens *auth.TokenService) *BusinessOnboardingHandler {
+func NewBusinessOnboardingHandler(
+	router *dbrouter.DBRouter,
+	globalDB globalDB,
+	tokens *auth.TokenService,
+) *BusinessOnboardingHandler {
 	return &BusinessOnboardingHandler{
 		Router:   router,
 		GlobalDB: globalDB,
@@ -112,20 +116,7 @@ func (h *BusinessOnboardingHandler) submitBusinessOnboarding(w http.ResponseWrit
 	businessTypeID := uuid.MustParse(req.BusinessTypeID)
 	industryID := uuid.MustParse(req.IndustryID)
 
-	// Validate each referenced catalog entry exists.
-	if err := h.ensureBusinessOnboardingCatalogRef(ctx, countryID, query.LookupCountryByID, apperror.MsgInvalidCountryID); err != nil {
-		response.Error(w, r, err)
-		return
-	}
-	if err := h.ensureBusinessOnboardingCatalogRef(ctx, companyRoleID, query.CompanyRoleByID, "unknown company_role_id reference"); err != nil {
-		response.Error(w, r, err)
-		return
-	}
-	if err := h.ensureBusinessOnboardingCatalogRef(ctx, businessTypeID, query.BusinessTypeByID, "unknown business_type_id reference"); err != nil {
-		response.Error(w, r, err)
-		return
-	}
-	if err := h.ensureBusinessOnboardingCatalogRef(ctx, industryID, query.OnboardingIndustryByID, "unknown industry_id reference"); err != nil {
+	if err := h.ensureBusinessRefsExist(ctx, countryID, companyRoleID, businessTypeID, industryID); err != nil {
 		response.Error(w, r, err)
 		return
 	}
@@ -134,19 +125,9 @@ func (h *BusinessOnboardingHandler) submitBusinessOnboarding(w http.ResponseWrit
 	// global account migrates into its real region right here.
 	originalReg := reg
 	if reg == region.RegionGlobal {
-		countrySQL, countryArgs, err := query.LookupCountryByID(countryID)
+		newReg, err := h.migrateForCountry(ctx, userID, countryID)
 		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		var target string
-		if err := h.GlobalDB.QueryRow(ctx, countrySQL, countryArgs...).Scan(new(uuid.UUID), new(string), new(string), &target, new(*string)); err != nil {
-			response.Error(w, r, apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID))
-			return
-		}
-		newReg, err := migrateUserToRegion(ctx, h.Router, h.GlobalDB, userID, region.Region(target))
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
+			response.Error(w, r, err)
 			return
 		}
 		reg = newReg
@@ -157,60 +138,9 @@ func (h *BusinessOnboardingHandler) submitBusinessOnboarding(w http.ResponseWrit
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
-
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	defer rollbackOnError(ctx, tx)
-
-	// Persist business profile fields on the user row.
-	userSQL, userArgs, err := query.UpdateAccountUserBusinessProfile(userID, req.LegalFullName)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if _, err := tx.Exec(ctx, userSQL, userArgs...); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	// Create or update the organization row owned by this user.
-	orgSQL, orgArgs, err := query.UpsertOrganizationProfile(userID, req.LegalBusinessName, companyRoleID)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if _, err := tx.Exec(ctx, orgSQL, orgArgs...); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	// Save business type and industry on the organization row.
-	bizSQL, bizArgs, err := query.UpdateOrganizationCatalog(userID, businessTypeID, industryID)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if err := tx.QueryRow(ctx, bizSQL, bizArgs...).Scan(new(uuid.UUID)); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	// Save country, BIN number, and registered address on the organization row.
-	regSQL, regArgs, err := query.UpdateOrganizationRegistration(userID, countryID, req.BINumber, req.BusinessRegisteredAddress)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if err := tx.QueryRow(ctx, regSQL, regArgs...).Scan(new(uuid.UUID)); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
+	ids := businessOnboardingIDs{countryID, companyRoleID, businessTypeID, industryID}
+	if err = persistBusinessOnboarding(ctx, pool, userID, &req, ids); err != nil {
+		response.Error(w, r, err)
 		return
 	}
 
@@ -240,6 +170,114 @@ func (h *BusinessOnboardingHandler) submitBusinessOnboarding(w http.ResponseWrit
 		IndustryID:                req.IndustryID,
 		Tokens:                    tokens,
 	})
+}
+
+// businessOnboardingIDs are the parsed catalog references of a business submission.
+type businessOnboardingIDs struct {
+	country, companyRole, businessType, industry uuid.UUID
+}
+
+// ensureBusinessRefsExist checks that every referenced catalog entry exists.
+func (h *BusinessOnboardingHandler) ensureBusinessRefsExist(
+	ctx context.Context,
+	countryID, companyRoleID, businessTypeID, industryID uuid.UUID,
+) error {
+	refs := []struct {
+		id    uuid.UUID
+		build func(uuid.UUID) (string, []any, error)
+		msg   string
+	}{
+		{countryID, query.LookupCountryByID, apperror.MsgInvalidCountryID},
+		{companyRoleID, query.CompanyRoleByID, "unknown company_role_id reference"},
+		{businessTypeID, query.BusinessTypeByID, "unknown business_type_id reference"},
+		{industryID, query.OnboardingIndustryByID, "unknown industry_id reference"},
+	}
+	for _, ref := range refs {
+		if err := h.ensureBusinessOnboardingCatalogRef(ctx, ref.id, ref.build, ref.msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migrateForCountry moves a still-global account into the region of the given country.
+func (h *BusinessOnboardingHandler) migrateForCountry(
+	ctx context.Context,
+	userID, countryID uuid.UUID,
+) (region.Region, error) {
+	countrySQL, countryArgs, err := query.LookupCountryByID(countryID)
+	if err != nil {
+		return region.RegionUnknown, apperror.ErrInternal
+	}
+	var target string
+	if scanErr := h.GlobalDB.QueryRow(ctx, countrySQL, countryArgs...).
+		Scan(new(uuid.UUID), new(string), new(string), &target, new(*string)); scanErr != nil {
+		return region.RegionUnknown, apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID)
+	}
+	newReg, err := migrateUserToRegion(ctx, h.Router, h.GlobalDB, userID, region.Region(target))
+	if err != nil {
+		return region.RegionUnknown, apperror.ErrInternal
+	}
+	return newReg, nil
+}
+
+// persistBusinessOnboarding writes the user profile, organization, catalog
+// references and registration details in one transaction.
+func persistBusinessOnboarding(
+	ctx context.Context,
+	pool dataPool,
+	userID uuid.UUID,
+	req *businessOnboardingRequest,
+	ids businessOnboardingIDs,
+) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	defer rollbackOnError(ctx, tx)
+
+	// Persist business profile fields on the user row.
+	userSQL, userArgs, err := query.UpdateAccountUserBusinessProfile(userID, req.LegalFullName)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	if _, execErr := tx.Exec(ctx, userSQL, userArgs...); execErr != nil {
+		return apperror.ErrInternal
+	}
+
+	// Create or update the organization row owned by this user.
+	orgSQL, orgArgs, err := query.UpsertOrganizationProfile(userID, req.LegalBusinessName, ids.companyRole)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	if _, execErr := tx.Exec(ctx, orgSQL, orgArgs...); execErr != nil {
+		return apperror.ErrInternal
+	}
+
+	// Save business type and industry on the organization row.
+	bizSQL, bizArgs, err := query.UpdateOrganizationCatalog(userID, ids.businessType, ids.industry)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	if scanErr := tx.QueryRow(ctx, bizSQL, bizArgs...).Scan(new(uuid.UUID)); scanErr != nil {
+		return apperror.ErrInternal
+	}
+
+	// Save country, BIN number, and registered address on the organization row.
+	regSQL, regArgs, err := query.UpdateOrganizationRegistration(
+		userID, ids.country, req.BINumber, req.BusinessRegisteredAddress,
+	)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	if scanErr := tx.QueryRow(ctx, regSQL, regArgs...).Scan(new(uuid.UUID)); scanErr != nil {
+		return apperror.ErrInternal
+	}
+
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		return apperror.ErrInternal
+	}
+	return nil
 }
 
 // ensureBusinessOnboardingCatalogRef validates that a UUID resolves to an active catalog row.

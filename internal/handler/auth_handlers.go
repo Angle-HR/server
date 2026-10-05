@@ -25,8 +25,12 @@ import (
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/response"
 )
+
+// otpModulus keeps generated one-time codes to six digits.
+const otpModulus = 1_000_000
 
 var _ = apidoc.ErrorEnvelope{}
 
@@ -231,8 +235,8 @@ func (h *AuthHandler) signup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var userID uuid.UUID
-	if err := h.GlobalDB.QueryRow(ctx, sql, args...).Scan(&userID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+	if scanErr := h.GlobalDB.QueryRow(ctx, sql, args...).Scan(&userID); scanErr != nil {
+		if errors.Is(scanErr, pgx.ErrNoRows) {
 			response.Error(w, r, apperror.New(apperror.CodeEmailAlreadyRegistered, apperror.MsgEmailAlreadyRegistered))
 			return
 		}
@@ -286,10 +290,17 @@ func (h *AuthHandler) patchSignup(w http.ResponseWriter, r *http.Request) {
 
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 	if email != session.Email {
-		if _, err := h.loadUserByEmail(ctx, region.Region(session.Region), email); err == nil {
+		if _, loadUserByEmailErr := h.loadUserByEmail(
+			ctx,
+			region.Region(session.Region),
+			email,
+		); loadUserByEmailErr == nil {
 			response.Error(w, r, apperror.New(apperror.CodeEmailAlreadyRegistered, apperror.MsgEmailAlreadyRegistered))
 			return
-		} else if !errors.Is(err, pgx.ErrNoRows) {
+		} else if !errors.Is(
+			loadUserByEmailErr,
+			pgx.ErrNoRows,
+		) {
 			response.Error(w, r, apperror.ErrInternal)
 			return
 		}
@@ -306,8 +317,8 @@ func (h *AuthHandler) patchSignup(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
-	if err := pool.QueryRow(ctx, sql, args...).Scan(&session.UserID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+	if scanErr := pool.QueryRow(ctx, sql, args...).Scan(&session.UserID); scanErr != nil {
+		if errors.Is(scanErr, pgx.ErrNoRows) {
 			response.Error(w, r, apperror.ErrNotFound)
 			return
 		}
@@ -315,7 +326,7 @@ func (h *AuthHandler) patchSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.Verifier.DeleteSession(ctx, req.VerificationSessionID)
+	besteffort.Log(ctx, "h.Verifier.DeleteSession", h.Verifier.DeleteSession(ctx, req.VerificationSessionID))
 
 	data, err := h.beginVerification(ctx, session.UserID, email, session.Region)
 	if err != nil {
@@ -353,80 +364,14 @@ func (h *AuthHandler) verifyEmail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	session, err := h.Verifier.ValidateCode(ctx, req.VerificationSessionID, req.Code)
 	if err != nil {
-		if errors.Is(err, auth.ErrVerificationExpired) {
-			response.Error(w, r, apperror.New(apperror.CodeVerificationExpired, apperror.MsgVerificationExpired))
-			return
-		}
-		if errors.Is(err, auth.ErrInvalidVerificationCode) {
-			response.Error(w, r, apperror.New(apperror.CodeInvalidVerificationCode, apperror.MsgInvalidVerificationCode))
-			return
-		}
-		response.Error(w, r, apperror.ErrNotFound)
+		response.Error(w, r, verificationCodeError(err))
 		return
 	}
 
 	reg := region.Region(session.Region)
-	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
+	currentStep, completed, err := h.markEmailVerified(ctx, reg, &session)
 	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	defer rollbackOnError(ctx, tx)
-
-	verifySQL, verifyArgs, err := setUserVerifiedSQL(reg, session.UserID)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if err := tx.QueryRow(ctx, verifySQL, verifyArgs...).Scan(&session.UserID); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	currentStep, completed := onboarding.InitialProgress()
-	progressSQL, progressArgs, err := upsertOnboardingProgressSQL(reg, session.UserID, currentStep, completed)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if _, err := tx.Exec(ctx, progressSQL, progressArgs...); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	globalTx, err := h.GlobalDB.Begin(ctx)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	defer rollbackOnError(ctx, globalTx)
-
-	registrySource := regionSourceExplicit
-	if reg == region.RegionGlobal {
-		registrySource = regionSourcePending
-	}
-	registrySQL, registryArgs, err := query.UpsertUsersRegistryProductUser(session.Email, session.Region, registrySource, session.UserID)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if _, err := globalTx.Exec(ctx, registrySQL, registryArgs...); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if err := globalTx.Commit(ctx); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
+		response.Error(w, r, err)
 		return
 	}
 
@@ -443,6 +388,82 @@ func (h *AuthHandler) verifyEmail(w http.ResponseWriter, r *http.Request) {
 		ExpiresIn:    tokens.ExpiresIn,
 		Onboarding:   summary,
 	})
+}
+
+// verificationCodeError maps a code-validation failure to the public API error.
+func verificationCodeError(err error) error {
+	switch {
+	case errors.Is(err, auth.ErrVerificationExpired):
+		return apperror.New(apperror.CodeVerificationExpired, apperror.MsgVerificationExpired)
+	case errors.Is(err, auth.ErrInvalidVerificationCode):
+		return apperror.New(apperror.CodeInvalidVerificationCode, apperror.MsgInvalidVerificationCode)
+	default:
+		return apperror.ErrNotFound
+	}
+}
+
+// markEmailVerified marks the user verified, seeds onboarding progress in the
+// user's database and records the user in the global registry, committing both
+// transactions. Any failure is reported as an internal error.
+func (h *AuthHandler) markEmailVerified(
+	ctx context.Context,
+	reg region.Region,
+	session *auth.VerificationSession,
+) (currentStep string, completed []string, err error) {
+	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
+	if err != nil {
+		return "", nil, apperror.ErrInternal
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return "", nil, apperror.ErrInternal
+	}
+	defer rollbackOnError(ctx, tx)
+
+	verifySQL, verifyArgs, err := setUserVerifiedSQL(reg, session.UserID)
+	if err != nil {
+		return "", nil, apperror.ErrInternal
+	}
+	if scanErr := tx.QueryRow(ctx, verifySQL, verifyArgs...).Scan(&session.UserID); scanErr != nil {
+		return "", nil, apperror.ErrInternal
+	}
+
+	currentStep, completed = onboarding.InitialProgress()
+	progressSQL, progressArgs, err := upsertOnboardingProgressSQL(reg, session.UserID, currentStep, completed)
+	if err != nil {
+		return "", nil, apperror.ErrInternal
+	}
+	if _, execErr := tx.Exec(ctx, progressSQL, progressArgs...); execErr != nil {
+		return "", nil, apperror.ErrInternal
+	}
+
+	globalTx, err := h.GlobalDB.Begin(ctx)
+	if err != nil {
+		return "", nil, apperror.ErrInternal
+	}
+	defer rollbackOnError(ctx, globalTx)
+
+	registrySource := regionSourceExplicit
+	if reg == region.RegionGlobal {
+		registrySource = regionSourcePending
+	}
+	registrySQL, registryArgs, err := query.UpsertUsersRegistryProductUser(
+		session.Email, session.Region, registrySource, session.UserID,
+	)
+	if err != nil {
+		return "", nil, apperror.ErrInternal
+	}
+	if _, execErr := globalTx.Exec(ctx, registrySQL, registryArgs...); execErr != nil {
+		return "", nil, apperror.ErrInternal
+	}
+
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		return "", nil, apperror.ErrInternal
+	}
+	if commitErr := globalTx.Commit(ctx); commitErr != nil {
+		return "", nil, apperror.ErrInternal
+	}
+	return currentStep, completed, nil
 }
 
 // resendVerification godoc
@@ -572,38 +593,15 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !auth.CheckPassword(user.PasswordHash, req.Password) {
-		_, _ = h.PasswordLockout.RecordFailure(ctx, email)
+		_, lockoutErr := h.PasswordLockout.RecordFailure(ctx, email)
+		besteffort.Log(ctx, "h.PasswordLockout.RecordFailure", lockoutErr)
 		response.Error(w, r, apperror.ErrUnauthorized)
 		return
 	}
-	_ = h.PasswordLockout.Reset(ctx, email)
+	besteffort.Log(ctx, "h.PasswordLockout.Reset", h.PasswordLockout.Reset(ctx, email))
 
 	if user.EmailVerifiedAt == nil {
-		ok, err := h.Verifier.CanResendByEmail(ctx, email)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		if !ok {
-			response.Error(w, r, apperror.New(apperror.CodeVerificationRateLimited, apperror.MsgVerificationRateLimited))
-			return
-		}
-
-		data, err := h.beginVerification(ctx, user.ID, email, string(reg))
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		if err := h.Verifier.MarkResentByEmail(ctx, email); err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-
-		response.Error(w, r, apperror.NewWithDetails(
-			apperror.CodeEmailNotVerified,
-			apperror.MsgEmailNotVerified,
-			verificationDetails(data),
-		))
+		response.Error(w, r, h.unverifiedLoginError(ctx, user.ID, email, reg))
 		return
 	}
 
@@ -613,6 +611,38 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.respondAuthTokens(w, r, ctx, reg, user)
+}
+
+// unverifiedLoginError starts a fresh verification session for a user who logged in
+// with valid credentials but has not verified their email, and returns the error
+// the login endpoint should respond with.
+func (h *AuthHandler) unverifiedLoginError(
+	ctx context.Context,
+	userID uuid.UUID,
+	email string,
+	reg region.Region,
+) error {
+	ok, err := h.Verifier.CanResendByEmail(ctx, email)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	if !ok {
+		return apperror.New(apperror.CodeVerificationRateLimited, apperror.MsgVerificationRateLimited)
+	}
+
+	data, err := h.beginVerification(ctx, userID, email, string(reg))
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	if err := h.Verifier.MarkResentByEmail(ctx, email); err != nil {
+		return apperror.ErrInternal
+	}
+
+	return apperror.NewWithDetails(
+		apperror.CodeEmailNotVerified,
+		apperror.MsgEmailNotVerified,
+		verificationDetails(data),
+	)
 }
 
 // refresh godoc
@@ -647,8 +677,8 @@ func (h *AuthHandler) refresh(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	if h.Revoker != nil {
-		ok, err := h.Revoker.IsRefreshValid(ctx, claims)
-		if err != nil {
+		ok, isRefreshValidErr := h.Revoker.IsRefreshValid(ctx, claims)
+		if isRefreshValidErr != nil {
 			response.Error(w, r, apperror.ErrInternal)
 			return
 		}
@@ -702,7 +732,11 @@ func (h *AuthHandler) refresh(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *AuthHandler) beginVerification(ctx context.Context, userID uuid.UUID, email, reg string) (AuthSignupData, error) {
+func (h *AuthHandler) beginVerification(
+	ctx context.Context,
+	userID uuid.UUID,
+	email, reg string,
+) (AuthSignupData, error) {
 	sessionID := uuid.NewString()
 	code, err := generateOTP()
 	if err != nil {
@@ -752,13 +786,14 @@ func (h *AuthHandler) enqueueVerificationEmail(ctx context.Context, email, code 
 	}
 	defer rollbackOnError(ctx, tx)
 
-	_, _ = h.Enqueuer.EnqueueTx(ctx, tx, mailer.EmailArgs{
+	_, enqueueErr := h.Enqueuer.EnqueueTx(ctx, tx, mailer.EmailArgs{
 		Type:             mailer.TypeEmailVerification,
 		Recipient:        email,
 		Code:             code,
 		ExpiresInSeconds: auth.CodeExpiresInSeconds(),
 	}, queue.EmailEnqueueOptions()...)
-	_ = tx.Commit(ctx)
+	besteffort.Log(ctx, "Enqueuer.EnqueueTx", enqueueErr)
+	besteffort.Log(ctx, "tx.Commit", tx.Commit(ctx))
 }
 
 func (h *AuthHandler) loadUserByEmail(ctx context.Context, reg region.Region, email string) (accountUser, error) {
@@ -799,16 +834,17 @@ func (h *AuthHandler) resolveUserRegion(ctx context.Context, email string) (regi
 	var registryEmail string
 	var reg string
 	var userID *uuid.UUID
-	if err := h.GlobalDB.QueryRow(ctx, sql, args...).Scan(&registryID, &registryEmail, &reg, &userID); err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return region.RegionUnknown, uuid.Nil, err
+	if scanErr := h.GlobalDB.QueryRow(ctx, sql, args...).
+		Scan(&registryID, &registryEmail, &reg, &userID); scanErr != nil {
+		if !errors.Is(scanErr, pgx.ErrNoRows) {
+			return region.RegionUnknown, uuid.Nil, scanErr
 		}
 		// No registry row at all: this can only be an unverified signup
 		// (verifyEmail is what creates the registry row), so it's still
 		// sitting in the global holding area.
-		user, err := h.loadUserByEmail(ctx, region.RegionGlobal, email)
-		if err != nil {
-			return region.RegionUnknown, uuid.Nil, err
+		user, loadUserByEmailErr := h.loadUserByEmail(ctx, region.RegionGlobal, email)
+		if loadUserByEmailErr != nil {
+			return region.RegionUnknown, uuid.Nil, loadUserByEmailErr
 		}
 		return region.RegionGlobal, user.ID, nil
 	}
@@ -825,7 +861,12 @@ func (h *AuthHandler) resolveUserRegion(ctx context.Context, email string) (regi
 	return homeReg, *userID, nil
 }
 
-func (h *AuthHandler) reconcileUserRegion(ctx context.Context, email string, userID uuid.UUID, registryRegion region.Region) (region.Region, error) {
+func (h *AuthHandler) reconcileUserRegion(
+	ctx context.Context,
+	email string,
+	userID uuid.UUID,
+	registryRegion region.Region,
+) (region.Region, error) {
 	if _, err := h.loadUserByID(ctx, registryRegion, userID); err == nil {
 		return registryRegion, nil
 	} else if !errors.Is(err, pgx.ErrNoRows) {
@@ -858,24 +899,24 @@ func (h *AuthHandler) findUserHomeRegion(ctx context.Context, userID uuid.UUID) 
 
 	var lastErr error
 	for _, reg := range region.All() {
-		pool, err := h.Router.DB(reg)
-		if err != nil {
-			lastErr = err
+		pool, dBErr := h.Router.DB(reg)
+		if dBErr != nil {
+			lastErr = dBErr
 			continue
 		}
 
 		var id uuid.UUID
-		err = pool.QueryRow(ctx, sql, args...).Scan(
+		dBErr = pool.QueryRow(ctx, sql, args...).Scan(
 			&id, new(string), new(string), new(*time.Time), new(*time.Time),
 			new(*string), new(*string), new(*string), new(*string), new(*uuid.UUID),
 			new(*string), new(*time.Time),
 		)
-		if errors.Is(err, pgx.ErrNoRows) {
-			lastErr = err
+		if errors.Is(dBErr, pgx.ErrNoRows) {
+			lastErr = dBErr
 			continue
 		}
-		if err != nil {
-			return region.RegionUnknown, err
+		if dBErr != nil {
+			return region.RegionUnknown, dBErr
 		}
 
 		return reg, nil
@@ -929,7 +970,11 @@ func (h *AuthHandler) lookupRegistryByUserID(ctx context.Context, userID uuid.UU
 	return region.Region(reg), email, nil
 }
 
-func (h *AuthHandler) loadOnboardingSummary(ctx context.Context, reg region.Region, user accountUser) (OnboardingProgressSummary, error) {
+func (h *AuthHandler) loadOnboardingSummary(
+	ctx context.Context,
+	reg region.Region,
+	user accountUser,
+) (OnboardingProgressSummary, error) {
 	if user.OnboardingCompletedAt != nil {
 		status := onboarding.StatusCompleted
 		return OnboardingProgressSummary{
@@ -980,7 +1025,13 @@ func scanAccountUser(row pgx.Row) (accountUser, error) {
 	return user, err
 }
 
-func (h *AuthHandler) respondAuthTokens(w http.ResponseWriter, r *http.Request, ctx context.Context, reg region.Region, user accountUser) {
+func (h *AuthHandler) respondAuthTokens(
+	w http.ResponseWriter,
+	r *http.Request,
+	ctx context.Context,
+	reg region.Region,
+	user accountUser,
+) {
 	tokens, err := h.Tokens.IssuePair(user.ID, reg, true)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
@@ -1018,7 +1069,12 @@ func (h *AuthHandler) userTOTPEnabled(user accountUser) bool {
 	return user.TOTPEnabledAt != nil && user.TOTPSecret != nil && *user.TOTPSecret != ""
 }
 
-func onboardingSummary(completedAt *time.Time, currentStep string, completed []string, accountType *string) OnboardingProgressSummary {
+func onboardingSummary(
+	completedAt *time.Time,
+	currentStep string,
+	completed []string,
+	accountType *string,
+) OnboardingProgressSummary {
 	if completedAt != nil {
 		return OnboardingProgressSummary{
 			Status:         onboarding.StatusCompleted,
@@ -1040,7 +1096,7 @@ func generateOTP() (string, error) {
 	if _, err := rand.Read(b[:]); err != nil {
 		return "", err
 	}
-	n := binary.BigEndian.Uint32(b[:]) % 1000000
+	n := binary.BigEndian.Uint32(b[:]) % otpModulus
 	return fmt.Sprintf("%06d", n), nil
 }
 
@@ -1051,7 +1107,5 @@ func decodeJSON(r *http.Request, dst any) error {
 }
 
 func rollbackOnError(ctx context.Context, tx pgx.Tx) {
-	if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
-		_ = err
-	}
+	besteffort.Log(ctx, "tx.Rollback", tx.Rollback(ctx))
 }

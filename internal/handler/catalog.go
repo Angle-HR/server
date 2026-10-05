@@ -13,6 +13,9 @@ import (
 	"github.com/Angle-HR/server/pkg/response"
 )
 
+// catalogCapacityHint pre-sizes catalog result slices; catalogs are small reference lists.
+const catalogCapacityHint = 16
+
 var _ = apidoc.ErrorEnvelope{}
 
 // CatalogHandler serves onboarding reference data from the global registry.
@@ -231,7 +234,7 @@ func (h *CatalogHandler) loadIndustries(ctx context.Context) ([]Industry, error)
 	}
 	defer rows.Close()
 
-	items := make([]Industry, 0, 12)
+	items := make([]Industry, 0, catalogCapacityHint)
 	for rows.Next() {
 		var item Industry
 		if err := rows.Scan(&item.ID, &item.Name, &item.Slug, &item.Emoji); err != nil {
@@ -256,7 +259,7 @@ func (h *CatalogHandler) loadHiringTools(ctx context.Context) ([]HiringTool, err
 	}
 	defer rows.Close()
 
-	items := make([]HiringTool, 0, 16)
+	items := make([]HiringTool, 0, catalogCapacityHint)
 	for rows.Next() {
 		var item HiringTool
 		if err := rows.Scan(&item.ID, &item.Name, &item.Slug, &item.IconURL); err != nil {
@@ -281,7 +284,7 @@ func (h *CatalogHandler) loadHiringFrustrations(ctx context.Context) ([]HiringFr
 	}
 	defer rows.Close()
 
-	items := make([]HiringFrustration, 0, 8)
+	items := make([]HiringFrustration, 0, catalogCapacityHint)
 	for rows.Next() {
 		var item HiringFrustration
 		if err := rows.Scan(&item.ID, &item.Description, &item.Slug, &item.Emoji); err != nil {
@@ -306,7 +309,7 @@ func (h *CatalogHandler) loadRoles(ctx context.Context) ([]Role, error) {
 	}
 	defer rows.Close()
 
-	items := make([]Role, 0, 8)
+	items := make([]Role, 0, catalogCapacityHint)
 	for rows.Next() {
 		var item Role
 		if err := rows.Scan(&item.ID, &item.Name, &item.Slug, &item.Emoji); err != nil {
@@ -331,7 +334,7 @@ func (h *CatalogHandler) loadTeamSizes(ctx context.Context) ([]TeamSize, error) 
 	}
 	defer rows.Close()
 
-	items := make([]TeamSize, 0, 4)
+	items := make([]TeamSize, 0, catalogCapacityHint)
 	for rows.Next() {
 		var item TeamSize
 		if err := rows.Scan(&item.ID, &item.Label, &item.MinSize, &item.MaxSize); err != nil {
@@ -356,7 +359,7 @@ func (h *CatalogHandler) loadBusinessTypes(ctx context.Context) ([]WaitlistBusin
 	}
 	defer rows.Close()
 
-	items := make([]WaitlistBusinessType, 0, 8)
+	items := make([]WaitlistBusinessType, 0, catalogCapacityHint)
 	for rows.Next() {
 		var item WaitlistBusinessType
 		if err := rows.Scan(&item.ID, &item.Name, &item.Slug); err != nil {

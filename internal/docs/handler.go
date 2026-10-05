@@ -115,7 +115,10 @@ func patchOpenAPISpec(content []byte, host, scheme string) ([]byte, error) {
 	case "http", "https":
 		doc["schemes"] = []string{scheme}
 	default:
-		return nil, fmt.Errorf("patchOpenAPISpec: unsupported scheme %q (expected http or https); check PUBLIC_API_URL", scheme)
+		return nil, fmt.Errorf(
+			"patchOpenAPISpec: unsupported scheme %q (expected http or https); check PUBLIC_API_URL",
+			scheme,
+		)
 	}
 	ApplyAPITagGroups(doc)
 

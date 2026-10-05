@@ -21,15 +21,19 @@ func TestRevocationStore_JTIAndUser(t *testing.T) {
 	}
 	t.Cleanup(mr.Close)
 	client := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { _ = client.Close() })
+	t.Cleanup(func() {
+		if closeErr := client.Close(); closeErr != nil {
+			t.Logf("close redis client: %v", closeErr)
+		}
+	})
 
 	store := NewRevocationStore(client)
 	ctx := context.Background()
 	jti := "jti-1"
 	expires := time.Now().Add(time.Hour)
 
-	if err := store.RevokeJTI(ctx, jti, expires); err != nil {
-		t.Fatalf("RevokeJTI: %v", err)
+	if revokeJTIErr := store.RevokeJTI(ctx, jti, expires); revokeJTIErr != nil {
+		t.Fatalf("RevokeJTI: %v", revokeJTIErr)
 	}
 	revoked, err := store.IsJTIRevoked(ctx, jti)
 	if err != nil || !revoked {
@@ -53,8 +57,8 @@ func TestRevocationStore_JTIAndUser(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("IsRefreshValid before revoke = %v, %v", ok, err)
 	}
-	if err := store.RevokeUserSessions(ctx, userID, time.Hour); err != nil {
-		t.Fatalf("RevokeUserSessions: %v", err)
+	if revokeUserSessionsErr := store.RevokeUserSessions(ctx, userID, time.Hour); revokeUserSessionsErr != nil {
+		t.Fatalf("RevokeUserSessions: %v", revokeUserSessionsErr)
 	}
 	ok, err = store.IsRefreshValid(ctx, claims)
 	if err != nil || ok {

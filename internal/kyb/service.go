@@ -316,7 +316,10 @@ func (s *Service) run(ctx context.Context, rec *Record, eventName, actorID strin
 	switch res.Outcome {
 	case OutcomeVerified:
 		rec.Status, rec.FailureReason, rec.VerifiedAt = StatusVerified, "", &now
-		events = append(events, Event{OrganizationID: rec.OrganizationID, Name: "verified", Status: StatusVerified, At: now})
+		events = append(
+			events,
+			Event{OrganizationID: rec.OrganizationID, Name: "verified", Status: StatusVerified, At: now},
+		)
 	case OutcomeNeedsReview:
 		rec.Status, rec.FailureReason = StatusPending, ""
 		events = append(events, Event{OrganizationID: rec.OrganizationID, Name: "queued_for_review",
@@ -354,7 +357,8 @@ func (s *Service) notify(ctx context.Context, organizationID string, n Notice, r
 	}
 	// A failed email must never undo or fail a verification, so it is only logged.
 	if err := s.Notifier.Notify(ctx, organizationID, n, reason); err != nil {
-		s.logger().Warn("kyb: notification failed", "organization_id", organizationID, "notice", string(n), "error", err)
+		s.logger().
+			Warn("kyb: notification failed", "organization_id", organizationID, "notice", string(n), "error", err)
 	}
 }
 

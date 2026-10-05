@@ -4,8 +4,37 @@ import (
 	"bytes"
 	"context"
 	"net/smtp"
+	"strings"
 	"testing"
 )
+
+// renderTemplate renders a mailer template for args and returns the output.
+func renderTemplate(t *testing.T, m *Mailer, name string, args EmailArgs) string {
+	t.Helper()
+	var buf bytes.Buffer
+	data := struct {
+		EmailArgs
+		AppURL string
+	}{args, m.cfg.AppURL}
+	if err := m.templates.ExecuteTemplate(&buf, name, data); err != nil {
+		t.Fatalf("failed to render template: %v", err)
+	}
+	return buf.String()
+}
+
+func assertContains(t *testing.T, content, want string) {
+	t.Helper()
+	if !strings.Contains(content, want) {
+		t.Errorf("expected rendered content to contain %q, got: %s", want, content)
+	}
+}
+
+func assertNotContains(t *testing.T, content, unwanted string) {
+	t.Helper()
+	if strings.Contains(content, unwanted) {
+		t.Errorf("expected rendered content not to contain %q, got: %s", unwanted, content)
+	}
+}
 
 func TestTemplatesRendering(t *testing.T) {
 	m, err := New(Config{})
@@ -14,68 +43,27 @@ func TestTemplatesRendering(t *testing.T) {
 	}
 
 	t.Run("waitlist_confirmation", func(t *testing.T) {
-		m, err := New(Config{})
-		if err != nil {
-			t.Fatalf("failed to create mailer: %v", err)
-		}
-
-		args := EmailArgs{
+		content := renderTemplate(t, m, "waitlist_confirmation.html", EmailArgs{
 			Type:      TypeWaitlistConfirmation,
 			Recipient: "test@example.com",
-		}
+		})
 
-		var buf bytes.Buffer
-		data := struct {
-			EmailArgs
-			AppURL string
-		}{args, m.cfg.AppURL}
-		err = m.templates.ExecuteTemplate(&buf, "waitlist_confirmation.html", data)
-		if err != nil {
-			t.Fatalf("failed to render template: %v", err)
-		}
-
-		content := buf.String()
-		if bytes.Contains(buf.Bytes(), []byte("/survey?token=")) {
-			t.Errorf("expected no survey CTA, got: %s", content)
-		}
-		if bytes.Contains(buf.Bytes(), []byte("Help shape our product")) {
-			t.Errorf("expected no survey button, got: %s", content)
-		}
-		if !bytes.Contains(buf.Bytes(), []byte("Hi,")) {
-			t.Errorf("expected generic greeting, got: %s", content)
-		}
-		if !bytes.Contains(buf.Bytes(), []byte("You're on")) {
-			t.Errorf("expected confirmation copy, got: %s", content)
-		}
-		if !bytes.Contains(buf.Bytes(), []byte("What happens next?")) {
-			t.Errorf("expected next-steps copy, got: %s", content)
-		}
+		assertNotContains(t, content, "/survey?token=")
+		assertNotContains(t, content, "Help shape our product")
+		assertContains(t, content, "Hi,")
+		assertContains(t, content, "You're on")
+		assertContains(t, content, "What happens next?")
 	})
 
 	t.Run("more_info_ack", func(t *testing.T) {
-		args := EmailArgs{
+		content := renderTemplate(t, m, "more_info_ack.html", EmailArgs{
 			Type:      TypeMoreInfoAck,
 			Recipient: "test@example.com",
 			FullName:  "Jane Smith",
-		}
+		})
 
-		var buf bytes.Buffer
-		data := struct {
-			EmailArgs
-			AppURL string
-		}{args, m.cfg.AppURL}
-		err := m.templates.ExecuteTemplate(&buf, "more_info_ack.html", data)
-		if err != nil {
-			t.Fatalf("failed to render template: %v", err)
-		}
-
-		content := buf.String()
-		if !bytes.Contains(buf.Bytes(), []byte("Jane Smith")) {
-			t.Errorf("expected rendered content to contain 'Jane Smith', got: %s", content)
-		}
-		if !bytes.Contains(buf.Bytes(), []byte("What happens next?")) {
-			t.Errorf("expected rendered content to contain title, got: %s", content)
-		}
+		assertContains(t, content, "Jane Smith")
+		assertContains(t, content, "What happens next?")
 	})
 }
 

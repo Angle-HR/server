@@ -24,6 +24,7 @@ import (
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/response"
 )
 
@@ -39,7 +40,12 @@ const (
 )
 
 type jobEnqueuer interface {
-	EnqueueTx(ctx context.Context, tx fluvio.Tx, args fluvio.JobArgs, opts ...fluvio.EnqueueOption) (*fluvio.JobRow, error)
+	EnqueueTx(
+		ctx context.Context,
+		tx fluvio.Tx,
+		args fluvio.JobArgs,
+		opts ...fluvio.EnqueueOption,
+	) (*fluvio.JobRow, error)
 }
 
 // WaitlistHandler handles waitlist signup requests.
@@ -53,7 +59,12 @@ type WaitlistHandler struct {
 }
 
 // NewWaitlistHandler returns a waitlist signup handler.
-func NewWaitlistHandler(router *dbrouter.DBRouter, globalDB globalDB, enqueuer jobEnqueuer, defaultRegion region.Region) *WaitlistHandler {
+func NewWaitlistHandler(
+	router *dbrouter.DBRouter,
+	globalDB globalDB,
+	enqueuer jobEnqueuer,
+	defaultRegion region.Region,
+) *WaitlistHandler {
 	return &WaitlistHandler{
 		Router:        router,
 		GlobalDB:      globalDB,
@@ -147,7 +158,7 @@ func (h *WaitlistHandler) signup(ctx context.Context, email string) error {
 		return fmt.Errorf("begin global transaction: %w", err)
 	}
 	defer func() {
-		_ = gtx.Rollback(ctx)
+		besteffort.Log(ctx, "gtx.Rollback", gtx.Rollback(ctx))
 	}()
 
 	var waitlistToken uuid.UUID
@@ -180,8 +191,8 @@ func (h *WaitlistHandler) signup(ctx context.Context, email string) error {
 		return fmt.Errorf("build waitlist registry insert: %w", err)
 	}
 
-	if _, err := gtx.Exec(ctx, registrySQL, registryArgs...); err != nil {
-		return fmt.Errorf("insert waitlist registry: %w", err)
+	if _, execErr := gtx.Exec(ctx, registrySQL, registryArgs...); execErr != nil {
+		return fmt.Errorf("insert waitlist registry: %w", execErr)
 	}
 
 	if h.Enqueuer != nil {
@@ -271,12 +282,15 @@ func validationError(err error) error {
 	)
 }
 
+// fieldEmail is both the JSON field name and the validator tag for email.
+const fieldEmail = "email"
+
 func jsonFieldName(structField string) string {
 	switch structField {
 	case "FullName":
 		return "full_name"
 	case "Email":
-		return "email"
+		return fieldEmail
 	case "CountryID":
 		return "country_id"
 	default:
@@ -288,7 +302,7 @@ func validationMessage(fe validator.FieldError) string {
 	switch fe.Tag() {
 	case "required":
 		return jsonFieldName(fe.Field()) + " is required"
-	case "email":
+	case fieldEmail:
 		return "invalid email format"
 	case "max":
 		return fmt.Sprintf("%s exceeds maximum length", jsonFieldName(fe.Field()))

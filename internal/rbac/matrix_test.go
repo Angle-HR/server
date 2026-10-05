@@ -41,8 +41,9 @@ func TestMatrixMatchesSQLSeed(t *testing.T) {
 	if err != nil {
 		t.Skip("seed file not found: ", err)
 	}
-	var sqlPairs []string
-	for _, m := range regexp.MustCompile(`\('([a-z_0-9]+)', '([a-z_.0-9]+)'\)`).FindAllStringSubmatch(string(b), -1) {
+	matches := regexp.MustCompile(`\('([a-z_0-9]+)', '([a-z_.0-9]+)'\)`).FindAllStringSubmatch(string(b), -1)
+	sqlPairs := make([]string, 0, len(matches))
+	for _, m := range matches {
 		sqlPairs = append(sqlPairs, m[1]+"|"+m[2])
 	}
 	var goPairs []string

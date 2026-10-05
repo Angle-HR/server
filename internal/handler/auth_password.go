@@ -15,6 +15,7 @@ import (
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/response"
 )
 
@@ -146,7 +147,8 @@ func (h *AuthHandler) resetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.Revoker != nil {
-		_ = h.Revoker.RevokeUserSessions(ctx, session.UserID, h.Tokens.RefreshLifetime())
+		besteffort.Log(ctx, "h.Revoker.RevokeUserSessions",
+			h.Revoker.RevokeUserSessions(ctx, session.UserID, h.Tokens.RefreshLifetime()))
 	}
 
 	response.Success(w, r, http.StatusOK, AuthMessageData{Message: "password updated"})
@@ -162,11 +164,12 @@ func (h *AuthHandler) enqueuePasswordResetEmail(ctx context.Context, email, toke
 	}
 	defer rollbackOnError(ctx, tx)
 
-	_, _ = h.Enqueuer.EnqueueTx(ctx, tx, mailer.EmailArgs{
+	_, enqueueErr := h.Enqueuer.EnqueueTx(ctx, tx, mailer.EmailArgs{
 		Type:             mailer.TypePasswordReset,
 		Recipient:        email,
 		Token:            token,
 		ExpiresInSeconds: auth.ResetTTLSeconds(),
 	}, queue.EmailEnqueueOptions()...)
-	_ = tx.Commit(ctx)
+	besteffort.Log(ctx, "Enqueuer.EnqueueTx", enqueueErr)
+	besteffort.Log(ctx, "tx.Commit", tx.Commit(ctx))
 }

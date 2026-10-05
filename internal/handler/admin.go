@@ -12,6 +12,7 @@ import (
 	"github.com/Angle-HR/server/internal/admin"
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/internal/dbrouter"
+	"github.com/Angle-HR/server/pkg/besteffort"
 )
 
 // Admin login gets a longer window and lock than product login: fewer,
@@ -109,5 +110,6 @@ func (h *AdminHandler) audit(r *http.Request, action, resourceType, resourceID s
 	if meta == nil {
 		meta = map[string]any{}
 	}
-	_ = h.Store.WriteAudit(r.Context(), actorID, action, resourceType, resourceID, meta, r.RemoteAddr)
+	besteffort.Log(r.Context(), "h.Store.WriteAudit",
+		h.Store.WriteAudit(r.Context(), actorID, action, resourceType, resourceID, meta, r.RemoteAddr))
 }

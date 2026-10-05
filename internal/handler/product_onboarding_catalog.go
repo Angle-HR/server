@@ -13,7 +13,11 @@ import (
 
 const catalogCacheControl = "public, max-age=300"
 
-func (h *ProductOnboardingHandler) writeCatalogList(w http.ResponseWriter, r *http.Request, load func(context.Context) (any, error)) {
+func (h *ProductOnboardingHandler) writeCatalogList(
+	w http.ResponseWriter,
+	r *http.Request,
+	load func(context.Context) (any, error),
+) {
 	items, err := load(r.Context())
 	if err != nil {
 		response.Error(w, r, err)
@@ -36,7 +40,7 @@ func (h *ProductOnboardingHandler) loadBusinessTypes(ctx context.Context) ([]Bus
 	}
 	defer rows.Close()
 
-	items := make([]BusinessType, 0, 8)
+	items := make([]BusinessType, 0, catalogCapacityHint)
 	for rows.Next() {
 		var id uuid.UUID
 		var item BusinessType
@@ -63,7 +67,7 @@ func (h *ProductOnboardingHandler) loadOnboardingIndustries(ctx context.Context)
 	}
 	defer rows.Close()
 
-	items := make([]OnboardingIndustry, 0, 16)
+	items := make([]OnboardingIndustry, 0, catalogCapacityHint)
 	for rows.Next() {
 		var id uuid.UUID
 		var item OnboardingIndustry
@@ -90,7 +94,7 @@ func (h *ProductOnboardingHandler) loadCompanyRoles(ctx context.Context) ([]Comp
 	}
 	defer rows.Close()
 
-	items := make([]CompanyRole, 0, 8)
+	items := make([]CompanyRole, 0, catalogCapacityHint)
 	for rows.Next() {
 		var id uuid.UUID
 		var item CompanyRole

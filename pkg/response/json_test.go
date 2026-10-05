@@ -22,7 +22,7 @@ func TestErrorLogsInternalFailures(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
 	t.Cleanup(func() { slog.SetDefault(prev) })
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/things", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/things", nil)
 	req = req.WithContext(context.WithValue(req.Context(), chimiddleware.RequestIDKey, "req-42"))
 	rec := httptest.NewRecorder()
 
@@ -56,7 +56,7 @@ func TestErrorDoesNotLogClientFailures(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
 	t.Cleanup(func() { slog.SetDefault(prev) })
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/things", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/things", nil)
 	rec := httptest.NewRecorder()
 
 	Error(rec, req, apperror.New(apperror.CodeValidationError, "bad input"))

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -34,10 +35,22 @@ type catalogDef struct {
 }
 
 var catalogDefs = map[string]catalogDef{
-	"countries":             {schema: "waitlist", table: "countries", hasActive: true, hasIconKey: true, hasRegion: true},
-	"industries":            {schema: "waitlist", table: "industries", hasActive: true, hasEmoji: true},
-	"hiring_tools":          {schema: "waitlist", table: "hiring_tools", hasActive: true, hasIconURL: true},
-	"hiring_frustrations":   {schema: "waitlist", table: "hiring_frustrations", hasActive: true, hasEmoji: true, hasDesc: true},
+	"countries": {
+		schema:     "waitlist",
+		table:      "countries",
+		hasActive:  true,
+		hasIconKey: true,
+		hasRegion:  true,
+	},
+	"industries":   {schema: "waitlist", table: "industries", hasActive: true, hasEmoji: true},
+	"hiring_tools": {schema: "waitlist", table: "hiring_tools", hasActive: true, hasIconURL: true},
+	"hiring_frustrations": {
+		schema:    "waitlist",
+		table:     "hiring_frustrations",
+		hasActive: true,
+		hasEmoji:  true,
+		hasDesc:   true,
+	},
 	"roles":                 {schema: "waitlist", table: "roles", hasActive: true, hasEmoji: true},
 	"team_sizes":            {schema: "waitlist", table: "team_sizes", hasLabel: true, hasMinMax: true},
 	"business_types":        {schema: "accounts", table: "business_types", hasActive: true},
@@ -125,80 +138,7 @@ func (h *AdminHandler) createCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := uuid.New()
-	sortOrder := 0
-	if body.SortOrder != nil {
-		sortOrder = *body.SortOrder
-	}
-	active := true
-	if body.IsActive != nil {
-		active = *body.IsActive
-	}
-
-	var err error
-	switch {
-	case def.hasLabel:
-		if body.Label == nil || strings.TrimSpace(*body.Label) == "" {
-			response.Error(w, r, apperror.New(apperror.CodeValidationError, "label is required"))
-			return
-		}
-		_, err = h.GlobalDB.Exec(r.Context(), fmt.Sprintf(`
-			INSERT INTO %s.%s (id, label, min_size, max_size, sort_order)
-			VALUES ($1, $2, $3, $4, $5)
-		`, def.schema, def.table), id, strings.TrimSpace(*body.Label), body.MinSize, body.MaxSize, sortOrder)
-	case def.hasDesc:
-		if body.Description == nil || body.Slug == nil {
-			response.Error(w, r, apperror.New(apperror.CodeValidationError, "description and slug are required"))
-			return
-		}
-		_, err = h.GlobalDB.Exec(r.Context(), fmt.Sprintf(`
-			INSERT INTO %s.%s (id, description, slug, emoji, sort_order, is_active)
-			VALUES ($1, $2, $3, $4, $5, $6)
-		`, def.schema, def.table), id, strings.TrimSpace(*body.Description), strings.TrimSpace(*body.Slug), body.Emoji, sortOrder, active)
-	case def.hasRegion:
-		if body.Name == nil || body.Slug == nil || body.Region == nil {
-			response.Error(w, r, apperror.New(apperror.CodeValidationError, "name, slug, and region are required"))
-			return
-		}
-		if _, err := region.ParseRegion(*body.Region); err != nil {
-			response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRegion))
-			return
-		}
-		_, err = h.GlobalDB.Exec(r.Context(), fmt.Sprintf(`
-			INSERT INTO %s.%s (id, name, slug, region, icon_key, sort_order, is_active)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
-		`, def.schema, def.table), id, strings.TrimSpace(*body.Name), strings.TrimSpace(*body.Slug), *body.Region, body.IconKey, sortOrder, active)
-	case def.hasIconURL:
-		if body.Name == nil || body.Slug == nil || body.IconURL == nil {
-			response.Error(w, r, apperror.New(apperror.CodeValidationError, "name, slug, and icon_url are required"))
-			return
-		}
-		_, err = h.GlobalDB.Exec(r.Context(), fmt.Sprintf(`
-			INSERT INTO %s.%s (id, name, slug, icon_url, sort_order, is_active)
-			VALUES ($1, $2, $3, $4, $5, $6)
-		`, def.schema, def.table), id, strings.TrimSpace(*body.Name), strings.TrimSpace(*body.Slug), strings.TrimSpace(*body.IconURL), sortOrder, active)
-	default:
-		if body.Name == nil || body.Slug == nil {
-			response.Error(w, r, apperror.New(apperror.CodeValidationError, "name and slug are required"))
-			return
-		}
-		switch {
-		case def.hasEmoji:
-			_, err = h.GlobalDB.Exec(r.Context(), fmt.Sprintf(`
-				INSERT INTO %s.%s (id, name, slug, emoji, sort_order, is_active)
-				VALUES ($1, $2, $3, $4, $5, $6)
-			`, def.schema, def.table), id, strings.TrimSpace(*body.Name), strings.TrimSpace(*body.Slug), body.Emoji, sortOrder, active)
-		case def.hasIconKey:
-			_, err = h.GlobalDB.Exec(r.Context(), fmt.Sprintf(`
-				INSERT INTO %s.%s (id, name, slug, icon_key, sort_order, is_active)
-				VALUES ($1, $2, $3, $4, $5, $6)
-			`, def.schema, def.table), id, strings.TrimSpace(*body.Name), strings.TrimSpace(*body.Slug), body.IconKey, sortOrder, active)
-		default:
-			_, err = h.GlobalDB.Exec(r.Context(), fmt.Sprintf(`
-				INSERT INTO %s.%s (id, name, slug, sort_order, is_active)
-				VALUES ($1, $2, $3, $4, $5)
-			`, def.schema, def.table), id, strings.TrimSpace(*body.Name), strings.TrimSpace(*body.Slug), sortOrder, active)
-		}
-	}
+	err := h.insertCatalogRow(r.Context(), def, &body, id)
 	if err != nil {
 		response.Error(w, r, err)
 		return
@@ -239,7 +179,7 @@ func (h *AdminHandler) patchCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body catalogCreateBody
-	if err := decodeJSON(r, &body); err != nil {
+	if decodeJSONErr := decodeJSON(r, &body); decodeJSONErr != nil {
 		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
 		return
 	}
@@ -257,90 +197,7 @@ func (h *AdminHandler) patchCatalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch {
-	case def.hasLabel:
-		_, err = h.GlobalDB.Exec(r.Context(), fmt.Sprintf(`
-			UPDATE %s.%s SET
-				label = COALESCE($2, label),
-				min_size = COALESCE($3, min_size),
-				max_size = COALESCE($4, max_size),
-				sort_order = COALESCE($5, sort_order),
-				updated_at = now()
-			WHERE id = $1
-		`, def.schema, def.table), id, body.Label, body.MinSize, body.MaxSize, body.SortOrder)
-	case def.hasDesc:
-		_, err = h.GlobalDB.Exec(r.Context(), fmt.Sprintf(`
-			UPDATE %s.%s SET
-				description = COALESCE($2, description),
-				slug = COALESCE($3, slug),
-				emoji = COALESCE($4, emoji),
-				sort_order = COALESCE($5, sort_order),
-				is_active = COALESCE($6, is_active),
-				updated_at = now()
-			WHERE id = $1
-		`, def.schema, def.table), id, body.Description, body.Slug, body.Emoji, body.SortOrder, body.IsActive)
-	case def.hasRegion:
-		if body.Region != nil {
-			if _, err := region.ParseRegion(*body.Region); err != nil {
-				response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRegion))
-				return
-			}
-		}
-		_, err = h.GlobalDB.Exec(r.Context(), fmt.Sprintf(`
-			UPDATE %s.%s SET
-				name = COALESCE($2, name),
-				slug = COALESCE($3, slug),
-				region = COALESCE($4, region),
-				icon_key = COALESCE($5, icon_key),
-				sort_order = COALESCE($6, sort_order),
-				is_active = COALESCE($7, is_active),
-				updated_at = now()
-			WHERE id = $1
-		`, def.schema, def.table), id, body.Name, body.Slug, body.Region, body.IconKey, body.SortOrder, body.IsActive)
-	case def.hasIconURL:
-		_, err = h.GlobalDB.Exec(r.Context(), fmt.Sprintf(`
-			UPDATE %s.%s SET
-				name = COALESCE($2, name),
-				slug = COALESCE($3, slug),
-				icon_url = COALESCE($4, icon_url),
-				sort_order = COALESCE($5, sort_order),
-				is_active = COALESCE($6, is_active),
-				updated_at = now()
-			WHERE id = $1
-		`, def.schema, def.table), id, body.Name, body.Slug, body.IconURL, body.SortOrder, body.IsActive)
-	case def.hasEmoji:
-		_, err = h.GlobalDB.Exec(r.Context(), fmt.Sprintf(`
-			UPDATE %s.%s SET
-				name = COALESCE($2, name),
-				slug = COALESCE($3, slug),
-				emoji = COALESCE($4, emoji),
-				sort_order = COALESCE($5, sort_order),
-				is_active = COALESCE($6, is_active),
-				updated_at = now()
-			WHERE id = $1
-		`, def.schema, def.table), id, body.Name, body.Slug, body.Emoji, body.SortOrder, body.IsActive)
-	case def.hasIconKey:
-		_, err = h.GlobalDB.Exec(r.Context(), fmt.Sprintf(`
-			UPDATE %s.%s SET
-				name = COALESCE($2, name),
-				slug = COALESCE($3, slug),
-				icon_key = COALESCE($4, icon_key),
-				sort_order = COALESCE($5, sort_order),
-				is_active = COALESCE($6, is_active),
-				updated_at = now()
-			WHERE id = $1
-		`, def.schema, def.table), id, body.Name, body.Slug, body.IconKey, body.SortOrder, body.IsActive)
-	default:
-		_, err = h.GlobalDB.Exec(r.Context(), fmt.Sprintf(`
-			UPDATE %s.%s SET
-				name = COALESCE($2, name),
-				slug = COALESCE($3, slug),
-				sort_order = COALESCE($4, sort_order),
-				is_active = COALESCE($5, is_active),
-				updated_at = now()
-			WHERE id = $1
-		`, def.schema, def.table), id, body.Name, body.Slug, body.SortOrder, body.IsActive)
-	}
+	err = h.updateCatalogRow(r.Context(), def, &body, id)
 	if err != nil {
 		response.Error(w, r, err)
 		return
@@ -353,6 +210,181 @@ func (h *AdminHandler) patchCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 	h.audit(r, "catalogs.patch", typeName, id.String(), nil)
 	response.Success(w, r, http.StatusOK, item)
+}
+
+// catalogColumn is one column and its value in a generated catalog INSERT or UPDATE.
+type catalogColumn struct {
+	name  string
+	value any
+}
+
+func trimmed(p *string) string { return strings.TrimSpace(*p) }
+
+func catalogValidation(msg string) error {
+	return apperror.New(apperror.CodeValidationError, msg)
+}
+
+// insertCatalogColumns validates body for the catalog shape and returns the columns to insert.
+func insertCatalogColumns(def catalogDef, body *catalogCreateBody) ([]catalogColumn, error) {
+	sortOrder := 0
+	if body.SortOrder != nil {
+		sortOrder = *body.SortOrder
+	}
+	active := true
+	if body.IsActive != nil {
+		active = *body.IsActive
+	}
+	tail := []catalogColumn{{"sort_order", sortOrder}, {"is_active", active}}
+
+	switch {
+	case def.hasLabel:
+		return insertLabelColumns(body, tail[0])
+	case def.hasDesc:
+		return insertDescriptionColumns(body, tail)
+	case def.hasRegion:
+		return insertRegionColumns(body, tail)
+	case def.hasIconURL:
+		return insertIconURLColumns(body, tail)
+	default:
+		return insertNamedColumns(def, body, tail)
+	}
+}
+
+func insertLabelColumns(body *catalogCreateBody, order catalogColumn) ([]catalogColumn, error) {
+	if body.Label == nil || strings.TrimSpace(*body.Label) == "" {
+		return nil, catalogValidation("label is required")
+	}
+	return []catalogColumn{
+		{"label", trimmed(body.Label)}, {"min_size", body.MinSize}, {"max_size", body.MaxSize}, order,
+	}, nil
+}
+
+func insertDescriptionColumns(body *catalogCreateBody, tail []catalogColumn) ([]catalogColumn, error) {
+	if body.Description == nil || body.Slug == nil {
+		return nil, catalogValidation("description and slug are required")
+	}
+	return append([]catalogColumn{
+		{"description", trimmed(body.Description)}, {"slug", trimmed(body.Slug)}, {"emoji", body.Emoji},
+	}, tail...), nil
+}
+
+func insertRegionColumns(body *catalogCreateBody, tail []catalogColumn) ([]catalogColumn, error) {
+	if body.Name == nil || body.Slug == nil || body.Region == nil {
+		return nil, catalogValidation("name, slug, and region are required")
+	}
+	if _, err := region.ParseRegion(*body.Region); err != nil {
+		return nil, catalogValidation(apperror.MsgInvalidRegion)
+	}
+	return append([]catalogColumn{
+		{"name", trimmed(body.Name)}, {"slug", trimmed(body.Slug)},
+		{"region", *body.Region}, {"icon_key", body.IconKey},
+	}, tail...), nil
+}
+
+func insertIconURLColumns(body *catalogCreateBody, tail []catalogColumn) ([]catalogColumn, error) {
+	if body.Name == nil || body.Slug == nil || body.IconURL == nil {
+		return nil, catalogValidation("name, slug, and icon_url are required")
+	}
+	return append([]catalogColumn{
+		{"name", trimmed(body.Name)}, {"slug", trimmed(body.Slug)}, {"icon_url", trimmed(body.IconURL)},
+	}, tail...), nil
+}
+
+func insertNamedColumns(def catalogDef, body *catalogCreateBody, tail []catalogColumn) ([]catalogColumn, error) {
+	if body.Name == nil || body.Slug == nil {
+		return nil, catalogValidation("name and slug are required")
+	}
+	cols := []catalogColumn{{"name", trimmed(body.Name)}, {"slug", trimmed(body.Slug)}}
+	switch {
+	case def.hasEmoji:
+		cols = append(cols, catalogColumn{"emoji", body.Emoji})
+	case def.hasIconKey:
+		cols = append(cols, catalogColumn{"icon_key", body.IconKey})
+	}
+	return append(cols, tail...), nil
+}
+
+// updateCatalogColumns returns the columns a PATCH may change for the catalog shape.
+func updateCatalogColumns(def catalogDef, body *catalogCreateBody) ([]catalogColumn, error) {
+	order := catalogColumn{"sort_order", body.SortOrder}
+	isActive := catalogColumn{"is_active", body.IsActive}
+	nameSlug := []catalogColumn{{"name", body.Name}, {"slug", body.Slug}}
+
+	switch {
+	case def.hasLabel:
+		return []catalogColumn{
+			{"label", body.Label}, {"min_size", body.MinSize}, {"max_size", body.MaxSize}, order,
+		}, nil
+	case def.hasDesc:
+		return []catalogColumn{
+			{"description", body.Description}, {"slug", body.Slug}, {"emoji", body.Emoji}, order, isActive,
+		}, nil
+	case def.hasRegion:
+		if body.Region != nil {
+			if _, err := region.ParseRegion(*body.Region); err != nil {
+				return nil, catalogValidation(apperror.MsgInvalidRegion)
+			}
+		}
+		return append(nameSlug,
+			catalogColumn{"region", body.Region}, catalogColumn{"icon_key", body.IconKey}, order, isActive), nil
+	case def.hasIconURL:
+		return append(nameSlug, catalogColumn{"icon_url", body.IconURL}, order, isActive), nil
+	case def.hasEmoji:
+		return append(nameSlug, catalogColumn{"emoji", body.Emoji}, order, isActive), nil
+	case def.hasIconKey:
+		return append(nameSlug, catalogColumn{"icon_key", body.IconKey}, order, isActive), nil
+	default:
+		return append(nameSlug, order, isActive), nil
+	}
+}
+
+// insertCatalogRow validates body and inserts a new catalog entry.
+func (h *AdminHandler) insertCatalogRow(
+	ctx context.Context,
+	def catalogDef,
+	body *catalogCreateBody,
+	id uuid.UUID,
+) error {
+	cols, err := insertCatalogColumns(def, body)
+	if err != nil {
+		return err
+	}
+	names := []string{"id"}
+	placeholders := []string{"$1"}
+	args := []any{id}
+	for i, c := range cols {
+		names = append(names, c.name)
+		placeholders = append(placeholders, "$"+strconv.Itoa(i+2))
+		args = append(args, c.value)
+	}
+	sql := fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s)",
+		def.schema, def.table, strings.Join(names, ", "), strings.Join(placeholders, ", "))
+	_, err = h.GlobalDB.Exec(ctx, sql, args...)
+	return err
+}
+
+// updateCatalogRow applies the non-nil fields of body to an existing catalog entry.
+func (h *AdminHandler) updateCatalogRow(
+	ctx context.Context,
+	def catalogDef,
+	body *catalogCreateBody,
+	id uuid.UUID,
+) error {
+	cols, err := updateCatalogColumns(def, body)
+	if err != nil {
+		return err
+	}
+	sets := make([]string, 0, len(cols)+1)
+	args := []any{id}
+	for i, c := range cols {
+		n := strconv.Itoa(i + 2)
+		sets = append(sets, c.name+" = COALESCE($"+n+", "+c.name+")")
+		args = append(args, c.value)
+	}
+	sets = append(sets, "updated_at = now()")
+	sql := fmt.Sprintf("UPDATE %s.%s SET %s WHERE id = $1", def.schema, def.table, strings.Join(sets, ", "))
+	_, err = h.GlobalDB.Exec(ctx, sql, args...)
+	return err
 }
 
 func (h *AdminHandler) loadCatalogItem(ctx context.Context, def catalogDef, id uuid.UUID) (json.RawMessage, error) {

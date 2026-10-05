@@ -37,7 +37,11 @@ type IndividualOnboardingHandler struct {
 // NewIndividualOnboardingHandler returns an individual onboarding handler.
 // Tokens is used to reissue JWTs when this submission migrates the account
 // out of the global holding region (see NewProductOnboardingHandler).
-func NewIndividualOnboardingHandler(router *dbrouter.DBRouter, globalDB globalDB, tokens *auth.TokenService) *IndividualOnboardingHandler {
+func NewIndividualOnboardingHandler(
+	router *dbrouter.DBRouter,
+	globalDB globalDB,
+	tokens *auth.TokenService,
+) *IndividualOnboardingHandler {
 	return &IndividualOnboardingHandler{
 		Router:   router,
 		GlobalDB: globalDB,
@@ -111,16 +115,7 @@ func (h *IndividualOnboardingHandler) submitIndividualOnboarding(w http.Response
 	businessTypeID := uuid.MustParse(req.BusinessTypeID)
 	industryID := uuid.MustParse(req.IndustryID)
 
-	// Validate each referenced catalog entry exists.
-	if err := h.ensureIndividualOnboardingCatalogRef(ctx, countryID, query.LookupCountryByID, apperror.MsgInvalidCountryID); err != nil {
-		response.Error(w, r, err)
-		return
-	}
-	if err := h.ensureIndividualOnboardingCatalogRef(ctx, businessTypeID, query.BusinessTypeByID, "unknown business_type_id reference"); err != nil {
-		response.Error(w, r, err)
-		return
-	}
-	if err := h.ensureIndividualOnboardingCatalogRef(ctx, industryID, query.OnboardingIndustryByID, "unknown industry_id reference"); err != nil {
+	if err := h.ensureIndividualRefsExist(ctx, countryID, businessTypeID, industryID); err != nil {
 		response.Error(w, r, err)
 		return
 	}
@@ -129,19 +124,9 @@ func (h *IndividualOnboardingHandler) submitIndividualOnboarding(w http.Response
 	// global account migrates into its real region right here.
 	originalReg := reg
 	if reg == region.RegionGlobal {
-		countrySQL, countryArgs, err := query.LookupCountryByID(countryID)
+		newReg, err := h.migrateForCountry(ctx, userID, countryID)
 		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		var target string
-		if err := h.GlobalDB.QueryRow(ctx, countrySQL, countryArgs...).Scan(new(uuid.UUID), new(string), new(string), &target, new(*string)); err != nil {
-			response.Error(w, r, apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID))
-			return
-		}
-		newReg, err := migrateUserToRegion(ctx, h.Router, h.GlobalDB, userID, region.Region(target))
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
+			response.Error(w, r, err)
 			return
 		}
 		reg = newReg
@@ -152,65 +137,8 @@ func (h *IndividualOnboardingHandler) submitIndividualOnboarding(w http.Response
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
-
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	defer rollbackOnError(ctx, tx)
-
-	// Persist individual profile fields on the user row.
-	userSQL, userArgs, err := query.UpdateAccountUserIndividualProfile(userID, req.FirstName, req.LastName, countryID)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if _, err := tx.Exec(ctx, userSQL, userArgs...); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	// Save business type, industry, and employee count on the individual user's row.
-	bizSQL, bizArgs, err := query.UpdateIndividualUserBusinessDetails(userID, businessTypeID, industryID, req.NoOfEmployees)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if _, err := tx.Exec(ctx, bizSQL, bizArgs...); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	// Advance onboarding progress now that the profile step is complete.
-	progressLookupSQL, progressLookupArgs, err := query.LookupOnboardingProgress(userID)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	var currentStep string
-	var completedSteps []string
-	if err := tx.QueryRow(ctx, progressLookupSQL, progressLookupArgs...).Scan(&userID, &currentStep, &completedSteps); err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		currentStep, completedSteps = onboarding.InitialProgress()
-	}
-	completedSteps = onboarding.AdvanceCompleted(completedSteps, onboarding.StepProfile)
-	currentStep = onboarding.StepProfile
-	progressSQL, progressArgs, err := query.UpsertOnboardingProgress(userID, currentStep, completedSteps)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if _, err := tx.Exec(ctx, progressSQL, progressArgs...); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
+	if err = persistIndividualOnboarding(ctx, pool, userID, &req, countryID, businessTypeID, industryID); err != nil {
+		response.Error(w, r, err)
 		return
 	}
 
@@ -238,6 +166,117 @@ func (h *IndividualOnboardingHandler) submitIndividualOnboarding(w http.Response
 		NoOfEmployees:  req.NoOfEmployees,
 		Tokens:         tokens,
 	})
+}
+
+// ensureIndividualRefsExist checks that every referenced catalog entry exists.
+func (h *IndividualOnboardingHandler) ensureIndividualRefsExist(
+	ctx context.Context,
+	countryID, businessTypeID, industryID uuid.UUID,
+) error {
+	refs := []struct {
+		id    uuid.UUID
+		build func(uuid.UUID) (string, []any, error)
+		msg   string
+	}{
+		{countryID, query.LookupCountryByID, apperror.MsgInvalidCountryID},
+		{businessTypeID, query.BusinessTypeByID, "unknown business_type_id reference"},
+		{industryID, query.OnboardingIndustryByID, "unknown industry_id reference"},
+	}
+	for _, ref := range refs {
+		if err := h.ensureIndividualOnboardingCatalogRef(ctx, ref.id, ref.build, ref.msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migrateForCountry moves a still-global account into the region of the given country.
+func (h *IndividualOnboardingHandler) migrateForCountry(
+	ctx context.Context,
+	userID, countryID uuid.UUID,
+) (region.Region, error) {
+	countrySQL, countryArgs, err := query.LookupCountryByID(countryID)
+	if err != nil {
+		return region.RegionUnknown, apperror.ErrInternal
+	}
+	var target string
+	if scanErr := h.GlobalDB.QueryRow(ctx, countrySQL, countryArgs...).
+		Scan(new(uuid.UUID), new(string), new(string), &target, new(*string)); scanErr != nil {
+		return region.RegionUnknown, apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID)
+	}
+	newReg, err := migrateUserToRegion(ctx, h.Router, h.GlobalDB, userID, region.Region(target))
+	if err != nil {
+		return region.RegionUnknown, apperror.ErrInternal
+	}
+	return newReg, nil
+}
+
+// persistIndividualOnboarding writes the individual's profile and business details
+// and marks the profile step complete, in one transaction.
+func persistIndividualOnboarding(
+	ctx context.Context,
+	pool dataPool,
+	userID uuid.UUID,
+	req *individualOnboardingRequest,
+	countryID, businessTypeID, industryID uuid.UUID,
+) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	defer rollbackOnError(ctx, tx)
+
+	// Persist individual profile fields on the user row.
+	userSQL, userArgs, err := query.UpdateAccountUserIndividualProfile(userID, req.FirstName, req.LastName, countryID)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	if _, execErr := tx.Exec(ctx, userSQL, userArgs...); execErr != nil {
+		return apperror.ErrInternal
+	}
+
+	// Save business type, industry, and employee count on the individual user's row.
+	bizSQL, bizArgs, err := query.UpdateIndividualUserBusinessDetails(
+		userID, businessTypeID, industryID, req.NoOfEmployees,
+	)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	if _, execErr := tx.Exec(ctx, bizSQL, bizArgs...); execErr != nil {
+		return apperror.ErrInternal
+	}
+
+	if err = advanceProfileProgress(ctx, tx, userID); err != nil {
+		return apperror.ErrInternal
+	}
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		return apperror.ErrInternal
+	}
+	return nil
+}
+
+// advanceProfileProgress marks the profile step complete for the user.
+func advanceProfileProgress(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error {
+	lookupSQL, lookupArgs, err := query.LookupOnboardingProgress(userID)
+	if err != nil {
+		return err
+	}
+	var currentStep string
+	var completedSteps []string
+	if scanErr := tx.QueryRow(ctx, lookupSQL, lookupArgs...).
+		Scan(new(uuid.UUID), &currentStep, &completedSteps); scanErr != nil {
+		if !errors.Is(scanErr, pgx.ErrNoRows) {
+			return scanErr
+		}
+		_, completedSteps = onboarding.InitialProgress()
+	}
+	completedSteps = onboarding.AdvanceCompleted(completedSteps, onboarding.StepProfile)
+	upsertSQL, upsertArgs, err := query.UpsertOnboardingProgress(userID, onboarding.StepProfile, completedSteps)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, upsertSQL, upsertArgs...)
+	return err
 }
 
 // ensureIndividualOnboardingCatalogRef validates that a UUID resolves to an active catalog row.

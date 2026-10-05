@@ -156,12 +156,12 @@ func (t textType) ValidateAnswer(cfg, answer json.RawMessage) error {
 	if err := json.Unmarshal(answer, &s); err != nil {
 		return errors.New("answer must be a string")
 	}
-	max := c.MaxLength
-	if max == 0 {
-		max = t.defaultMax
+	maxLen := c.MaxLength
+	if maxLen == 0 {
+		maxLen = t.defaultMax
 	}
-	if n := utf8.RuneCountInString(strings.TrimSpace(s)); n > max {
-		return fmt.Errorf("answer is longer than %d characters", max)
+	if n := utf8.RuneCountInString(strings.TrimSpace(s)); n > maxLen {
+		return fmt.Errorf("answer is longer than %d characters", maxLen)
 	}
 	return nil
 }
@@ -223,7 +223,8 @@ func (emailType) ValidateAnswer(_, answer json.RawMessage) error {
 		return errors.New("answer must be a string")
 	}
 	addr, err := mail.ParseAddress(strings.TrimSpace(s))
-	if err != nil || addr.Address != strings.TrimSpace(s) || !strings.Contains(addr.Address[strings.LastIndex(addr.Address, "@"):], ".") {
+	if err != nil || addr.Address != strings.TrimSpace(s) ||
+		!strings.Contains(addr.Address[strings.LastIndex(addr.Address, "@"):], ".") {
 		return errors.New("answer must be a valid email address")
 	}
 	return nil
@@ -491,18 +492,18 @@ type dateType struct{}
 
 func (dateType) Key() string { return "date" }
 
-func parseBounds(c dateConfig) (min, max time.Time, err error) {
+func parseBounds(c dateConfig) (minDate, maxDate time.Time, err error) {
 	if c.MinDate != "" {
-		if min, err = time.Parse("2006-01-02", c.MinDate); err != nil {
-			return min, max, errors.New("min_date must be an ISO date")
+		if minDate, err = time.Parse("2006-01-02", c.MinDate); err != nil {
+			return minDate, maxDate, errors.New("min_date must be an ISO date")
 		}
 	}
 	if c.MaxDate != "" {
-		if max, err = time.Parse("2006-01-02", c.MaxDate); err != nil {
-			return min, max, errors.New("max_date must be an ISO date")
+		if maxDate, err = time.Parse("2006-01-02", c.MaxDate); err != nil {
+			return minDate, maxDate, errors.New("max_date must be an ISO date")
 		}
 	}
-	return min, max, nil
+	return minDate, maxDate, nil
 }
 
 func (dateType) ValidateConfig(cfg json.RawMessage) error {
@@ -510,11 +511,11 @@ func (dateType) ValidateConfig(cfg json.RawMessage) error {
 	if err := decodeStrict(cfg, &c); err != nil {
 		return err
 	}
-	min, max, err := parseBounds(c)
+	minDate, maxDate, err := parseBounds(c)
 	if err != nil {
 		return err
 	}
-	if !min.IsZero() && !max.IsZero() && min.After(max) {
+	if !minDate.IsZero() && !maxDate.IsZero() && minDate.After(maxDate) {
 		return errors.New("min_date must not be after max_date")
 	}
 	return nil
@@ -525,22 +526,22 @@ func (dateType) ValidateAnswer(cfg, answer json.RawMessage) error {
 	if err := decodeStrict(cfg, &c); err != nil {
 		return err
 	}
-	min, max, err := parseBounds(c)
+	minDate, maxDate, err := parseBounds(c)
 	if err != nil {
 		return err
 	}
 	var s string
-	if err := json.Unmarshal(answer, &s); err != nil {
+	if unmarshalErr := json.Unmarshal(answer, &s); unmarshalErr != nil {
 		return errors.New("answer must be a string")
 	}
 	d, err := time.Parse("2006-01-02", s)
 	if err != nil {
 		return errors.New("answer must be an ISO date")
 	}
-	if !min.IsZero() && d.Before(min) {
+	if !minDate.IsZero() && d.Before(minDate) {
 		return fmt.Errorf("date must be on or after %s", c.MinDate)
 	}
-	if !max.IsZero() && d.After(max) {
+	if !maxDate.IsZero() && d.After(maxDate) {
 		return fmt.Errorf("date must be on or before %s", c.MaxDate)
 	}
 	return nil

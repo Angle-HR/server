@@ -35,9 +35,10 @@ const (
 	FormEDIViewNamed  Permission = "form.edi.view_named"
 )
 
-// Roles are the seven organization roles. A member can hold several.
+// Role is one of the seven organization roles. A member can hold several.
 type Role string
 
+// Organization roles.
 const (
 	RoleFounder     Role = "founder"
 	RoleHR1         Role = "hr_1"

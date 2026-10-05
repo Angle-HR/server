@@ -13,6 +13,9 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
+// randomTokenBytes is the entropy of generated tokens (256 bits).
+const randomTokenBytes = 32
+
 const (
 	resetKeyPrefix = "auth:reset:"
 	resetTTL       = time.Hour
@@ -89,7 +92,7 @@ func ResetTTLSeconds() int {
 }
 
 func newOpaqueToken() (string, error) {
-	buf := make([]byte, 32)
+	buf := make([]byte, randomTokenBytes)
 	if _, err := rand.Read(buf); err != nil {
 		return "", fmt.Errorf("generate reset token: %w", err)
 	}

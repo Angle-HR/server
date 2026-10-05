@@ -9,12 +9,14 @@ import (
 	"github.com/Angle-HR/server/internal/mailer"
 )
 
+// EmailWorker sends queued emails through the mailer.
 type EmailWorker struct {
 	fluvio.WorkerDefaults[mailer.EmailArgs]
 	Mailer *mailer.Mailer
 	Logger *slog.Logger
 }
 
+// Work sends one email job.
 func (w *EmailWorker) Work(ctx context.Context, job *fluvio.Job[mailer.EmailArgs]) error {
 	logger := w.Logger
 	if logger == nil {

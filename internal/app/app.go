@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,11 +24,15 @@ import (
 	"github.com/Angle-HR/server/internal/handler"
 	"github.com/Angle-HR/server/internal/onboarding"
 	"github.com/Angle-HR/server/internal/queue"
+	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/config"
 	"github.com/Angle-HR/server/pkg/db"
 	"github.com/Angle-HR/server/pkg/logger"
 	redisclient "github.com/Angle-HR/server/pkg/redis"
 )
+
+// corsMaxAgeSeconds is how long browsers may cache CORS preflight results.
+const corsMaxAgeSeconds = 300
 
 const (
 	readHeaderTimeout   = 5 * time.Second
@@ -36,6 +41,48 @@ const (
 	idleTimeout         = 60 * time.Second
 	maxRequestBodyBytes = 1 << 20 // 1 MB
 )
+
+// bootstrapAdmin creates the initial admin account when bootstrap credentials are configured.
+func bootstrapAdmin(ctx context.Context, cfg config.Config, store *admin.Store) error {
+	if cfg.AdminBootstrapEmail == "" || cfg.AdminBootstrapPassword == "" {
+		return nil
+	}
+	hash, err := auth.HashPassword(cfg.AdminBootstrapPassword)
+	if err != nil {
+		return fmt.Errorf("hash admin bootstrap password: %w", err)
+	}
+	if err = admin.Bootstrap(ctx, store, admin.BootstrapConfig{
+		Email:        cfg.AdminBootstrapEmail,
+		PasswordHash: hash,
+		Name:         cfg.AdminBootstrapName,
+	}); err != nil {
+		return fmt.Errorf("bootstrap admin: %w", err)
+	}
+	return nil
+}
+
+// useCommonMiddleware installs body limits, request IDs, logging, panic recovery and CORS.
+func useCommonMiddleware(router chi.Router, cfg config.Config, log *slog.Logger) {
+	router.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+			next.ServeHTTP(w, r)
+		})
+	})
+	router.Use(chimiddleware.RequestID)
+	router.Use(chimiddleware.RealIP)
+	router.Use(logger.RequestLogger(log))
+	router.Use(chimiddleware.Recoverer)
+	if len(cfg.CORSAllowedOrigins) > 0 {
+		router.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   cfg.CORSAllowedOrigins,
+			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+			AllowCredentials: false,
+			MaxAge:           corsMaxAgeSeconds,
+		}))
+	}
+}
 
 // Run starts the HTTP server and blocks until shutdown.
 func Run() error {
@@ -51,7 +98,7 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("connect redis: %w", err)
 	}
-	defer redisClient.Close()
+	defer func() { besteffort.Log(context.Background(), "redisClient.Close", redisClient.Close()) }()
 
 	regionConfigs, err := dbrouter.LoadConfigsFromEnv()
 	if err != nil {
@@ -70,8 +117,8 @@ func Run() error {
 	}
 	defer globalPool.Close()
 
-	if err := queue.Migrate(ctx, globalPool); err != nil {
-		return fmt.Errorf("apply Fluvio migrations: %w", err)
+	if migrateErr := queue.Migrate(ctx, globalPool); migrateErr != nil {
+		return fmt.Errorf("apply Fluvio migrations: %w", migrateErr)
 	}
 
 	fluvioClient, err := queue.NewInsertClient(globalPool)
@@ -90,18 +137,8 @@ func Run() error {
 	authMiddleware := auth.NewMiddleware(tokenService)
 
 	adminStore := admin.NewStore(globalPool)
-	if cfg.AdminBootstrapEmail != "" && cfg.AdminBootstrapPassword != "" {
-		hash, err := auth.HashPassword(cfg.AdminBootstrapPassword)
-		if err != nil {
-			return fmt.Errorf("hash admin bootstrap password: %w", err)
-		}
-		if err := admin.Bootstrap(ctx, adminStore, admin.BootstrapConfig{
-			Email:        cfg.AdminBootstrapEmail,
-			PasswordHash: hash,
-			Name:         cfg.AdminBootstrapName,
-		}); err != nil {
-			return fmt.Errorf("bootstrap admin: %w", err)
-		}
+	if bootstrapErr := bootstrapAdmin(ctx, cfg, adminStore); bootstrapErr != nil {
+		return bootstrapErr
 	}
 	adminMiddleware := auth.NewAdminMiddleware(tokenService, adminStore)
 
@@ -117,28 +154,18 @@ func Run() error {
 	}
 	individualOnboardingHandler := handler.NewIndividualOnboardingHandler(dbRouter, globalPool, tokenService)
 	businessOnboardingHandler := handler.NewBusinessOnboardingHandler(dbRouter, globalPool, tokenService)
-	adminHandler := handler.NewAdminHandler(adminStore, dbRouter, globalPool, redisClient, tokenService, fluvioClient, fluvioClient)
+	adminHandler := handler.NewAdminHandler(
+		adminStore,
+		dbRouter,
+		globalPool,
+		redisClient,
+		tokenService,
+		fluvioClient,
+		fluvioClient,
+	)
 
 	router := chi.NewRouter()
-	router.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
-			next.ServeHTTP(w, r)
-		})
-	})
-	router.Use(chimiddleware.RequestID)
-	router.Use(chimiddleware.RealIP)
-	router.Use(logger.RequestLogger(log))
-	router.Use(chimiddleware.Recoverer)
-	if len(cfg.CORSAllowedOrigins) > 0 {
-		router.Use(cors.Handler(cors.Options{
-			AllowedOrigins:   cfg.CORSAllowedOrigins,
-			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
-			AllowCredentials: false,
-			MaxAge:           300,
-		}))
-	}
+	useCommonMiddleware(router, cfg, log)
 
 	if docs.IsEnabled(cfg.AppEnv) {
 		docs.RegisterRoutes(router, docs.Config{PublicAPIURL: cfg.PublicAPIURL})
@@ -181,9 +208,17 @@ func Run() error {
 		IdleTimeout:       idleTimeout,
 	}
 
+	return serve(server, cfg, log)
+}
+
+// serve runs the HTTP server until it fails or a shutdown signal arrives, then shuts it down gracefully.
+func serve(server *http.Server, cfg config.Config, log *slog.Logger) error {
 	errCh := make(chan error, 1)
 	go func() {
-		level, _ := logger.ParseLevel(cfg.LogLevel, cfg.AppEnv)
+		level, levelErr := logger.ParseLevel(cfg.LogLevel, cfg.AppEnv)
+		if levelErr != nil {
+			log.Warn("invalid log level, using fallback", "error", levelErr)
+		}
 		log.Info("server listening", "addr", server.Addr, "env", cfg.AppEnv, "log_level", level.String())
 		if serveErr := server.ListenAndServe(); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
 			errCh <- fmt.Errorf("listen and serve: %w", serveErr)

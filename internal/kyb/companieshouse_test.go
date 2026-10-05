@@ -45,10 +45,38 @@ func TestCompaniesHouseOutcomes(t *testing.T) {
 	}{
 		{"verified", 200, activeBody, nil, OutcomeVerified, ""},
 		{"number not found", 404, `{}`, nil, OutcomeFailed, ReasonNumberNotFound},
-		{"dissolved", 200, strings.Replace(activeBody, `"active"`, `"dissolved"`, 1), nil, OutcomeFailed, ReasonInactiveEntity},
-		{"liquidation", 200, strings.Replace(activeBody, `"active"`, `"liquidation"`, 1), nil, OutcomeFailed, ReasonInactiveEntity},
-		{"name mismatch", 200, activeBody, func(r *Request) { r.LegalName = "Acme Trading" }, OutcomeFailed, ReasonNameMismatch},
-		{"address mismatch", 200, activeBody, func(r *Request) { r.Address.PostCode = "M1 1AA" }, OutcomeFailed, ReasonAddressMismatch},
+		{
+			"dissolved",
+			200,
+			strings.Replace(activeBody, `"active"`, `"dissolved"`, 1),
+			nil,
+			OutcomeFailed,
+			ReasonInactiveEntity,
+		},
+		{
+			"liquidation",
+			200,
+			strings.Replace(activeBody, `"active"`, `"liquidation"`, 1),
+			nil,
+			OutcomeFailed,
+			ReasonInactiveEntity,
+		},
+		{
+			"name mismatch",
+			200,
+			activeBody,
+			func(r *Request) { r.LegalName = "Acme Trading" },
+			OutcomeFailed,
+			ReasonNameMismatch,
+		},
+		{
+			"address mismatch",
+			200,
+			activeBody,
+			func(r *Request) { r.Address.PostCode = "M1 1AA" },
+			OutcomeFailed,
+			ReasonAddressMismatch,
+		},
 		{"inactive wins over name mismatch", 200, strings.Replace(activeBody, `"active"`, `"dissolved"`, 1),
 			func(r *Request) { r.LegalName = "Other" }, OutcomeFailed, ReasonInactiveEntity},
 	}
@@ -93,7 +121,14 @@ func TestCompaniesHouseCouldNotRun(t *testing.T) {
 		status int
 		want   error
 	}{
-		{401, ErrRegistryAuth}, {403, ErrRegistryAuth}, {429, ErrRateLimited}, {500, ErrRegistryUnavailable}, {503, ErrRegistryUnavailable},
+		{
+			401,
+			ErrRegistryAuth,
+		},
+		{403, ErrRegistryAuth},
+		{429, ErrRateLimited},
+		{500, ErrRegistryUnavailable},
+		{503, ErrRegistryUnavailable},
 	}
 	for _, c := range cases {
 		srv, _ := chServer(t, c.status, `{}`)
@@ -102,7 +137,11 @@ func TestCompaniesHouseCouldNotRun(t *testing.T) {
 			t.Errorf("status %d: err = %v, want %v", c.status, err, c.want)
 		}
 	}
-	if _, err := (&CompaniesHouse{BaseURL: "http://127.0.0.1:1", APIKey: "secret-key"}).Verify(context.Background(), req()); !errors.Is(err, ErrRegistryUnavailable) || strings.Contains(err.Error(), "secret-key") {
+	if _, err := (&CompaniesHouse{BaseURL: "http://127.0.0.1:1", APIKey: "secret-key"}).Verify(
+		context.Background(),
+		req(),
+	); !errors.Is(err, ErrRegistryUnavailable) ||
+		strings.Contains(err.Error(), "secret-key") {
 		t.Errorf("connection error must be ErrRegistryUnavailable without leaking the key, got %v", err)
 	}
 	if _, err := (&CompaniesHouse{}).Verify(context.Background(), req()); !errors.Is(err, ErrRegistryAuth) {

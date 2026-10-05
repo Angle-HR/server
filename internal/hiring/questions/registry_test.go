@@ -37,10 +37,30 @@ func TestValidateConfig(t *testing.T) {
 		{"choice ok", "single_choice", opts, false},
 		{"choice one option", "single_choice", `{"options":[{"id":"a","label":"A"}]}`, true},
 		{"choice dup id", "dropdown", `{"options":[{"id":"a","label":"A"},{"id":"a","label":"B"}]}`, true},
-		{"single with min_selected", "single_choice", `{"options":[{"id":"a","label":"A"},{"id":"b","label":"B"}],"min_selected":1}`, true},
-		{"multi limits ok", "multiple_choice", `{"options":[{"id":"a","label":"A"},{"id":"b","label":"B"}],"min_selected":1,"max_selected":2}`, false},
-		{"multi min>max", "multiple_choice", `{"options":[{"id":"a","label":"A"},{"id":"b","label":"B"}],"min_selected":2,"max_selected":1}`, true},
-		{"searchable only dropdown", "single_choice", `{"options":[{"id":"a","label":"A"},{"id":"b","label":"B"}],"searchable":true}`, true},
+		{
+			"single with min_selected",
+			"single_choice",
+			`{"options":[{"id":"a","label":"A"},{"id":"b","label":"B"}],"min_selected":1}`,
+			true,
+		},
+		{
+			"multi limits ok",
+			"multiple_choice",
+			`{"options":[{"id":"a","label":"A"},{"id":"b","label":"B"}],"min_selected":1,"max_selected":2}`,
+			false,
+		},
+		{
+			"multi min>max",
+			"multiple_choice",
+			`{"options":[{"id":"a","label":"A"},{"id":"b","label":"B"}],"min_selected":2,"max_selected":1}`,
+			true,
+		},
+		{
+			"searchable only dropdown",
+			"single_choice",
+			`{"options":[{"id":"a","label":"A"},{"id":"b","label":"B"}],"searchable":true}`,
+			true,
+		},
 		{"scale ok", "linear_scale", `{"min":1,"max":5}`, false},
 		{"scale bad min", "linear_scale", `{"min":2,"max":5}`, true},
 		{"scale max too big", "linear_scale", `{"min":0,"max":11}`, true},
@@ -122,7 +142,13 @@ func TestValidateAnswer(t *testing.T) {
 func TestValidateForm(t *testing.T) {
 	base := func() []Question {
 		return []Question{
-			{Section: "personal_information", Type: "short_text", Label: "Full name", Required: true, SystemKey: "full_name"},
+			{
+				Section:   "personal_information",
+				Type:      "short_text",
+				Label:     "Full name",
+				Required:  true,
+				SystemKey: "full_name",
+			},
 			{Section: "personal_information", Type: "email", Label: "Email", Required: true, SystemKey: "email"},
 		}
 	}
@@ -157,7 +183,10 @@ func TestValidateForm(t *testing.T) {
 		t.Error("two autofill questions must fail")
 	}
 
-	bad := append(base(), Question{Section: "screening", Type: "single_choice", Label: "Pick", Config: raw(`{"options":[]}`)})
+	bad := append(
+		base(),
+		Question{Section: "screening", Type: "single_choice", Label: "Pick", Config: raw(`{"options":[]}`)},
+	)
 	errs := ValidateForm(bad, nil)
 	if len(errs) != 1 || errs[0].Path != "questions[2].config" {
 		t.Errorf("want path questions[2].config, got %v", errs)

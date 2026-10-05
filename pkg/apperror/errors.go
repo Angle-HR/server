@@ -218,39 +218,28 @@ func PublicDetails(err error) map[string]any {
 	return nil
 }
 
+// publicMessages maps an error code to the message shown to API clients.
+var publicMessages = map[string]string{
+	CodeNotFound:                MsgNotFound,
+	CodeConflict:                MsgEmailAlreadyRegistered,
+	CodeValidationError:         MsgInvalidRequest,
+	CodeUnauthorized:            MsgUnauthorized,
+	CodeForbidden:               MsgForbidden,
+	CodeNotImplemented:          MsgNotImplemented,
+	CodeGone:                    "gone",
+	CodeEmailAlreadyRegistered:  MsgEmailAlreadyRegistered,
+	CodeInvalidVerificationCode: MsgInvalidVerificationCode,
+	CodeVerificationExpired:     MsgVerificationExpired,
+	CodeVerificationRateLimited: MsgVerificationRateLimited,
+	CodeEmailNotVerified:        MsgEmailNotVerified,
+	CodeOnboardingIncomplete:    MsgOnboardingStepIncomplete,
+	CodeInvalidAccountBranch:    MsgInvalidAccountTypeBranch,
+	CodeTooManyAttempts:         MsgTooManyAttempts,
+}
+
 func publicMessageForCode(code string) string {
-	switch code {
-	case CodeNotFound:
-		return MsgNotFound
-	case CodeConflict:
-		return MsgEmailAlreadyRegistered
-	case CodeValidationError:
-		return MsgInvalidRequest
-	case CodeUnauthorized:
-		return MsgUnauthorized
-	case CodeForbidden:
-		return MsgForbidden
-	case CodeNotImplemented:
-		return MsgNotImplemented
-	case CodeGone:
-		return "gone"
-	case CodeEmailAlreadyRegistered:
-		return MsgEmailAlreadyRegistered
-	case CodeInvalidVerificationCode:
-		return MsgInvalidVerificationCode
-	case CodeVerificationExpired:
-		return MsgVerificationExpired
-	case CodeVerificationRateLimited:
-		return MsgVerificationRateLimited
-	case CodeEmailNotVerified:
-		return MsgEmailNotVerified
-	case CodeOnboardingIncomplete:
-		return MsgOnboardingStepIncomplete
-	case CodeInvalidAccountBranch:
-		return MsgInvalidAccountTypeBranch
-	case CodeTooManyAttempts:
-		return MsgTooManyAttempts
-	default:
-		return MsgInternalServerError
+	if msg, ok := publicMessages[code]; ok {
+		return msg
 	}
+	return MsgInternalServerError
 }

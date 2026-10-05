@@ -208,15 +208,15 @@ func TestCountriesList(t *testing.T) {
 		h.RegisterRoutes(r)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/countries", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/countries", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
 	assertStatus(t, rec, http.StatusOK)
 
 	var envelope response.Envelope
-	if err := json.NewDecoder(rec.Body).Decode(&envelope); err != nil {
-		t.Fatalf("decode envelope: %v", err)
+	if decodeErr := json.NewDecoder(rec.Body).Decode(&envelope); decodeErr != nil {
+		t.Fatalf("decode envelope: %v", decodeErr)
 	}
 
 	raw, err := json.Marshal(envelope.Data)
@@ -318,7 +318,7 @@ func testWaitlistRouter(
 func postWaitlist(t *testing.T, router chi.Router, body string) *httptest.ResponseRecorder {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/waitlist", bytes.NewReader([]byte(body)))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/waitlist", bytes.NewReader([]byte(body)))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -401,7 +401,11 @@ func decodeDetailsFields(t *testing.T, body response.ErrorBody) []map[string]str
 		}
 		entry := make(map[string]string, len(m))
 		for k, v := range m {
-			entry[k] = v.(string)
+			str, isString := v.(string)
+			if !isString {
+				t.Fatalf("details.fields value: expected string, got %T", v)
+			}
+			entry[k] = str
 		}
 		result = append(result, entry)
 	}

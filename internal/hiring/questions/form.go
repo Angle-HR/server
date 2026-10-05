@@ -43,55 +43,85 @@ type FieldError struct {
 // declared is the set of special categories the employer has declared a basis for.
 func ValidateForm(qs []Question, declared map[string]bool) []FieldError {
 	var errs []FieldError
-	add := func(i int, field, msg string) {
+	if len(qs) > MaxQuestionsPerForm {
+		errs = append(errs, FieldError{
+			Path:    "questions",
+			Message: fmt.Sprintf("a form can have at most %d questions", MaxQuestionsPerForm),
+		})
+	}
+
+	var seen formCoverage
+	for i := range qs {
+		errs = append(errs, validateQuestion(i, &qs[i], declared)...)
+		seen.note(&qs[i])
+	}
+	return append(errs, seen.problems()...)
+}
+
+// validateQuestion checks a single question.
+func validateQuestion(i int, q *Question, declared map[string]bool) []FieldError {
+	var errs []FieldError
+	add := func(field, msg string) {
 		errs = append(errs, FieldError{Path: fmt.Sprintf("questions[%d].%s", i, field), Message: msg})
 	}
 
-	if len(qs) > MaxQuestionsPerForm {
-		errs = append(errs, FieldError{Path: "questions", Message: fmt.Sprintf("a form can have at most %d questions", MaxQuestionsPerForm)})
+	if !Sections[q.Section] {
+		add("section", "unknown section")
 	}
+	if q.Label == "" {
+		add("label", "label is required")
+	}
+	if err := ValidateConfig(q.Type, q.Config); err != nil {
+		add("config", err.Error())
+	}
+	switch {
+	case q.SpecialCategory == "":
+	case !SpecialCategories[q.SpecialCategory]:
+		add("special_category", "unknown special category")
+	case !declared[q.SpecialCategory]:
+		add("special_category", "this category has not been declared for the job")
+	}
+	switch q.SystemKey {
+	case "full_name":
+		if !q.Required {
+			add("required", "full name is always required")
+		}
+	case "email":
+		if !q.Required {
+			add("required", "email is always required")
+		}
+	}
+	return errs
+}
 
-	hasName, hasEmail, autofill := false, false, 0
-	for i, q := range qs {
-		if !Sections[q.Section] {
-			add(i, "section", "unknown section")
-		}
-		if q.Label == "" {
-			add(i, "label", "label is required")
-		}
-		if err := ValidateConfig(q.Type, q.Config); err != nil {
-			add(i, "config", err.Error())
-		}
-		if q.SpecialCategory != "" {
-			if !SpecialCategories[q.SpecialCategory] {
-				add(i, "special_category", "unknown special category")
-			} else if !declared[q.SpecialCategory] {
-				add(i, "special_category", "this category has not been declared for the job")
-			}
-		}
-		switch q.SystemKey {
-		case "full_name":
-			hasName = true
-			if !q.Required {
-				add(i, "required", "full name is always required")
-			}
-		case "email":
-			hasEmail = true
-			if !q.Required {
-				add(i, "required", "email is always required")
-			}
-		}
-		if q.Type == "autofill_resume" || q.SystemKey == "autofill_resume" {
-			autofill++
-		}
+// formCoverage tracks which mandatory fields a form contains.
+type formCoverage struct {
+	hasName, hasEmail bool
+	autofill          int
+}
+
+func (c *formCoverage) note(q *Question) {
+	switch q.SystemKey {
+	case "full_name":
+		c.hasName = true
+	case "email":
+		c.hasEmail = true
 	}
-	if !hasName {
+	if q.Type == "autofill_resume" || q.SystemKey == "autofill_resume" {
+		c.autofill++
+	}
+}
+
+// problems returns the form-level errors for missing or duplicated fields.
+func (c *formCoverage) problems() []FieldError {
+	var errs []FieldError
+	if !c.hasName {
 		errs = append(errs, FieldError{Path: "questions", Message: "the full name field cannot be removed"})
 	}
-	if !hasEmail {
+	if !c.hasEmail {
 		errs = append(errs, FieldError{Path: "questions", Message: "the email field cannot be removed"})
 	}
-	if autofill > 1 {
+	if c.autofill > 1 {
 		errs = append(errs, FieldError{Path: "questions", Message: "autofill with resume can appear only once"})
 	}
 	return errs

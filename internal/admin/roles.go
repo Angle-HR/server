@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 )
 
 // ListPermissions returns the seeded permission catalog.
@@ -158,7 +160,11 @@ func setRolePermissions(ctx context.Context, tx pgx.Tx, roleID uuid.UUID, permID
 }
 
 // CreateRole creates a custom role with the given permissions.
-func (s *Store) CreateRole(ctx context.Context, slug, name string, permissionSlugs []string) (RoleWithPermissions, error) {
+func (s *Store) CreateRole(
+	ctx context.Context,
+	slug, name string,
+	permissionSlugs []string,
+) (RoleWithPermissions, error) {
 	slug = strings.TrimSpace(strings.ToLower(slug))
 	name = strings.TrimSpace(name)
 	if slug == "" || name == "" {
@@ -169,7 +175,7 @@ func (s *Store) CreateRole(ctx context.Context, slug, name string, permissionSlu
 	if err != nil {
 		return RoleWithPermissions{}, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() { besteffort.Log(ctx, "tx.Rollback", tx.Rollback(ctx)) }()
 
 	permIDs, err := s.resolvePermissionIDs(ctx, tx, permissionSlugs)
 	if err != nil {
@@ -189,8 +195,8 @@ func (s *Store) CreateRole(ctx context.Context, slug, name string, permissionSlu
 		return RoleWithPermissions{}, fmt.Errorf("create role: %w", err)
 	}
 
-	if err := setRolePermissions(ctx, tx, id, permIDs); err != nil {
-		return RoleWithPermissions{}, err
+	if setRolePermissionsErr := setRolePermissions(ctx, tx, id, permIDs); setRolePermissionsErr != nil {
+		return RoleWithPermissions{}, setRolePermissionsErr
 	}
 
 	item, err := s.getRoleWithPermissionsTx(ctx, tx, id)
@@ -204,12 +210,17 @@ func (s *Store) CreateRole(ctx context.Context, slug, name string, permissionSlu
 }
 
 // UpdateRole patches a role name and/or replaces its permissions.
-func (s *Store) UpdateRole(ctx context.Context, id uuid.UUID, name *string, permissionSlugs *[]string) (RoleWithPermissions, error) {
+func (s *Store) UpdateRole(
+	ctx context.Context,
+	id uuid.UUID,
+	name *string,
+	permissionSlugs *[]string,
+) (RoleWithPermissions, error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return RoleWithPermissions{}, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() { besteffort.Log(ctx, "tx.Rollback", tx.Rollback(ctx)) }()
 
 	var slug string
 	var isSystem bool
@@ -221,40 +232,8 @@ func (s *Store) UpdateRole(ctx context.Context, id uuid.UUID, name *string, perm
 		return RoleWithPermissions{}, err
 	}
 
-	if name != nil {
-		trimmed := strings.TrimSpace(*name)
-		if trimmed == "" {
-			return RoleWithPermissions{}, apperror.New(apperror.CodeValidationError, "name cannot be empty")
-		}
-		if _, err := tx.Exec(ctx, `UPDATE admin.roles SET name = $2 WHERE id = $1`, id, trimmed); err != nil {
-			return RoleWithPermissions{}, err
-		}
-	}
-
-	if permissionSlugs != nil {
-		permIDs, err := s.resolvePermissionIDs(ctx, tx, *permissionSlugs)
-		if err != nil {
-			return RoleWithPermissions{}, err
-		}
-		if err := setRolePermissions(ctx, tx, id, permIDs); err != nil {
-			return RoleWithPermissions{}, err
-		}
-		// If editing superadmin permissions, ensure at least one active user still has admins:write.
-		if slug == RoleSuperadmin {
-			var hasWrite bool
-			for _, p := range *permissionSlugs {
-				if p == PermAdminsWrite {
-					hasWrite = true
-					break
-				}
-			}
-			if !hasWrite {
-				return RoleWithPermissions{}, apperror.New(
-					apperror.CodeConflict,
-					"superadmin role must retain admins:write",
-				)
-			}
-		}
+	if updateErr := s.applyRoleUpdates(ctx, tx, id, slug, name, permissionSlugs); updateErr != nil {
+		return RoleWithPermissions{}, updateErr
 	}
 
 	item, err := s.getRoleWithPermissionsTx(ctx, tx, id)
@@ -265,6 +244,42 @@ func (s *Store) UpdateRole(ctx context.Context, id uuid.UUID, name *string, perm
 		return RoleWithPermissions{}, err
 	}
 	return item, nil
+}
+
+// applyRoleUpdates renames the role and/or replaces its permissions inside tx.
+func (s *Store) applyRoleUpdates(
+	ctx context.Context,
+	tx pgx.Tx,
+	id uuid.UUID,
+	slug string,
+	name *string,
+	permissionSlugs *[]string,
+) error {
+	if name != nil {
+		trimmed := strings.TrimSpace(*name)
+		if trimmed == "" {
+			return apperror.New(apperror.CodeValidationError, "name cannot be empty")
+		}
+		if _, err := tx.Exec(ctx, `UPDATE admin.roles SET name = $2 WHERE id = $1`, id, trimmed); err != nil {
+			return err
+		}
+	}
+	if permissionSlugs == nil {
+		return nil
+	}
+
+	permIDs, err := s.resolvePermissionIDs(ctx, tx, *permissionSlugs)
+	if err != nil {
+		return err
+	}
+	if setErr := setRolePermissions(ctx, tx, id, permIDs); setErr != nil {
+		return setErr
+	}
+	// The superadmin role must keep admins:write so someone can always manage admins.
+	if slug == RoleSuperadmin && !slices.Contains(*permissionSlugs, PermAdminsWrite) {
+		return apperror.New(apperror.CodeConflict, "superadmin role must retain admins:write")
+	}
+	return nil
 }
 
 // DeleteRole deletes a non-system role that is not assigned to any user.
@@ -282,8 +297,9 @@ func (s *Store) DeleteRole(ctx context.Context, id uuid.UUID) error {
 	}
 
 	var assigned int
-	if err := s.DB.QueryRow(ctx, `SELECT COUNT(*) FROM admin.user_roles WHERE role_id = $1`, id).Scan(&assigned); err != nil {
-		return err
+	if scanErr := s.DB.QueryRow(ctx, `SELECT COUNT(*) FROM admin.user_roles WHERE role_id = $1`, id).
+		Scan(&assigned); scanErr != nil {
+		return scanErr
 	}
 	if assigned > 0 {
 		return apperror.New(apperror.CodeConflict, "role is still assigned to staff")

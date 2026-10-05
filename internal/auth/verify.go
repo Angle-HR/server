@@ -9,6 +9,8 @@ import (
 
 	"github.com/google/uuid"
 	goredis "github.com/redis/go-redis/v9"
+
+	"github.com/Angle-HR/server/pkg/besteffort"
 )
 
 const (
@@ -127,7 +129,10 @@ func (s *VerificationStore) ValidateCode(ctx context.Context, sessionID, code st
 
 // ValidateCodeForPurpose checks the OTP and optionally enforces session purpose.
 // Empty wantPurpose accepts email_verify sessions (including legacy sessions with empty purpose).
-func (s *VerificationStore) ValidateCodeForPurpose(ctx context.Context, sessionID, code, wantPurpose string) (VerificationSession, error) {
+func (s *VerificationStore) ValidateCodeForPurpose(
+	ctx context.Context,
+	sessionID, code, wantPurpose string,
+) (VerificationSession, error) {
 	session, err := s.GetSession(ctx, sessionID)
 	if err != nil {
 		return VerificationSession{}, err
@@ -145,13 +150,13 @@ func (s *VerificationStore) ValidateCodeForPurpose(ctx context.Context, sessionI
 	}
 
 	if session.Attempts >= maxVerifyAttempts {
-		_ = s.DeleteSession(ctx, sessionID)
+		besteffort.Log(ctx, "s.DeleteSession", s.DeleteSession(ctx, sessionID))
 		return VerificationSession{}, ErrInvalidVerificationCode
 	}
 
 	if session.Code != code {
 		session.Attempts++
-		_ = s.ReplaceSession(ctx, session)
+		besteffort.Log(ctx, "s.ReplaceSession", s.ReplaceSession(ctx, session))
 		return VerificationSession{}, ErrInvalidVerificationCode
 	}
 

@@ -5,6 +5,9 @@ import (
 	"fmt"
 )
 
+// systemKeyEmail is the mandatory application field for an email address.
+const systemKeyEmail = "email"
+
 // Sections a question can belong to.
 var Sections = map[string]bool{
 	"personal_information": true,
@@ -86,7 +89,7 @@ func validateQuestion(i int, q *Question, declared map[string]bool) []FieldError
 		if !q.Required {
 			add("required", "full name is always required")
 		}
-	case "email":
+	case systemKeyEmail:
 		if !q.Required {
 			add("required", "email is always required")
 		}
@@ -104,7 +107,7 @@ func (c *formCoverage) note(q *Question) {
 	switch q.SystemKey {
 	case "full_name":
 		c.hasName = true
-	case "email":
+	case systemKeyEmail:
 		c.hasEmail = true
 	}
 	if q.Type == "autofill_resume" || q.SystemKey == "autofill_resume" {

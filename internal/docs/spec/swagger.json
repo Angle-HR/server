@@ -1132,6 +1132,9 @@
                 "legal_full_name": {
                     "type": "string"
                 },
+                "tokens": {
+                    "$ref": "#/definitions/internal_handler.RegionReissue"
+                },
                 "user_id": {
                     "type": "string"
                 }
@@ -1431,6 +1434,9 @@
                 "no_of_employees": {
                     "type": "integer"
                 },
+                "tokens": {
+                    "$ref": "#/definitions/internal_handler.RegionReissue"
+                },
                 "user_id": {
                     "type": "string"
                 }
@@ -1464,6 +1470,165 @@
                 },
                 "meta": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.KYBAddress": {
+            "properties": {
+                "city": {
+                    "type": "string"
+                },
+                "country": {
+                    "type": "string"
+                },
+                "line1": {
+                    "type": "string"
+                },
+                "line2": {
+                    "type": "string"
+                },
+                "post_code": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.KYBChangeCountryRequest": {
+            "properties": {
+                "country_code": {
+                    "example": "KE",
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.KYBConfirmAddressRequest": {
+            "properties": {
+                "address_type": {
+                    "enum": [
+                        "registered",
+                        "trading"
+                    ],
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.KYBRetryRequest": {
+            "properties": {
+                "legal_name": {
+                    "type": "string"
+                },
+                "registration_number": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.KYBStatusData": {
+            "properties": {
+                "address_confirmable": {
+                    "type": "boolean"
+                },
+                "can_publish": {
+                    "type": "boolean"
+                },
+                "can_retry": {
+                    "type": "boolean"
+                },
+                "checked_at": {
+                    "type": "string"
+                },
+                "country_code": {
+                    "type": "string"
+                },
+                "display": {
+                    "enum": [
+                        "verified",
+                        "pending_review",
+                        "action_required",
+                        "failed",
+                        "not_started"
+                    ],
+                    "type": "string"
+                },
+                "failure_reason": {
+                    "type": "string"
+                },
+                "light_retry": {
+                    "type": "boolean"
+                },
+                "name_confirmable": {
+                    "type": "boolean"
+                },
+                "registered_address": {
+                    "type": "string"
+                },
+                "registry_name": {
+                    "type": "string"
+                },
+                "status": {
+                    "enum": [
+                        "not_started",
+                        "pending",
+                        "verified",
+                        "failed"
+                    ],
+                    "type": "string"
+                },
+                "tier": {
+                    "type": "integer"
+                },
+                "verified_at": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.KYBStatusEnvelope": {
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.KYBStatusData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.KYBSubmitRequest": {
+            "properties": {
+                "address": {
+                    "$ref": "#/definitions/internal_handler.KYBAddress"
+                },
+                "address_type": {
+                    "enum": [
+                        "registered",
+                        "trading"
+                    ],
+                    "type": "string"
+                },
+                "country_code": {
+                    "example": "GB",
+                    "type": "string"
+                },
+                "identifiers": {
+                    "additionalProperties": {
+                        "type": "string"
+                    },
+                    "type": "object"
+                },
+                "legal_name": {
+                    "example": "Acme Ltd",
+                    "type": "string"
+                },
+                "registration_number": {
+                    "example": "01234567",
+                    "type": "string"
                 }
             },
             "type": "object"
@@ -1568,6 +1733,9 @@
                 },
                 "state_or_county": {
                     "type": "string"
+                },
+                "tokens": {
+                    "$ref": "#/definitions/internal_handler.RegionReissue"
                 },
                 "verification_status": {
                     "enum": [
@@ -1909,6 +2077,9 @@
                 "region": {
                     "example": "uk",
                     "type": "string"
+                },
+                "tokens": {
+                    "$ref": "#/definitions/internal_handler.RegionReissue"
                 }
             },
             "type": "object"
@@ -1995,6 +2166,23 @@
                 },
                 "slug": {
                     "example": "angle",
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.RegionReissue": {
+            "properties": {
+                "access_token": {
+                    "example": "eyJhbGciOiJIUzI1NiIs...",
+                    "type": "string"
+                },
+                "expires_in": {
+                    "example": 3600,
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "example": "eyJhbGciOiJIUzI1NiIs...",
                     "type": "string"
                 }
             },
@@ -4384,7 +4572,7 @@
                 "consumes": [
                     "application/json"
                 ],
-                "description": "Creates an unverified user in AUTH_DEFAULT_REGION (default uk) and enqueues a 6-digit verification email. OTP expires in 300 seconds.",
+                "description": "Creates an unverified account in the global holding area (no regional database yet) and enqueues a 6-digit verification email. The account is assigned a real region once onboarding is given a country. OTP expires in 300 seconds.",
                 "parameters": [
                     {
                         "description": "Signup payload",
@@ -5447,6 +5635,305 @@
                 "summary": "Get onboarding status",
                 "tags": [
                     "onboarding/session"
+                ]
+            }
+        },
+        "/organization/verification": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.KYBStatusEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Get company verification status",
+                "tags": [
+                    "organization/verification"
+                ]
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "description": "First submission or a full resubmission after a failure. Tier 1 countries are checked immediately; others are queued for manual review (status pending).",
+                "parameters": [
+                    {
+                        "description": "Verification form",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.KYBSubmitRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.KYBStatusEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Submit company verification",
+                "tags": [
+                    "organization/verification"
+                ]
+            }
+        },
+        "/organization/verification/change-country": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "description": "Clears the registration number and country identifiers, keeps name and address, and returns the status to not_started.",
+                "parameters": [
+                    {
+                        "description": "Country",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.KYBChangeCountryRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.KYBStatusEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Change the registration country",
+                "tags": [
+                    "organization/verification"
+                ]
+            }
+        },
+        "/organization/verification/confirm-address": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "description": "Accepts an address_mismatch warning once the user says whether the address is registered or trading.",
+                "parameters": [
+                    {
+                        "description": "Address type",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.KYBConfirmAddressRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.KYBStatusEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Confirm which address was entered",
+                "tags": [
+                    "organization/verification"
+                ]
+            }
+        },
+        "/organization/verification/confirm-name": {
+            "post": {
+                "description": "One-click fix for a name_mismatch: the registry's legal name replaces what was typed and the check runs again.",
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.KYBStatusEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Confirm the registry's company name",
+                "tags": [
+                    "organization/verification"
+                ]
+            }
+        },
+        "/organization/verification/retry": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "description": "Light retry for number_not_found and name_mismatch failures. Country and address are reused.",
+                "parameters": [
+                    {
+                        "description": "Retry form",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.KYBRetryRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.KYBStatusEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Retry verification with name and number only",
+                "tags": [
+                    "organization/verification"
                 ]
             }
         },

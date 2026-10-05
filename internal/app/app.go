@@ -22,6 +22,7 @@ import (
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/docs"
 	"github.com/Angle-HR/server/internal/handler"
+	"github.com/Angle-HR/server/internal/kyb"
 	"github.com/Angle-HR/server/internal/onboarding"
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/pkg/besteffort"
@@ -154,6 +155,7 @@ func Run() error {
 	}
 	individualOnboardingHandler := handler.NewIndividualOnboardingHandler(dbRouter, globalPool, tokenService)
 	businessOnboardingHandler := handler.NewBusinessOnboardingHandler(dbRouter, globalPool, tokenService)
+	kybHandler := handler.NewKYBHandler(dbRouter, globalPool, newKYBRegistry(cfg))
 	adminHandler := handler.NewAdminHandler(
 		adminStore,
 		dbRouter,
@@ -188,6 +190,7 @@ func Run() error {
 			productOnboardingHandler.RegisterProtectedRoutes(r)
 			individualOnboardingHandler.RegisterProtectedRoutes(r)
 			businessOnboardingHandler.RegisterProtectedRoutes(r)
+			kybHandler.RegisterProtectedRoutes(r)
 		})
 
 		r.Route("/admin", func(r chi.Router) {
@@ -244,4 +247,15 @@ func serve(server *http.Server, cfg config.Config, log *slog.Logger) error {
 
 	log.Info("server stopped")
 	return nil
+}
+
+// newKYBRegistry installs the automated company verifiers that are configured.
+// A country without one is verified by a person (Tier 2), so the UK stays a
+// manual review until COMPANIES_HOUSE_API_KEY is set.
+func newKYBRegistry(cfg config.Config) *kyb.Registry {
+	reg := kyb.NewRegistry()
+	if cfg.CompaniesHouseAPIKey != "" {
+		reg.Register("GB", &kyb.CompaniesHouse{APIKey: cfg.CompaniesHouseAPIKey})
+	}
+	return reg
 }

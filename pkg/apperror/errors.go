@@ -73,6 +73,7 @@ const (
 	CodePayloadTooLarge         = "PAYLOAD_TOO_LARGE"
 	CodeGone                    = "GONE"
 	CodeTooManyAttempts         = "too_many_attempts"
+	CodeServiceUnavailable      = "SERVICE_UNAVAILABLE"
 )
 
 var httpStatusByCode = map[string]int{
@@ -94,6 +95,7 @@ var httpStatusByCode = map[string]int{
 	CodePayloadTooLarge:         http.StatusRequestEntityTooLarge,
 	CodeGone:                    http.StatusGone,
 	CodeTooManyAttempts:         http.StatusTooManyRequests,
+	CodeServiceUnavailable:      http.StatusServiceUnavailable,
 }
 
 // AppError is a structured application error.
@@ -235,6 +237,7 @@ var publicMessages = map[string]string{
 	CodeOnboardingIncomplete:    MsgOnboardingStepIncomplete,
 	CodeInvalidAccountBranch:    MsgInvalidAccountTypeBranch,
 	CodeTooManyAttempts:         MsgTooManyAttempts,
+	CodeServiceUnavailable:      "service temporarily unavailable, try again",
 }
 
 func publicMessageForCode(code string) string {

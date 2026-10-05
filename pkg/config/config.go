@@ -45,6 +45,7 @@ type Config struct {
 	TOTPEncryptionKey      string
 	AddressVerifyMode      string
 	AddressSearchMode      string
+	CompaniesHouseAPIKey   string
 }
 
 // Load reads configuration from the environment.
@@ -57,6 +58,7 @@ func Load() (Config, error) {
 		ServerPort:             os.Getenv("SERVER_PORT"),
 		DBUrlGlobal:            os.Getenv("DB_URL_GLOBAL"),
 		RedisURL:               os.Getenv("REDIS_URL"),
+		CompaniesHouseAPIKey:   strings.TrimSpace(os.Getenv("COMPANIES_HOUSE_API_KEY")),
 		AppEnv:                 os.Getenv("APP_ENV"),
 		LogLevel:               strings.TrimSpace(os.Getenv("LOG_LEVEL")),
 		PublicAPIURL:           os.Getenv("PUBLIC_API_URL"),

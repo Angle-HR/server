@@ -7,8 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Angle-HR/server/internal/docs"
 	"gopkg.in/yaml.v3"
+
+	"github.com/Angle-HR/server/internal/docs"
 )
 
 func main() {

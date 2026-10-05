@@ -11,8 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Angle-HR/server/pkg/apperror"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+
+	"github.com/Angle-HR/server/pkg/apperror"
 )
 
 func TestErrorLogsInternalFailures(t *testing.T) {

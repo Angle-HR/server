@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/internal/mailer"
@@ -14,7 +16,6 @@ import (
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
-	"github.com/jackc/pgx/v5"
 )
 
 var _ = apidoc.ErrorEnvelope{}

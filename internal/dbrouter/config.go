@@ -11,13 +11,13 @@ import (
 
 // RegionConfig holds per-region PostgreSQL and Cloudflare R2 connection settings.
 type RegionConfig struct {
-	Region       region.Region
-	PostgresDSN  string
-	R2Endpoint   string
-	R2AccessKey  string
-	R2SecretKey  string
-	R2Bucket     string
-	R2UseSSL     bool
+	Region      region.Region
+	PostgresDSN string
+	R2Endpoint  string
+	R2AccessKey string
+	R2SecretKey string
+	R2Bucket    string
+	R2UseSSL    bool
 }
 
 func allRegions() []region.Region {

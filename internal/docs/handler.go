@@ -1,8 +1,8 @@
 package docs
 
 import (
-	"encoding/json"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"

@@ -9,11 +9,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
+	fluvio "github.com/software78/fluvio"
+
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/pkg/db"
 	"github.com/Angle-HR/server/pkg/logger"
-	"github.com/joho/godotenv"
-	fluvio "github.com/software78/fluvio"
 )
 
 // Run connects to the global database, applies Fluvio migrations, registers

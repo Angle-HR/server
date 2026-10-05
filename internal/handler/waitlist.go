@@ -11,6 +11,12 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	fluvio "github.com/software78/fluvio"
+
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/mailer"
@@ -19,11 +25,6 @@ import (
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	fluvio "github.com/software78/fluvio"
 )
 
 var _ = apidoc.ErrorEnvelope{}

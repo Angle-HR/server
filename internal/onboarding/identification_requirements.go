@@ -228,12 +228,12 @@ func PrimaryIdentificationNumber(countrySlug string, values map[string]string) s
 // #region agent log
 func debugLogIdentification(location, message string, data map[string]any) {
 	payload := map[string]any{
-		"sessionId":    "b69c38",
-		"location":     location,
-		"message":      message,
-		"data":         data,
-		"timestamp":    time.Now().UnixMilli(),
-		"runId":        "pre-fix",
+		"sessionId": "b69c38",
+		"location":  location,
+		"message":   message,
+		"data":      data,
+		"timestamp": time.Now().UnixMilli(),
+		"runId":     "pre-fix",
 	}
 	line, err := json.Marshal(payload)
 	if err != nil {

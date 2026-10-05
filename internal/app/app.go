@@ -11,6 +11,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
+	"github.com/software78/fluvio/fluviui"
+
 	"github.com/Angle-HR/server/internal/admin"
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/internal/dbrouter"
@@ -22,10 +27,6 @@ import (
 	"github.com/Angle-HR/server/pkg/db"
 	"github.com/Angle-HR/server/pkg/logger"
 	redisclient "github.com/Angle-HR/server/pkg/redis"
-	"github.com/go-chi/chi/v5"
-	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
-	"github.com/software78/fluvio/fluviui"
 )
 
 const (

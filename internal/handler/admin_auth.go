@@ -5,12 +5,13 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 var _ = apidoc.ErrorEnvelope{}

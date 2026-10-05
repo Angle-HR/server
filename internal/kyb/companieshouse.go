@@ -47,8 +47,10 @@ type chCompany struct {
 // activeStatuses are the Companies House company_status values treated as in
 // good standing. Everything else (dissolved, liquidation, receivership,
 // administration, voluntary-arrangement, insolvency-proceedings,
-// converted-closed, closed, removed) is treated as inactive. This list should be
-// checked against the current API documentation before launch.
+// converted-closed, closed, removed) is treated as inactive. Checked on 5 Oct 2026
+// against the company_status values in github.com/companieshouse/api-enumerations
+// (active, dissolved, liquidation, receivership, converted-closed, voluntary-arrangement,
+// insolvency-proceedings, administration, open, closed, registered, removed).
 var activeStatuses = map[string]bool{"active": true, "open": true, "registered": true}
 
 // NormalizeUKNumber upper-cases a company number, strips spaces, and left-pads

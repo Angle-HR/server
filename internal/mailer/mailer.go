@@ -24,6 +24,10 @@ const (
 	TypePasswordReset        = "password_reset"
 	TypeLoginOTP             = "login_otp"
 	TypeOrgInvite            = "org_invite"
+	TypeKYBFailed            = "kyb_failed"
+	TypeKYBReviewQueued      = "kyb_review_queued"
+	TypeKYBNudge1            = "kyb_nudge_1"
+	TypeKYBNudge2            = "kyb_nudge_2"
 )
 
 // EmailArgs defines job queue arguments for email notifications.
@@ -35,6 +39,7 @@ type EmailArgs struct {
 	Token            string `json:"token,omitempty"`
 	Code             string `json:"code,omitempty"`
 	ExpiresInSeconds int    `json:"expires_in_seconds,omitempty"`
+	FailureReason    string `json:"failure_reason,omitempty"` // KYB emails: why verification failed
 }
 
 // Kind returns the job kind name.
@@ -115,6 +120,15 @@ func (m *Mailer) selectTemplate(emailType string) (templateName, subject, baseUR
 		return "login_otp.html", "Your Open HR sign-in code", baseURL, nil
 	case TypeOrgInvite:
 		return "org_invite.html", "You're invited to Open HR", baseURL, needsAppURL("org_invite")
+	case TypeKYBFailed:
+		return "kyb_failed.html", "We couldn't verify your company yet", baseURL, needsAppURL("kyb_failed")
+	case TypeKYBReviewQueued:
+		return "kyb_review_queued.html", "Your company verification is in review", baseURL, nil
+	case TypeKYBNudge1:
+		return "kyb_nudge_1.html", "Finish verifying your company", baseURL, needsAppURL("kyb_nudge_1")
+	case TypeKYBNudge2:
+		return "kyb_nudge_2.html", "Your company verification still needs attention", baseURL,
+			needsAppURL("kyb_nudge_2")
 	default:
 		return "", "", "", fmt.Errorf("unknown email type: %s", emailType)
 	}

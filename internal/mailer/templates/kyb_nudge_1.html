@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Finish verifying your company</title>
+</head>
+<body style="margin: 0; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f9fafb; color: #111827;">
+    <div style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 40px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+        <div style="margin-bottom: 32px; text-align: left;">
+            <span style="font-size: 20px; font-weight: 700; color: #0284c7; letter-spacing: -0.025em;">Angle HR</span>
+        </div>
+
+        <h1 style="font-size: 24px; font-weight: 700; line-height: 32px; color: #0f172a; margin-top: 0; margin-bottom: 16px; letter-spacing: -0.025em;">Finish verifying your company</h1>
+
+        <p style="font-size: 16px; line-height: 24px; color: #475569; margin-top: 0; margin-bottom: 24px;">Hi{{if .FullName}} {{.FullName}}{{end}},</p>
+        <p style="font-size: 16px; line-height: 24px; color: #475569; margin-top: 0; margin-bottom: 24px;">Your company verification still needs a small fix: {{if eq .FailureReason "number_not_found"}}we couldn't find that registration number in the official company register for your country.{{else if eq .FailureReason "name_mismatch"}}the company name you entered doesn't match the name on the official register.{{else if eq .FailureReason "address_mismatch"}}the address you entered doesn't match the registered address, so we need you to tell us which kind of address it is.{{else if eq .FailureReason "inactive_entity"}}the official register shows this company as dissolved, inactive or insolvent.{{else if eq .FailureReason "wrong_country"}}the registration number doesn't look like it belongs to the country you selected.{{else}}the details didn't match the official register.{{end}}</p>
+        <p style="font-size: 16px; line-height: 24px; color: #475569; margin-top: 0; margin-bottom: 24px;">It only takes a minute, and once it is done you can publish your jobs.</p>
+
+        <div style="text-align: center; margin-top: 24px;">
+            <a href="{{.AppURL}}/dashboard"
+                style="display: inline-block; background-color: #0284c7; color: #ffffff; padding: 12px 24px; font-size: 16px; font-weight: 600; text-decoration: none; border-radius: 8px;">Fix your details</a>
+        </div>
+
+        <div style="border-top: 1px solid #f1f5f9; padding-top: 24px; margin-top: 32px;">
+            <p style="font-size: 14px; line-height: 20px; color: #94a3b8; margin: 0;">Best regards,<br>The Angle HR Team</p>
+        </div>
+    </div>
+</body>
+</html>

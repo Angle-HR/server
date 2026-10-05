@@ -154,3 +154,59 @@ func TestFormatFromHeader(t *testing.T) {
 		}
 	}
 }
+
+func TestKYBTemplates(t *testing.T) {
+	m, err := New(Config{AppURL: "https://app.example.com"})
+	if err != nil {
+		t.Fatalf("failed to create mailer: %v", err)
+	}
+
+	t.Run("failed names the specific reason and links to the fix", func(t *testing.T) {
+		content := renderTemplate(t, m, "kyb_failed.html", EmailArgs{
+			Type: TypeKYBFailed, FullName: "Ada", OrganizationName: "Acme Ltd", FailureReason: "number_not_found",
+		})
+		assertContains(t, content, "Acme Ltd")
+		assertContains(t, content, "couldn")
+		assertContains(t, content, "registration number")
+		assertContains(t, content, "https://app.example.com/dashboard")
+	})
+
+	t.Run("failed for an inactive company points to support, not a retry", func(t *testing.T) {
+		content := renderTemplate(t, m, "kyb_failed.html", EmailArgs{
+			Type: TypeKYBFailed, OrganizationName: "Acme Ltd", FailureReason: "inactive_entity",
+		})
+		assertContains(t, content, "dissolved, inactive or insolvent")
+		assertContains(t, content, "support team")
+		assertNotContains(t, content, "Fix your details")
+	})
+
+	t.Run("review queued is reassuring and has no action", func(t *testing.T) {
+		content := renderTemplate(t, m, "kyb_review_queued.html", EmailArgs{Type: TypeKYBReviewQueued})
+		assertContains(t, content, "nothing you need to do")
+		assertNotContains(t, content, "Fix your details")
+	})
+
+	t.Run("nudges", func(t *testing.T) {
+		first := renderTemplate(t, m, "kyb_nudge_1.html", EmailArgs{Type: TypeKYBNudge1, FailureReason: "name_mismatch"})
+		assertContains(t, first, "company name you entered")
+		assertContains(t, first, "https://app.example.com/dashboard")
+
+		second := renderTemplate(t, m, "kyb_nudge_2.html", EmailArgs{Type: TypeKYBNudge2, FailureReason: "name_mismatch"})
+		assertContains(t, second, "support team")
+	})
+}
+
+func TestKYBEmailTypesNeedAppURLWhereTheyLink(t *testing.T) {
+	m, err := New(Config{})
+	if err != nil {
+		t.Fatalf("failed to create mailer: %v", err)
+	}
+	for _, emailType := range []string{TypeKYBFailed, TypeKYBNudge1, TypeKYBNudge2} {
+		if _, _, _, err := m.selectTemplate(emailType); err == nil {
+			t.Errorf("%s: want an error without APP_URL", emailType)
+		}
+	}
+	if _, _, _, err := m.selectTemplate(TypeKYBReviewQueued); err != nil {
+		t.Errorf("review queued has no link and must not need APP_URL: %v", err)
+	}
+}

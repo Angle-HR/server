@@ -20,6 +20,7 @@ import (
 type DB interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
@@ -85,7 +86,11 @@ ON CONFLICT (organization_id) DO UPDATE SET
     failure_reason = EXCLUDED.failure_reason, registry_name = EXCLUDED.registry_name,
     registered_address = EXCLUDED.registered_address, attempts = EXCLUDED.attempts,
     checked_at = EXCLUDED.checked_at, verified_at = EXCLUDED.verified_at, reviewer_id = EXCLUDED.reviewer_id,
-    notices_sent = EXCLUDED.notices_sent`
+    notices_sent = EXCLUDED.notices_sent,
+    deletion_flagged_at = CASE
+        WHEN EXCLUDED.failure_reason IS NULL
+          OR EXCLUDED.attempts > accounts.organization_verifications.attempts THEN NULL
+        ELSE accounts.organization_verifications.deletion_flagged_at END`
 
 const statusSQL = `
 UPDATE accounts.organizations

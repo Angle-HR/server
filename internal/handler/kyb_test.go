@@ -124,6 +124,7 @@ func TestKYBError_mapping(t *testing.T) {
 		kyb.ErrNothingToRetry:         http.StatusConflict,
 		kyb.ErrActionNotAllowed:       http.StatusConflict,
 		kyb.ErrTemporarilyUnavailable: http.StatusServiceUnavailable,
+		kyb.ErrNotVerified:            http.StatusForbidden,
 	}
 	for in, want := range cases {
 		if got := apperror.HTTPStatus(kybError(in)); got != want {

@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/software78/fluvio/fluviui"
 
 	"github.com/Angle-HR/server/internal/admin"
@@ -23,8 +24,10 @@ import (
 	"github.com/Angle-HR/server/internal/docs"
 	"github.com/Angle-HR/server/internal/handler"
 	"github.com/Angle-HR/server/internal/kyb"
+	"github.com/Angle-HR/server/internal/kyb/kybnotify"
 	"github.com/Angle-HR/server/internal/onboarding"
 	"github.com/Angle-HR/server/internal/queue"
+	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/config"
 	"github.com/Angle-HR/server/pkg/db"
@@ -156,6 +159,9 @@ func Run() error {
 	individualOnboardingHandler := handler.NewIndividualOnboardingHandler(dbRouter, globalPool, tokenService)
 	businessOnboardingHandler := handler.NewBusinessOnboardingHandler(dbRouter, globalPool, tokenService)
 	kybHandler := handler.NewKYBHandler(dbRouter, globalPool, newKYBRegistry(cfg))
+	kybNotifierFor := newKYBNotifierFactory(dbRouter, globalPool, fluvioClient)
+	kybHandler.NotifierFor = kybNotifierFor
+	kybHandler.Formats = onboarding.RegistrationNumberFormatOK
 	adminHandler := handler.NewAdminHandler(
 		adminStore,
 		dbRouter,
@@ -165,6 +171,8 @@ func Run() error {
 		fluvioClient,
 		fluvioClient,
 	)
+
+	adminHandler.KYBNotifierFor = kybNotifierFor
 
 	router := chi.NewRouter()
 	useCommonMiddleware(router, cfg, log)
@@ -258,4 +266,18 @@ func newKYBRegistry(cfg config.Config) *kyb.Registry {
 		reg.Register("GB", &kyb.CompaniesHouse{APIKey: cfg.CompaniesHouseAPIKey})
 	}
 	return reg
+}
+
+// newKYBNotifierFactory returns the factory that builds a region's KYB email notifier.
+// A region with no database yields no notifier, so verification still works without emails.
+func newKYBNotifierFactory(
+	router *dbrouter.DBRouter, global *pgxpool.Pool, enqueuer kybnotify.Enqueuer,
+) handler.KYBNotifierFactory {
+	return func(reg region.Region) kyb.Notifier {
+		pool, err := router.DB(reg)
+		if err != nil {
+			return nil
+		}
+		return &kybnotify.Notifier{Regional: pool, Global: global, Enqueuer: enqueuer}
+	}
 }

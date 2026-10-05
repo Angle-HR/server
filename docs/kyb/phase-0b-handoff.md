@@ -29,33 +29,22 @@ use the light retry form (name and number only).
 Verified in the sandbox: gofmt, `go vet`, `go test -race` for `internal/kyb/...` and `internal/handler`, and
 golangci-lint on the new code (only goconst noise from a newer linter than the project's).
 
-## To do, in order
+## Added 5 Oct (second session, written without a working Go toolchain)
 
-1. **Admin review queue** (`internal/handler`, new file e.g. `admin_verification.go`).
-   - List pending items from `admin.verification_queue` (ids, region, country only).
-   - Item detail: read the record from the organization's regional DB (`dbrouter.DB(region)`) so the operator
-     can compare against the government portal.
-   - Approve / reject calling `kyb.Service.Review`; rejection needs a valid failure reason.
-   - New RBAC permission (suggest `verification:review`; see `internal/rbac/matrix.go` and
-     `db/migrations/global_registry/000004_rbac_role_permissions.sql` for how permissions are seeded).
-   - Admin audit entry via `AdminHandler.audit`. Routes go in `AdminHandler.RegisterProtectedRoutes`.
-   - Note: `Service.Review` runs against one region's Store; build it per request from the queue item's region.
-2. **Emails and worker jobs.**
-   - Templates for `kyb_failed` (names the specific reason), `kyb_review_queued`, `kyb_nudge_1` (+2 days),
-     `kyb_nudge_2` (+7 days, mentions support). See `internal/mailer` (`selectTemplate`) and `internal/worker`.
-   - A `kyb.Notifier` implementation using the mailer/queue; set it on `KYBHandler.Notifier` and the admin service.
-   - Scheduled job using `kyb.NextNotice` and `kyb.DeletionDue`; increment `notices_sent` after each nudge.
-     The 30-day case only flags the account for a reviewed deletion job; it must not delete.
-3. **Ownership transfer re-verification.** When the owner changes, the new owner's organization must be verified
-   again (status back to `not_started`/`pending`, event recorded). Ownership-transfer code is not in this repo yet;
-   build the function and tests and note the hook point.
-4. **Publish gate.** One function, e.g. `kyb.RequirePublish(status)`, returning an error unless `verified`
-   (`Status.CanPublish` exists). The job-creation code is not in this repo yet; build and test the check and
-   leave the hook for the job-publish handler. Drafting must never be blocked.
-5. **Wire `kyb.FormatChecker`** to `onboarding.ValidateIdentification` (`internal/onboarding/identification_requirements.go`)
-   and set it on `KYBHandler.Formats`, so a number in the wrong format for the chosen country fails as `wrong_country`.
-6. **Verify Companies House `activeStatuses`** in `companieshouse.go` against the current API documentation.
-7. **Final verification**: whole-repo `go test -race ./...`, lint, `make security` (gosec, govulncheck).
+Compiled and tested in a scratch module (pass): `internal/kyb` (incl. new sweep and lifecycle tests) and `internal/onboarding` format checker.
+gofmt-clean but NOT compiled or tested (need pgx, fluvio and other modules): `internal/kyb/kybstore`, `kybnotify`, `internal/handler`, `internal/mailer`, `internal/app`, `cmd/kyb-sweep`.
+
+1. Admin review queue: `internal/handler/admin_verification.go` (+ test). GET `/admin/verification`, GET `/admin/verification/{organizationID}`, POST `/admin/verification/{organizationID}/review` (`{"decision":"approve|reject","reason":...}`). Permission `verification:review` (const in `internal/admin/permissions.go`, seeded for superadmin by `db/migrations/global_registry/000006_verification_review_permission.sql`). Audited.
+2. Emails: templates `kyb_failed`, `kyb_review_queued`, `kyb_nudge_1`, `kyb_nudge_2` (mailer, link goes to `{APP_URL}/dashboard`; confirm the real frontend route). `internal/kyb/kybnotify` queues them; handlers take a per-region `NotifierFor` factory (wired in `internal/app`). Sweep: `kyb.Sweeper` + `cmd/kyb-sweep` (one-shot, run hourly from a scheduler; not added to Dockerfile/CI). 30-day case only sets `deletion_flagged_at` (migration `000007_kyb_deletion_flag.sql`), deletes nothing.
+3. Ownership transfer: `Service.OwnershipTransferred` (`internal/kyb/lifecycle.go`). Verified/failed go back to `not_started`; pending left alone. Hook point: call after the new owner is saved.
+4. Publish gate: `kyb.RequirePublish` / `RequirePublishFor` (`ErrNotVerified`, mapped to 403 in `kybError`). Hook point: job-publish handler.
+5. `onboarding.RegistrationNumberFormatOK` set as `KYBHandler.Formats` (GB, NG, DE, KE only; others pass).
+6. `activeStatuses` checked against Companies House enumerations: correct.
+
+## Still to do
+
+- Run `gofmt`, `go vet`, `go test -race ./...`, lint, `make security` on a machine with module access (item 7).
+- Run `make swagger` (new admin endpoints add annotations) and migrate: regional 000007, global 000006.
 
 ## Open items needing the owner (Owen)
 

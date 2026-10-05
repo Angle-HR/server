@@ -27,11 +27,21 @@ const kybMaxBodyBytes = 1 << 20
 
 // KYBHandler serves company verification (KYB V2) for the signed-in organization owner.
 type KYBHandler struct {
-	Router   *dbrouter.DBRouter
-	GlobalDB globalDB
-	Registry *kyb.Registry
-	Notifier kyb.Notifier      // optional
-	Formats  kyb.FormatChecker // optional
+	Router      *dbrouter.DBRouter
+	GlobalDB    globalDB
+	Registry    *kyb.Registry
+	NotifierFor KYBNotifierFactory // optional
+	Formats     kyb.FormatChecker  // optional
+}
+
+// KYBNotifierFactory builds the notifier for one region. A nil factory means no emails.
+type KYBNotifierFactory func(reg region.Region) kyb.Notifier
+
+func (f KYBNotifierFactory) notifier(reg region.Region) kyb.Notifier {
+	if f == nil {
+		return nil
+	}
+	return f(reg)
 }
 
 // NewKYBHandler returns a KYB handler. registry decides which countries are verified automatically.
@@ -183,7 +193,7 @@ func (h *KYBHandler) scope(w http.ResponseWriter, r *http.Request) (*kybScope, b
 			Store:    store,
 			Queue:    &kybstore.Queue{DB: h.GlobalDB, Region: string(reg)},
 			Registry: h.Registry,
-			Notifier: h.Notifier,
+			Notifier: h.NotifierFor.notifier(reg),
 			Formats:  h.Formats,
 			Logger:   slog.Default(),
 		},
@@ -209,6 +219,8 @@ func kybError(err error) error {
 		return apperror.New(apperror.CodeConflict, "organization is already verified")
 	case errors.Is(err, kyb.ErrReviewInProgress):
 		return apperror.New(apperror.CodeConflict, "manual review is in progress")
+	case errors.Is(err, kyb.ErrNotVerified):
+		return apperror.New(apperror.CodeForbidden, "company must be verified before publishing")
 	case errors.Is(err, kyb.ErrNothingToRetry), errors.Is(err, kyb.ErrActionNotAllowed):
 		return apperror.New(apperror.CodeConflict, "action not available for the current verification status")
 	case errors.Is(err, kyb.ErrTemporarilyUnavailable):

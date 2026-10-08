@@ -83,7 +83,7 @@ func useCommonMiddleware(router chi.Router, cfg config.Config, log *slog.Logger)
 		router.Use(cors.Handler(cors.Options{
 			AllowedOrigins:   cfg.CORSAllowedOrigins,
 			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "If-Match"},
 			AllowCredentials: false,
 			MaxAge:           corsMaxAgeSeconds,
 		}))

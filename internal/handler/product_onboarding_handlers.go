@@ -254,7 +254,7 @@ func (h *ProductOnboardingHandler) saveIndividualProfile(
 		return ProductProfileData{}, apperror.ErrInternal
 	}
 
-	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepProfile)
+	completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepProfile)
 	if err != nil {
 		return ProductProfileData{}, apperror.ErrInternal
 	}
@@ -330,7 +330,7 @@ func (h *ProductOnboardingHandler) saveBusinessProfile(
 		return ProductProfileData{}, apperror.ErrInternal
 	}
 
-	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepProfile)
+	completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepProfile)
 	if err != nil {
 		return ProductProfileData{}, apperror.ErrInternal
 	}
@@ -460,7 +460,7 @@ func (h *ProductOnboardingHandler) saveAddress(
 		return ProductAddressData{}, err
 	}
 
-	completed, currentStep, err := h.persistAddress(ctx, pool, userID, countryID, &req, identificationPayload, binNumber)
+	completed, currentStep, err := h.persistAddress(ctx, pool, reg, userID, countryID, &req, identificationPayload, binNumber)
 	if err != nil {
 		return ProductAddressData{}, err
 	}
@@ -518,6 +518,7 @@ func (h *ProductOnboardingHandler) checkIdentification(
 func (h *ProductOnboardingHandler) persistAddress(
 	ctx context.Context,
 	pool dataPool,
+	reg region.Region,
 	userID, countryID uuid.UUID,
 	req *productAddressBody,
 	identificationPayload []byte,
@@ -554,7 +555,7 @@ func (h *ProductOnboardingHandler) persistAddress(
 		return nil, "", apperror.ErrInternal
 	}
 
-	completed, currentStep, err = h.advanceProgress(ctx, tx, userID, onboarding.StepIdentificationAddress)
+	completed, currentStep, err = h.advanceProgress(ctx, tx, reg, userID, onboarding.StepIdentificationAddress)
 	if err != nil {
 		return nil, "", apperror.ErrInternal
 	}
@@ -696,13 +697,15 @@ func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.
 		return
 	}
 
-	pool, err := h.Router.DB(reg)
+	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
 
-	if result.Status == onboarding.VerificationStatusVerified {
+	// A still-global account has not saved an address row yet. The check result
+	// is returned to the client; the address step writes it after migration.
+	if result.Status == onboarding.VerificationStatusVerified && reg != region.RegionGlobal {
 		if err := storeVerifiedAddress(ctx, pool, userID, result.Status); err != nil {
 			response.Error(w, r, err)
 			return
@@ -869,7 +872,7 @@ func (h *ProductOnboardingHandler) putCompliance(w http.ResponseWriter, r *http.
 		return
 	}
 
-	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepCompliance)
+	completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepCompliance)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -1262,10 +1265,11 @@ func loadComplianceState(
 func (h *ProductOnboardingHandler) advanceProgress(
 	ctx context.Context,
 	tx pgx.Tx,
+	reg region.Region,
 	userID uuid.UUID,
 	step string,
 ) ([]string, string, error) {
-	progressSQL, progressArgs, err := query.LookupOnboardingProgress(userID)
+	progressSQL, progressArgs, err := lookupOnboardingProgressSQL(reg, userID)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1283,7 +1287,7 @@ func (h *ProductOnboardingHandler) advanceProgress(
 
 	completed = onboarding.AdvanceCompleted(completed, step)
 	currentStep = normalizeStep(step)
-	upsertSQL, upsertArgs, err := query.UpsertOnboardingProgress(userID, currentStep, completed)
+	upsertSQL, upsertArgs, err := upsertOnboardingProgressSQL(reg, userID, currentStep, completed)
 	if err != nil {
 		return nil, "", err
 	}

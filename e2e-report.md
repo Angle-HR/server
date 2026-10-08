@@ -4,6 +4,8 @@ Date: 8 October 2026
 
 The Docker stack was started from a clean volume (`docker compose up --build -d`) and exercised over HTTP against `http://localhost:8080`. Mail was read from Mailhog at `http://localhost:8025`. The stack is still running.
 
+The failures below were fixed and rechecked on a new business account (`fix-biz-1791456848@example.com`). Profile, address verify, address save, compliance, and complete all succeeded, the account moved to `uk`, a new job returned `ETag: "1"`, and a preflight that asks for `If-Match` now allows it.
+
 ## Environment
 
 | Service | Result |

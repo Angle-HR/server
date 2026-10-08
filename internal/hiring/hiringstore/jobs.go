@@ -42,9 +42,11 @@ INSERT INTO hiring.org_counters (tenant_id, next_job_number) VALUES ($1::uuid, 2
 ON CONFLICT (tenant_id) DO UPDATE SET next_job_number = hiring.org_counters.next_job_number + 1
 RETURNING next_job_number - 1`
 
+// revision starts at 0 because the create transaction's details write increments it,
+// so the revision the client first sees is 1.
 const insertJobSQL = `
-INSERT INTO hiring.job_postings (tenant_id, created_by, job_number)
-VALUES ($1::uuid, $2::uuid, $3)
+INSERT INTO hiring.job_postings (tenant_id, created_by, job_number, revision)
+VALUES ($1::uuid, $2::uuid, $3, 0)
 RETURNING id::text`
 
 const updateJobSQL = `

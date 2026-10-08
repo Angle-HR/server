@@ -590,6 +590,146 @@
             },
             "type": "object"
         },
+        "internal_handler.AdminVerificationDetail": {
+            "properties": {
+                "address": {
+                    "$ref": "#/definitions/internal_handler.KYBAddress"
+                },
+                "address_type": {
+                    "type": "string"
+                },
+                "attempts": {
+                    "type": "integer"
+                },
+                "country_code": {
+                    "type": "string"
+                },
+                "identifiers": {
+                    "additionalProperties": {
+                        "type": "string"
+                    },
+                    "type": "object"
+                },
+                "legal_name": {
+                    "type": "string"
+                },
+                "organization_id": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "registration_number": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "submitted_at": {
+                    "type": "string"
+                },
+                "tier": {
+                    "type": "integer"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminVerificationDetailEnvelope": {
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.AdminVerificationDetail"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminVerificationItem": {
+            "properties": {
+                "country_code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "organization_id": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "submitted_at": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminVerificationListEnvelope": {
+            "properties": {
+                "data": {
+                    "items": {
+                        "$ref": "#/definitions/internal_handler.AdminVerificationItem"
+                    },
+                    "type": "array"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminVerificationReviewData": {
+            "properties": {
+                "failure_reason": {
+                    "type": "string"
+                },
+                "organization_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "enum": [
+                        "verified",
+                        "failed"
+                    ],
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminVerificationReviewEnvelope": {
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_handler.AdminVerificationReviewData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            },
+            "type": "object"
+        },
+        "internal_handler.AdminVerificationReviewRequest": {
+            "properties": {
+                "decision": {
+                    "enum": [
+                        "approve",
+                        "reject"
+                    ],
+                    "type": "string"
+                },
+                "reason": {
+                    "enum": [
+                        "number_not_found",
+                        "name_mismatch",
+                        "address_mismatch",
+                        "inactive_entity",
+                        "wrong_country"
+                    ],
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
         "internal_handler.AdminWaitlistDetailEnvelope": {
             "properties": {
                 "data": {
@@ -3666,6 +3806,160 @@
                 "summary": "Update product user",
                 "tags": [
                     "admin/users"
+                ]
+            }
+        },
+        "/admin/verification": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "Page size (max 100)",
+                        "in": "query",
+                        "name": "limit",
+                        "type": "integer"
+                    },
+                    {
+                        "description": "Offset",
+                        "in": "query",
+                        "name": "offset",
+                        "type": "integer"
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminVerificationListEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "List pending company verification reviews",
+                "tags": [
+                    "admin/verification"
+                ]
+            }
+        },
+        "/admin/verification/{organizationID}": {
+            "get": {
+                "description": "Returns the submitted details from the organization's region so the operator can compare them with the government portal.",
+                "parameters": [
+                    {
+                        "description": "Organization ID",
+                        "in": "path",
+                        "name": "organizationID",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminVerificationDetailEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Get a pending company verification review",
+                "tags": [
+                    "admin/verification"
+                ]
+            }
+        },
+        "/admin/verification/{organizationID}/review": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "description": "Records the operator's decision. A rejection needs a valid failure reason and emails the owner.",
+                "parameters": [
+                    {
+                        "description": "Organization ID",
+                        "in": "path",
+                        "name": "organizationID",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "description": "Decision",
+                        "in": "body",
+                        "name": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminVerificationReviewRequest"
+                        }
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handler.AdminVerificationReviewEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Approve or reject a company verification",
+                "tags": [
+                    "admin/verification"
                 ]
             }
         },

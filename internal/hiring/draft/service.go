@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/Angle-HR/server/internal/hiring/gates"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/questions"
@@ -38,6 +39,15 @@ type Store interface {
 		payload json.RawMessage) (*hiringtypes.Template, error)
 	DeleteTemplate(ctx context.Context, tenantID, userID, id string) error
 
+	// OrgMembers returns the people in the company among userIDs, keyed by user id. Unknown ids are absent.
+	OrgMembers(ctx context.Context, tenantID string, userIDs []string) (map[string]hiringtypes.Member, error)
+
+	// Company setup: the publish prerequisites that live on the company.
+	CompanySetup(ctx context.Context, tenantID, dpaVersion string) (*hiringtypes.CompanySetup, error)
+	AcceptDPA(ctx context.Context, tenantID, userID, version string) error
+	SetPrivacyContact(ctx context.Context, tenantID, email, dpo string) error
+	RecordDPIA(ctx context.Context, tenantID, userID string, scope json.RawMessage) (int, error)
+
 	GetSettings(ctx context.Context, tenantID string) (hiringtypes.Settings, error)
 	SetAutomatedScreening(ctx context.Context, tenantID, actorID string, on bool) error
 }
@@ -52,12 +62,20 @@ type Reference interface {
 	CheckRefs(ctx context.Context, skillIDs []string, industry, seniority, experience string,
 	) (*hiringtypes.RefCheck, error)
 	SkillNames(ctx context.Context, ids []string) (map[string]string, error)
+
+	// Gates is the compliance gate catalog.
+	Gates(ctx context.Context) ([]gates.Gate, error)
+	// RegisterJob records which region holds a published job, so the public page can find it.
+	RegisterJob(ctx context.Context, e hiringtypes.RegistryEntry) error
+	// SetRegistryStatus follows a status change of a job already registered.
+	SetRegistryStatus(ctx context.Context, publicID, status string) error
 }
 
 // Caller is who is acting and what they may do, resolved once per request.
 type Caller struct {
 	UserID      string
 	OrgID       string
+	Region      string
 	CompanyName string
 	Perms       rbac.Set
 }
@@ -76,6 +94,11 @@ type Service struct {
 	Store Store
 	Ref   Reference
 	Now   func() time.Time
+
+	// Company reads verification, agreement and DPIA state for the publish checks. Nil fails every company check.
+	Company Company
+	// NewPublicID makes the public id of a job on first publish. Nil uses a random id.
+	NewPublicID func() string
 }
 
 func (s *Service) now() time.Time {
@@ -116,19 +139,33 @@ func fromQuestionErrors(in []questions.FieldError) []jobs.FieldError {
 
 // ---- access rules ----
 
-// canSee: everyone with job.view.all, and people with job.view.assigned for the jobs they created.
-// Job members arrive with the permissions step in a later phase.
-func canSee(c Caller, createdBy string) bool {
-	return c.can(rbac.JobViewAll) || (c.can(rbac.JobViewAssigned) && createdBy == c.UserID)
+// canSee: everyone with job.view.all, and people with job.view.assigned for the jobs they created or were
+// added to as a hiring team member.
+func canSee(c Caller, rec *hiringtypes.JobRecord) bool {
+	if c.can(rbac.JobViewAll) {
+		return true
+	}
+	if !c.can(rbac.JobViewAssigned) {
+		return false
+	}
+	if rec.Job.CreatedBy == c.UserID {
+		return true
+	}
+	for _, m := range rec.Members {
+		if m.UserID == c.UserID {
+			return true
+		}
+	}
+	return false
 }
 
 // editable returns ErrNotFound for a job the caller cannot see, so a job's existence is not revealed, and a
-// ForbiddenError for one they can see but may not change.
-func editable(c Caller, j *jobs.Job) error {
-	if !canSee(c, j.CreatedBy) {
+// ForbiddenError for one they can see but may not change. Team membership grants visibility only.
+func editable(c Caller, rec *hiringtypes.JobRecord) error {
+	if !canSee(c, rec) {
 		return hiringtypes.ErrNotFound
 	}
-	if !c.can(rbac.JobEditDraft) || (j.CreatedBy != c.UserID && !c.can(rbac.JobEditPublished)) {
+	if !c.can(rbac.JobEditDraft) || (rec.Job.CreatedBy != c.UserID && !c.can(rbac.JobEditPublished)) {
 		return forbidden("you cannot edit this job")
 	}
 	return nil
@@ -141,6 +178,8 @@ type JobView struct {
 	jobs.Job
 	Warnings   []jobs.Warning   `json:"warnings"`
 	Duplicates []jobs.Duplicate `json:"duplicates,omitempty"`
+	// Members is the hiring team, shown to people who may see the access list.
+	Members []hiringtypes.Member `json:"members,omitempty"`
 }
 
 // FormView is the application form of a job.
@@ -168,6 +207,9 @@ func (s *Service) view(ctx context.Context, c Caller, rec *hiringtypes.JobRecord
 		j.Pay = jobs.Pay{Visible: j.Pay.Visible}
 	}
 	v.Job = j
+	if c.can(rbac.JobAccessViewList) {
+		v.Members = rec.Members
+	}
 
 	if cat != nil {
 		_, mw, _ := jobs.ValidateMarkets(j.LocationMode, j.Markets, cat)
@@ -240,7 +282,7 @@ func (s *Service) load(ctx context.Context, c Caller, id string) (*hiringtypes.J
 	if err != nil {
 		return nil, err
 	}
-	if !canSee(c, rec.Job.CreatedBy) {
+	if !canSee(c, rec) {
 		return nil, hiringtypes.ErrNotFound
 	}
 	return rec, nil
@@ -297,7 +339,7 @@ func (s *Service) Delete(ctx context.Context, c Caller, id string, ifMatch int) 
 	if err != nil {
 		return err
 	}
-	if err := editable(c, &rec.Job); err != nil {
+	if err := editable(c, rec); err != nil {
 		return err
 	}
 	return s.Store.DeleteDraft(ctx, c.OrgID, c.UserID, id, ifMatch)
@@ -309,7 +351,7 @@ func (s *Service) AcknowledgeDuplicate(ctx context.Context, c Caller, id string)
 	if err != nil {
 		return err
 	}
-	if err := editable(c, &rec.Job); err != nil {
+	if err := editable(c, rec); err != nil {
 		return err
 	}
 	return s.Store.RecordAudit(ctx, c.OrgID, c.UserID, id, "job.duplicate_acknowledged", nil)

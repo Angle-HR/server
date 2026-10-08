@@ -198,11 +198,11 @@ func (s *Service) catalog(ctx context.Context) (jobs.MarketCatalog, error) {
 }
 
 // draftEditable is editable plus the rule that only drafts change here.
-func draftEditable(c Caller, j *jobs.Job) error {
-	if err := editable(c, j); err != nil {
+func draftEditable(c Caller, rec *hiringtypes.JobRecord) error {
+	if err := editable(c, rec); err != nil {
 		return err
 	}
-	if j.Status != jobs.StatusDraft {
+	if rec.Job.Status != jobs.StatusDraft {
 		return ErrNotEditable
 	}
 	return nil
@@ -226,7 +226,7 @@ func progress(cur *hiringtypes.JobRecord, merged *jobs.Details, strict bool) ([]
 func (s *Service) applyPatch(
 	c Caller, cur *hiringtypes.JobRecord, p jobs.Patch, cat jobs.MarketCatalog, strict bool,
 ) (*hiringtypes.UpdateResult, error) {
-	if err := draftEditable(c, &cur.Job); err != nil {
+	if err := draftEditable(c, cur); err != nil {
 		return nil, err
 	}
 	merged, errs := s.settle(c, cur.Job.Details, p, cat, strict)
@@ -504,7 +504,7 @@ func formView(rec *hiringtypes.JobRecord, screening bool) *FormView {
 func applyForm(
 	c Caller, cur *hiringtypes.JobRecord, in FormInput, pol questions.Policy,
 ) (*hiringtypes.UpdateResult, error) {
-	if err := draftEditable(c, &cur.Job); err != nil {
+	if err := draftEditable(c, cur); err != nil {
 		return nil, err
 	}
 	form, decls, qerrs := questions.Build(in.Questions, in.Declarations, pol)

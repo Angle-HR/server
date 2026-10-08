@@ -4,6 +4,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -35,18 +36,44 @@ func TestMatrixSeparationOfDuties(t *testing.T) {
 	}
 }
 
-// The Go matrix and the SQL seed must describe the same grants.
+// The Go matrix must equal the SQL seed: the inserts of 000004, then the renames and inserts of 000008.
 func TestMatrixMatchesSQLSeed(t *testing.T) {
-	b, err := os.ReadFile("../../db/migrations/global_registry/000004_rbac_role_permissions.sql")
+	base, err := os.ReadFile("../../db/migrations/global_registry/000004_rbac_role_permissions.sql")
 	if err != nil {
 		t.Skip("seed file not found: ", err)
 	}
-	matches := regexp.MustCompile(`\('([a-z_0-9]+)', '([a-z_.0-9]+)'\)`).FindAllStringSubmatch(string(b), -1)
-	sqlPairs := make([]string, 0, len(matches))
-	for _, m := range matches {
-		sqlPairs = append(sqlPairs, m[1]+"|"+m[2])
+	p2, err := os.ReadFile("../../db/migrations/global_registry/000008_rbac_phase2_permissions.sql")
+	if err != nil {
+		t.Skip("phase 2 seed file not found: ", err)
 	}
-	var goPairs []string
+	pair := regexp.MustCompile(`\('([a-z_0-9]+)', '([a-z_.0-9]+)'\)`)
+	grants := map[string]bool{}
+	for _, m := range pair.FindAllStringSubmatch(string(base), -1) {
+		grants[m[1]+"|"+m[2]] = true
+	}
+	// Only the Up section of 000008: renames first, then inserts.
+	up := strings.SplitN(string(p2), "-- +goose Down", 2)[0]
+	rename := regexp.MustCompile(`SET permission = '([a-z_.0-9]+)'\s+WHERE permission = '([a-z_.0-9]+)'`)
+	for _, m := range rename.FindAllStringSubmatch(up, -1) {
+		for k := range grants {
+			if strings.HasSuffix(k, "|"+m[2]) {
+				delete(grants, k)
+				grants[strings.TrimSuffix(k, m[2])+m[1]] = true
+			}
+		}
+	}
+	del := regexp.MustCompile(`DELETE FROM rbac.role_permissions WHERE role = '([a-z_0-9]+)' AND permission = '([a-z_.0-9]+)'`)
+	for _, m := range del.FindAllStringSubmatch(up, -1) {
+		delete(grants, m[1]+"|"+m[2])
+	}
+	ins := up[strings.Index(up, "INSERT INTO"):]
+	for _, m := range pair.FindAllStringSubmatch(ins, -1) {
+		grants[m[1]+"|"+m[2]] = true
+	}
+	var sqlPairs, goPairs []string
+	for k := range grants {
+		sqlPairs = append(sqlPairs, k)
+	}
 	for r, ps := range DefaultMatrix {
 		for _, p := range ps {
 			goPairs = append(goPairs, string(r)+"|"+string(p))
@@ -61,5 +88,25 @@ func TestMatrixMatchesSQLSeed(t *testing.T) {
 		if sqlPairs[i] != goPairs[i] {
 			t.Fatalf("mismatch: sql %s vs go %s", sqlPairs[i], goPairs[i])
 		}
+	}
+}
+
+func TestPhase2Grants(t *testing.T) {
+	has := func(r Role, p Permission) bool { return NewSet(DefaultMatrix[r]...).Has(p) }
+	if !has(RoleHR2, JobStatusChange) || has(RoleLineManager, JobStatusChange) {
+		t.Error("job.status.change: HR 2 yes, line manager no")
+	}
+	if has(RoleHR2, JobExport) || has(RoleHR2, JobManageAny) || !has(RoleHR1, JobExport) || !has(RoleFounder, JobManageAny) {
+		t.Error("export and manage_any are Founder and HR 1 only")
+	}
+	if !has(RoleHR2, JobCollaboratorAddLimited) || has(RoleHR2, "job.collaborator.add_restricted") ||
+		has(RoleHR2, JobCollaboratorAdd) {
+		t.Error("add_limited renamed and held by HR 2")
+	}
+	if has(RoleHR1, AccountOwnershipTransfer) || !has(RoleFounder, AccountOwnershipTransfer) {
+		t.Error("only the Founder transfers ownership")
+	}
+	if !has(RoleFounder, AccountAgreementsAccept) || !has(RoleLegal, AccountAgreementsAccept) || has(RoleHR1, AccountAgreementsAccept) {
+		t.Error("only Founder and Legal accept the DPA")
 	}
 }

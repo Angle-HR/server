@@ -91,7 +91,8 @@ SELECT j.id::text, j.job_number, j.created_by::text, j.status, j.current_step, j
        COALESCE(j.experience_range_id::text, ''),
        COALESCE(j.pay_type, ''), j.pay_min, j.pay_max, COALESCE(j.pay_currency, ''), COALESCE(j.pay_period, ''),
        j.pay_visible, j.show_on_career_page, COALESCE(j.lawful_basis, ''), COALESCE(j.lia_reference, ''),
-       j.retention_months, COALESCE(j.assessment_url, '')
+       j.retention_months, COALESCE(j.assessment_url, ''),
+       COALESCE(j.public_id, ''), COALESCE(to_char(j.dpia_confirmed_at AT TIME ZONE 'UTC', '` + tsLayout + `'), '')
 FROM hiring.job_postings j
 LEFT JOIN hiring.departments d ON d.id = j.department_id
 WHERE j.id = $1::uuid AND j.tenant_id = $2::uuid AND j.deleted_at IS NULL`
@@ -223,6 +224,9 @@ func applyUpdate(ctx context.Context, tx pgx.Tx, tenantID, actorID, id string, r
 		if err := writeForm(ctx, tx, tenantID, actorID, id, res); err != nil {
 			return err
 		}
+	}
+	if err := applyPhase2(ctx, tx, tenantID, actorID, id, res); err != nil {
+		return err
 	}
 	if res.AuditAction != "" {
 		diff, err := json.Marshal(nonNil(res.AuditDiff))
@@ -428,6 +432,7 @@ func loadRecord(ctx context.Context, tx pgx.Tx, tenantID, id string, forUpdate b
 		&j.EmploymentType, &j.SeniorityLevelID, &j.ExperienceRangeID,
 		&payType, &payMin, &payMax, &payCurrency, &payPeriod, &j.Pay.Visible, &j.ShowOnCareerPage,
 		&j.LawfulBasis, &j.LIAReference, &j.RetentionMonths, &j.AssessmentURL,
+		&j.PublicID, &rec.DPIAConfirmedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -463,6 +468,9 @@ func loadRecord(ctx context.Context, tx pgx.Tx, tenantID, id string, forUpdate b
 	err = tx.QueryRow(ctx, loadFormRevisionSQL, id).Scan(&rec.FormRevision)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("hiringstore: load form revision: %w", err)
+	}
+	if err = loadPhase2(ctx, tx, id, rec); err != nil {
+		return nil, err
 	}
 	return rec, nil
 }

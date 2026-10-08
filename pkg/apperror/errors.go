@@ -76,6 +76,7 @@ const (
 	CodeGone                    = "GONE"
 	CodeTooManyAttempts         = "too_many_attempts"
 	CodeServiceUnavailable      = "SERVICE_UNAVAILABLE"
+	CodePublishBlocked          = "PUBLISH_BLOCKED"
 )
 
 var httpStatusByCode = map[string]int{
@@ -98,6 +99,7 @@ var httpStatusByCode = map[string]int{
 	CodeGone:                    http.StatusGone,
 	CodeTooManyAttempts:         http.StatusTooManyRequests,
 	CodeServiceUnavailable:      http.StatusServiceUnavailable,
+	CodePublishBlocked:          http.StatusUnprocessableEntity,
 }
 
 // AppError is a structured application error.

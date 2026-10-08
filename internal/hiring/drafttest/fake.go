@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Angle-HR/server/internal/hiring/gates"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/questions"
@@ -25,11 +26,22 @@ type Store struct {
 	Screening bool
 	Audits    []string
 	nextID    int
+
+	// Phase 2.
+	People map[string]hiringtypes.Member // company members by user id (for hiring team checks)
+	Log    []string                      // compliance log rows as gate|event
+
+	DPAAccepted  []string // accepted agreement versions
+	PrivacyEmail string
+	DPO          string
+	DPIAVersion  int
 }
 
 // NewStore returns an empty in-memory store.
 func NewStore() *Store {
-	return &Store{Jobs: map[string]*hiringtypes.JobRecord{}, TplUser: map[string]string{}}
+	return &Store{
+		Jobs: map[string]*hiringtypes.JobRecord{}, TplUser: map[string]string{}, People: map[string]hiringtypes.Member{},
+	}
 }
 
 func (f *Store) uuid() string {
@@ -62,6 +74,7 @@ func (f *Store) write(tenant, actor string, rec *hiringtypes.JobRecord, res *hir
 		}
 		rec.Declarations = append([]questions.Declaration(nil), *res.Decls...)
 	}
+	f.writePhase2(rec, res)
 	rec.Job.CompletedSections = res.Completed
 	rec.Job.CurrentStep = res.Step
 	rec.Job.Revision++
@@ -141,10 +154,14 @@ func (f *Store) ListJobs(
 		if !strings.HasPrefix(k, tenant+"|") {
 			continue
 		}
-		if flt.OnlyMine != "" && r.Job.CreatedBy != flt.OnlyMine {
+		if flt.OnlyMine != "" && r.Job.CreatedBy != flt.OnlyMine && !isMember(r, flt.OnlyMine) {
 			continue
 		}
-		out = append(out, hiringtypes.ListItem{ID: r.Job.ID, Title: r.Job.Title, Status: r.Job.Status})
+		if len(flt.Statuses) > 0 && !contains(flt.Statuses, r.Job.Status) {
+			continue
+		}
+		out = append(out, hiringtypes.ListItem{ID: r.Job.ID, Title: r.Job.Title, Status: r.Job.Status,
+			JobCode: r.Job.JobCode, CreatedBy: r.Job.CreatedBy})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, "", nil
@@ -289,6 +306,37 @@ func (f *Store) SetAutomatedScreening(_ context.Context, _, _ string, on bool) e
 type Ref struct {
 	Skills   map[string]string
 	Industry string
+
+	// Phase 2.
+	GateList     []gates.Gate
+	Registry     map[string]hiringtypes.RegistryEntry
+	FailRegister error
+}
+
+// Gates implements draft.Reference.
+func (r *Ref) Gates(context.Context) ([]gates.Gate, error) { return r.GateList, nil }
+
+// RegisterJob implements draft.Reference.
+func (r *Ref) RegisterJob(_ context.Context, e hiringtypes.RegistryEntry) error {
+	if r.FailRegister != nil {
+		return r.FailRegister
+	}
+	if r.Registry == nil {
+		r.Registry = map[string]hiringtypes.RegistryEntry{}
+	}
+	r.Registry[e.PublicID] = e
+	return nil
+}
+
+// SetRegistryStatus implements draft.Reference.
+func (r *Ref) SetRegistryStatus(_ context.Context, publicID, status string) error {
+	e, ok := r.Registry[publicID]
+	if !ok {
+		return hiringtypes.ErrNotFound
+	}
+	e.Status = status
+	r.Registry[publicID] = e
+	return nil
 }
 
 // Markets implements draft.Reference.
@@ -349,4 +397,114 @@ func (r *Ref) SkillNames(_ context.Context, ids []string) (map[string]string, er
 		}
 	}
 	return out, nil
+}
+
+func isMember(r *hiringtypes.JobRecord, user string) bool {
+	for _, m := range r.Members {
+		if m.UserID == user {
+			return true
+		}
+	}
+	return false
+}
+
+func contains(list []string, v string) bool {
+	for _, s := range list {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
+// writePhase2 applies the status, team, rules and confirmation parts of an update.
+func (f *Store) writePhase2(rec *hiringtypes.JobRecord, res *hiringtypes.UpdateResult) {
+	if res.Members != nil {
+		rec.Members = append([]hiringtypes.Member(nil), *res.Members...)
+	}
+	if res.Rules != nil {
+		rec.Rules = append(rec.Rules[:0:0], *res.Rules...)
+		for i := range rec.Rules {
+			if rec.Rules[i].ID == "" {
+				rec.Rules[i].ID = f.uuid()
+			}
+		}
+	}
+	if res.DPIAConfirm != nil {
+		rec.DPIAConfirmedAt = ""
+		if *res.DPIAConfirm {
+			rec.DPIAConfirmedAt = "2026-10-08T12:00:00Z"
+		}
+	}
+	if c := res.Confirm; c != nil {
+		replaced := false
+		for i := range rec.Confirmations {
+			if rec.Confirmations[i].GateID == c.GateID {
+				rec.Confirmations[i].Version, rec.Confirmations[i].Confirmed = c.Version, c.Confirmed
+				replaced = true
+			}
+		}
+		if !replaced {
+			rec.Confirmations = append(rec.Confirmations, gates.Confirmation{GateID: c.GateID, Version: c.Version, Confirmed: c.Confirmed})
+		}
+		f.Log = append(f.Log, c.GateID+"|"+map[bool]string{true: "confirmed", false: "withdrawn"}[c.Confirmed])
+	}
+	if sc := res.Status; sc != nil {
+		rec.Job.Status = sc.To
+		if sc.To == jobs.StatusPublished && rec.Job.PublishedAt == "" {
+			rec.Job.PublishedAt = "2026-10-08T12:00:00Z"
+		}
+		if sc.PublicID != "" {
+			rec.Job.PublicID = sc.PublicID
+		}
+		if sc.FreezeForm {
+			rec.FormVersion++
+		}
+		for _, l := range sc.Log {
+			f.Log = append(f.Log, l.GateID+"|"+l.Event)
+		}
+	}
+}
+
+// OrgMembers implements draft.Store.
+func (f *Store) OrgMembers(_ context.Context, _ string, ids []string) (map[string]hiringtypes.Member, error) {
+	out := map[string]hiringtypes.Member{}
+	for _, id := range ids {
+		if m, ok := f.People[id]; ok {
+			out[id] = m
+		}
+	}
+	return out, nil
+}
+
+// ---- company setup ----
+
+// CompanySetup implements draft.Store.
+func (f *Store) CompanySetup(_ context.Context, _, dpaVersion string) (*hiringtypes.CompanySetup, error) {
+	out := &hiringtypes.CompanySetup{KYBStatus: "verified", DPAVersion: dpaVersion, PrivacyContact: f.PrivacyEmail,
+		DPOContact: f.DPO, DPIAVersion: f.DPIAVersion}
+	for _, v := range f.DPAAccepted {
+		if v == dpaVersion {
+			out.DPAAccepted = true
+		}
+	}
+	return out, nil
+}
+
+// AcceptDPA implements draft.Store.
+func (f *Store) AcceptDPA(_ context.Context, _, _, version string) error {
+	f.DPAAccepted = append(f.DPAAccepted, version)
+	return nil
+}
+
+// SetPrivacyContact implements draft.Store.
+func (f *Store) SetPrivacyContact(_ context.Context, _, email, dpo string) error {
+	f.PrivacyEmail, f.DPO = email, dpo
+	return nil
+}
+
+// RecordDPIA implements draft.Store.
+func (f *Store) RecordDPIA(_ context.Context, _, _ string, _ json.RawMessage) (int, error) {
+	f.DPIAVersion++
+	return f.DPIAVersion, nil
 }

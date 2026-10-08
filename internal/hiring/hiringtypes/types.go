@@ -10,8 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Angle-HR/server/internal/hiring/gates"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/questions"
+	"github.com/Angle-HR/server/internal/hiring/screening"
 )
 
 // Errors the HTTP layer maps to responses.
@@ -41,6 +43,53 @@ type JobRecord struct {
 	Form         []questions.FormQuestion
 	Declarations []questions.Declaration
 	FormRevision int
+
+	// Phase 2.
+	Members         []Member
+	Rules           []screening.Rule
+	Confirmations   []gates.Confirmation
+	DPIAConfirmedAt string // when the job's owner confirmed screening is within the company DPIA ("" = not yet)
+	FormVersion     int    // newest frozen form_versions row (0 = never published)
+}
+
+// Member is a person on a job's hiring team. The job's creator has access without being listed.
+type Member struct {
+	UserID string `json:"user_id"`
+	Role   string `json:"role"`
+	Name   string `json:"name,omitempty"`  // output only
+	Email  string `json:"email,omitempty"` // output only
+}
+
+// Hiring team roles stored in hiring.job_members.
+const (
+	MemberHiringManager = "hiring_manager"
+	MemberRecruiter     = "recruiter"
+	MemberInterviewer   = "interviewer"
+	MemberViewer        = "viewer"
+)
+
+// LogEntry is one compliance_log row written with a status change: one per gate, so the log shows what the
+// publisher saw and confirmed.
+type LogEntry struct {
+	GateID   string
+	Severity string
+	Event    string
+}
+
+// StatusChange moves a job to another status in the same write as the checks that allowed it.
+type StatusChange struct {
+	To         string
+	FreezeForm bool       // write a new form_versions row (every publish does)
+	PublicID   string     // set on first publish
+	Log        []LogEntry // compliance_log rows, same transaction
+}
+
+// GateConfirm records one customer confirmation (or withdrawal) of a gate.
+type GateConfirm struct {
+	GateID    string
+	Version   int
+	Confirmed bool
+	Severity  string
 }
 
 // CreateInput is a new draft.
@@ -63,6 +112,12 @@ type UpdateResult struct {
 	Decls       *[]questions.Declaration  // replace the special category declarations (nil leaves them)
 	AuditAction string
 	AuditDiff   map[string]any
+
+	Status      *StatusChange     // change the job's status
+	Members     *[]Member         // replace the hiring team
+	Rules       *[]screening.Rule // replace the screening rules
+	DPIAConfirm *bool             // set or clear the job's DPIA scope confirmation
+	Confirm     *GateConfirm      // confirm or withdraw one gate
 }
 
 // ListFilter selects jobs for the list view.
@@ -161,4 +216,35 @@ func DecodeCursor(c string) (updatedAt, id string, err error) {
 		return "", "", errors.New("invalid cursor")
 	}
 	return parts[0], parts[1], nil
+}
+
+// RegistryEntry is a published job's row in the global registry: just enough to find its region.
+type RegistryEntry struct {
+	PublicID       string
+	Region         string
+	OrganizationID string
+	Status         string
+	PublishedAt    time.Time
+	ValidThrough   string // closing date, YYYY-MM-DD, or ""
+}
+
+// CompanyState is what the publish checks need to know about the company.
+type CompanyState struct {
+	Verified          bool // KYB status is verified
+	DPAAccepted       bool // the current terms and DPA version is accepted
+	PrivacyContactSet bool
+	DPIARecorded      bool // Legal recorded the company DPIA
+}
+
+// CompanySetup is the company's publish prerequisites as the settings page shows them.
+type CompanySetup struct {
+	KYBStatus         string `json:"kyb_status"`
+	DPAVersion        string `json:"dpa_version"` // the version that must be accepted
+	DPAAccepted       bool   `json:"dpa_accepted"`
+	DPAAcceptedAt     string `json:"dpa_accepted_at,omitempty"`
+	PrivacyContact    string `json:"privacy_contact_email"`
+	DPOContact        string `json:"dpo_contact"`
+	DPIAVersion       int    `json:"dpia_version"` // 0 = not recorded
+	DPIARecordedAt    string `json:"dpia_recorded_at,omitempty"`
+	AutomatedScreenOn bool   `json:"automated_screening_enabled"`
 }

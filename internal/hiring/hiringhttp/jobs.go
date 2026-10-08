@@ -20,10 +20,13 @@ var _ = apidoc.ErrorEnvelope{}
 
 // RegisterProtectedRoutes mounts the authenticated hiring routes.
 func (h *HiringHandler) RegisterProtectedRoutes(r chi.Router) {
+	h.registerPublishRoutes(r)
 	r.Route("/jobs", func(r chi.Router) {
 		r.Get("/", h.listJobs)
 		r.Post("/", h.createJob)
+		h.registerPublishJobRoutes(r)
 		r.Route("/{id}", func(r chi.Router) {
+			h.registerPublishItemRoutes(r)
 			r.Get("/", h.getJob)
 			r.Patch("/", h.patchJob)
 			r.Delete("/", h.deleteJob)

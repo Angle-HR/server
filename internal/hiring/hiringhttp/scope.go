@@ -97,20 +97,32 @@ func (d *PostgresHiringDirectory) Scope(
 	if err != nil {
 		return nil, draft.Caller{}, err
 	}
+	store := &hiringstore.Store{DB: pool}
 	svc := &draft.Service{
-		Store: &hiringstore.Store{DB: pool},
-		Ref:   &hiringstore.Global{DB: d.Global},
-		Now:   d.Now,
+		Store:   store,
+		Ref:     &hiringstore.Global{DB: d.Global},
+		Now:     d.Now,
+		Company: storeCompany{store: store},
 	}
-	return svc, draft.Caller{UserID: userID, OrgID: orgID, CompanyName: name, Perms: PermissionsFor(roles, owner)}, nil
+	return svc, draft.Caller{
+		UserID: userID, OrgID: orgID, Region: string(reg), CompanyName: name, Perms: PermissionsFor(roles, owner),
+	}, nil
 }
 
 var errOnboardingIncomplete = apperror.New(apperror.CodeOnboardingIncomplete, apperror.MsgOnboardingStepIncomplete)
+
+// storeCompany reads the company's publish prerequisites for the publish checks.
+type storeCompany struct{ store *hiringstore.Store }
+
+func (c storeCompany) State(ctx context.Context, orgID string) (draft.CompanyState, error) {
+	return c.store.CompanyState(ctx, orgID, draft.CurrentDPAVersion)
+}
 
 // Compile-time checks that the real stores satisfy the service's interfaces.
 var (
 	_ draft.Store     = (*hiringstore.Store)(nil)
 	_ draft.Reference = (*hiringstore.Global)(nil)
+	_ draft.Company   = storeCompany{}
 )
 
 // HiringHandler serves job drafts, the application form builder and the hiring catalogs.
@@ -182,9 +194,10 @@ func readBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 // hiringError maps a service or store error to an API error.
 func hiringError(err error) error {
 	var (
-		ve    *draft.ValidationError
-		fe    *draft.ForbiddenError
-		stale *hiringtypes.StaleRevisionError
+		ve      *draft.ValidationError
+		fe      *draft.ForbiddenError
+		stale   *hiringtypes.StaleRevisionError
+		blocked *draft.BlockedError
 	)
 	switch {
 	case errors.As(err, &ve):
@@ -197,6 +210,12 @@ func hiringError(err error) error {
 			"this job was changed by someone else; reload it and try again", map[string]any{"current_revision": stale.Current})
 	case errors.Is(err, hiringtypes.ErrNotFound):
 		return apperror.New(apperror.CodeNotFound, "not found")
+	case errors.As(err, &blocked):
+		return apperror.NewWithDetails(apperror.CodePublishBlocked, "this job cannot be published yet",
+			map[string]any{"blocking": blocked.Report.Blocking, "warnings": blocked.Report.Warnings,
+				"gates": blocked.Report.Gates})
+	case errors.Is(err, draft.ErrInvalidTransition):
+		return apperror.New(apperror.CodeConflict, "this job's status does not allow that")
 	case errors.Is(err, draft.ErrNotEditable), errors.Is(err, hiringtypes.ErrNotDraft):
 		return apperror.New(apperror.CodeConflict, "only draft jobs can be changed here")
 	case errors.Is(err, hiringtypes.ErrConflict):

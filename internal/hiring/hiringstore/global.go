@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Angle-HR/server/internal/hiring/gates"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
 )
@@ -171,4 +172,66 @@ func (g *Global) SkillNames(ctx context.Context, ids []string) (map[string]strin
 		out[id] = name
 	}
 	return out, rows.Err()
+}
+
+// ---- compliance gates and the public registry (phase 2) ----
+
+const gatesSQL = `
+SELECT id, COALESCE(market_code, ''), platform, severity, requirement, COALESCE(legal_basis, ''), trigger, version
+FROM hiring.compliance_gates WHERE is_active ORDER BY market_code NULLS LAST, id`
+
+// Gates returns the active compliance gate catalog.
+func (g *Global) Gates(ctx context.Context) ([]gates.Gate, error) {
+	rows, err := g.DB.Query(ctx, gatesSQL)
+	if err != nil {
+		return nil, fmt.Errorf("hiringstore: gates: %w", err)
+	}
+	defer rows.Close()
+	out := []gates.Gate{}
+	for rows.Next() {
+		var gt gates.Gate
+		var trigger []byte
+		if err = rows.Scan(&gt.ID, &gt.MarketCode, &gt.Platform, &gt.Severity, &gt.Requirement, &gt.LegalBasis,
+			&trigger, &gt.Version); err != nil {
+			return nil, fmt.Errorf("hiringstore: scan gate: %w", err)
+		}
+		gt.Trigger = json.RawMessage(trigger)
+		out = append(out, gt)
+	}
+	return out, rows.Err()
+}
+
+const registerJobSQL = `
+INSERT INTO hiring.job_registry (public_id, region, organization_id, status, published_at, valid_through)
+VALUES ($1, $2, $3::uuid, $4, $5, NULLIF($6, '')::date)
+ON CONFLICT (public_id) DO UPDATE SET
+    status = EXCLUDED.status, valid_through = EXCLUDED.valid_through,
+    published_at = COALESCE(hiring.job_registry.published_at, EXCLUDED.published_at)
+WHERE hiring.job_registry.organization_id = EXCLUDED.organization_id AND hiring.job_registry.region = EXCLUDED.region`
+
+// RegisterJob records which region and company hold a published job. Registering the same job again updates its
+// status and closing date; a public id that belongs to another company or region is never overwritten.
+func (g *Global) RegisterJob(ctx context.Context, e hiringtypes.RegistryEntry) error {
+	tag, err := g.DB.Exec(ctx, registerJobSQL, e.PublicID, e.Region, e.OrganizationID, e.Status, e.PublishedAt, e.ValidThrough)
+	if err != nil {
+		return fmt.Errorf("hiringstore: register job: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("hiringstore: register job: public id %s belongs to another company", e.PublicID)
+	}
+	return nil
+}
+
+const setRegistryStatusSQL = `UPDATE hiring.job_registry SET status = $2 WHERE public_id = $1`
+
+// SetRegistryStatus follows a status change of a registered job.
+func (g *Global) SetRegistryStatus(ctx context.Context, publicID, status string) error {
+	tag, err := g.DB.Exec(ctx, setRegistryStatusSQL, publicID, status)
+	if err != nil {
+		return fmt.Errorf("hiringstore: registry status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

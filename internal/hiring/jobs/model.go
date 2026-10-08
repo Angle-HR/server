@@ -161,6 +161,7 @@ type Job struct {
 	ID                string   `json:"id"`
 	JobNumber         int      `json:"job_number"`
 	JobCode           string   `json:"job_code"`
+	PublicID          string   `json:"public_id,omitempty"`
 	CreatedBy         string   `json:"created_by"`
 	Status            string   `json:"status"`
 	CurrentStep       string   `json:"current_step"`

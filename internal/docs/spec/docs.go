@@ -2384,6 +2384,393 @@ const docTemplate = `{
                 }
             }
         },
+        "/hiring/catalog": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Fixed lists (employment type, pay, travel, visa, lawful basis, currencies, retention options), seniority, experience, industries and every market with its warnings and whether it is open.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "Job form pick lists",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.CatalogEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/hiring/departments": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "List departments",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.DepartmentsEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Names are unique per company ignoring case; adding an existing name returns the existing department.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "Add a department",
+                "parameters": [
+                    {
+                        "description": "Department",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.DepartmentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.DepartmentEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/hiring/settings": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Company-level switches. Automated screening (knockout questions) is off until the company's legal contact turns it on.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "Hiring settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.SettingsEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Needs form.automated_screening.enable (Legal).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "Change hiring settings",
+                "parameters": [
+                    {
+                        "description": "Settings",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.SettingsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.SettingsEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/hiring/skills": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "Search skills",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start of the skill name",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Most results (default 20, max 50)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.SkillsEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/hiring/templates": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Company templates plus the caller's own default setup.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "templates"
+                ],
+                "summary": "List templates",
+                "parameters": [
+                    {
+                        "enum": [
+                            "job_details",
+                            "application_form"
+                        ],
+                        "type": "string",
+                        "description": "job_details or application_form",
+                        "name": "kind",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.TemplatesEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The template is made from an existing job, so it always matches what the builders produce. Set as_my_default to keep the setup for the caller's future jobs (\"Keep this setup\"); otherwise name it to share it with the company. Titles and closing dates are never saved, and pay and retention only when the caller may set them.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "templates"
+                ],
+                "summary": "Save a job's setup as a template",
+                "parameters": [
+                    {
+                        "description": "Template",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.TemplateInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.TemplateEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/hiring/templates/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "templates"
+                ],
+                "summary": "Delete a template",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Template id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/hiring/timezones": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Time zones with their current UTC offset, for jobs that are open to a time zone rather than a place.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "Time zones",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.TimezonesEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/industries": {
             "get": {
                 "description": "Returns active industry options for onboarding.",
@@ -2403,6 +2790,632 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Newest first. People who can only see assigned jobs get the jobs they created or were added to.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "List jobs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Comma-separated statuses, e.g. draft,published",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Only this department",
+                        "name": "department_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search the title",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "next_cursor from the previous page",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (default 25, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.JobListEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "All fields are optional, so the page can create a draft the first time the user saves. The draft starts from the caller's saved default setup and the standard application form unless template_id or form_template_id say otherwise.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Create a draft job",
+                "parameters": [
+                    {
+                        "description": "Job fields",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.CreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.JobEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the job with warnings (market rules, pay advice, possible duplicates). The ETag header carries the revision to send back in If-Match.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Get a job",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.JobEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Only drafts can be deleted. Everything else is closed or archived instead.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Delete a draft",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Revision the client loaded",
+                        "name": "If-Match",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "\"Save as draft\": send only the fields that changed. Formats are checked, required fields are not. Pay needs job.salary_range.set and retention needs job.retention.set.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Save a draft",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Revision the client loaded",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Patch"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.JobEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/application-form": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "application-form"
+                ],
+                "summary": "Get the application form",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.FormEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the whole form. Full name and email are locked, the CV accepts PDF only, questions about current or past pay are refused, knockout rules need automated screening enabled for the company, and special category questions need a declaration and a lawful basis on the job. A knockout flags a candidate for a person to review; it never rejects anyone.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "application-form"
+                ],
+                "summary": "Save the application form",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Revision the client loaded",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Form",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.FormInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.FormEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/details": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Same body as PATCH, but the required fields (title, department, hiring option, travel, visa, employment type and, for people who can set pay, pay) must be present once applied. Moves the draft to the application form step.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Save and continue on the job details step",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Revision the client loaded",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Patch"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.JobEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/duplicates/dismiss": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Records in the audit log that the user saw the warning and kept going. The warning still shows if the job is opened again.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Acknowledge the duplicate-job warning",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/markets": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the places a job is open to. Closed markets are rejected, an anywhere job takes no places, and the retention period is raised to the strictest minimum of the chosen markets. The response carries the market warnings.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Set the hiring option and markets",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Revision the client loaded",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Markets",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.MarketsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.JobEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/preview": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The candidate-facing view, built the same way as the live page. It never contains knockout rules, the lawful basis, retention or the assessment link.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Preview the posting",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.PreviewEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -2656,11 +3669,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-<<<<<<< HEAD
-                "description": "Saves legal business name, legal full name, country, company role, BIN number, registered address, business type, and industry type for a business account.",
-=======
                 "description": "Deprecated: prefer stepped PUT /onboarding/profile → address → PUT /onboarding/business (type/industry/employees) → complete. This one-shot includes KYB-oriented fields (BIN, registered address) and does not advance onboarding progress.",
->>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "consumes": [
                     "application/json"
                 ],
@@ -2670,12 +3679,8 @@ const docTemplate = `{
                 "tags": [
                     "onboarding/business"
                 ],
-<<<<<<< HEAD
-                "summary": "Submit business onboarding",
-=======
                 "summary": "Submit business onboarding (deprecated)",
                 "deprecated": true,
->>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "parameters": [
                     {
                         "description": "Business onboarding payload",
@@ -2816,8 +3821,6 @@ const docTemplate = `{
                 }
             }
         },
-<<<<<<< HEAD
-=======
         "/onboarding/compliance": {
             "put": {
                 "security": [
@@ -2922,7 +3925,6 @@ const docTemplate = `{
                 }
             }
         },
->>>>>>> 661519092b0171635e01370358342be351cf59f9
         "/onboarding/individual": {
             "post": {
                 "security": [
@@ -2930,11 +3932,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-<<<<<<< HEAD
-                "description": "Saves first name, last name, country of residence, business type, industry type, and number of employees for an individual account.",
-=======
                 "description": "Deprecated: prefer the stepped flow PUT /onboarding/profile then address/complete. Saves first name, last name, country, business type, industry, and employee count on the user row only.",
->>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "consumes": [
                     "application/json"
                 ],
@@ -2944,12 +3942,8 @@ const docTemplate = `{
                 "tags": [
                     "onboarding/individual"
                 ],
-<<<<<<< HEAD
-                "summary": "Submit individual onboarding",
-=======
                 "summary": "Submit individual onboarding (deprecated)",
                 "deprecated": true,
->>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "parameters": [
                     {
                         "description": "Individual onboarding payload",
@@ -3732,6 +4726,988 @@ const docTemplate = `{
                 "request_id": {
                     "type": "string",
                     "example": "abc123"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_draft.Catalog": {
+            "type": "object",
+            "properties": {
+                "currencies": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "description_sections": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "employment_types": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option"
+                    }
+                },
+                "experience_ranges": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.CatalogItem"
+                    }
+                },
+                "industries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.CatalogItem"
+                    }
+                },
+                "lawful_bases": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option"
+                    }
+                },
+                "location_modes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option"
+                    }
+                },
+                "markets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Market"
+                    }
+                },
+                "max_title_length": {
+                    "type": "integer"
+                },
+                "pay_periods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option"
+                    }
+                },
+                "pay_types": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option"
+                    }
+                },
+                "retention_months": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "seniority_levels": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.CatalogItem"
+                    }
+                },
+                "travel_frequencies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option"
+                    }
+                },
+                "visa_policies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option"
+                    }
+                },
+                "workplace_types": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option"
+                    }
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_draft.CreateRequest": {
+            "type": "object",
+            "properties": {
+                "assessment_url": {
+                    "type": "string"
+                },
+                "closing_date": {
+                    "type": "string"
+                },
+                "custom_industry": {
+                    "type": "string"
+                },
+                "department_id": {
+                    "type": "string"
+                },
+                "description_sections": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "employment_type": {
+                    "type": "string"
+                },
+                "experience_range_id": {
+                    "type": "string"
+                },
+                "form_template_id": {
+                    "description": "FormTemplateID starts the application form from a saved form template.",
+                    "type": "string"
+                },
+                "industry_id": {
+                    "type": "string"
+                },
+                "lawful_basis": {
+                    "type": "string"
+                },
+                "lia_reference": {
+                    "type": "string"
+                },
+                "location_mode": {
+                    "type": "string"
+                },
+                "location_text": {
+                    "type": "string"
+                },
+                "markets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.MarketSel"
+                    }
+                },
+                "pay": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.PayPatch"
+                },
+                "retention_months": {
+                    "type": "integer"
+                },
+                "seniority_level_id": {
+                    "type": "string"
+                },
+                "show_on_career_page": {
+                    "type": "boolean"
+                },
+                "skills": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Skill"
+                    }
+                },
+                "template_id": {
+                    "description": "TemplateID starts the draft from a saved job-details template instead of the caller's default.",
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "travel_frequency": {
+                    "type": "string"
+                },
+                "use_company_address": {
+                    "type": "boolean"
+                },
+                "visa_sponsorship": {
+                    "type": "string"
+                },
+                "workplace_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_draft.FormInput": {
+            "type": "object",
+            "properties": {
+                "declarations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_questions.Declaration"
+                    }
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_questions.FormQuestion"
+                    }
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_draft.FormView": {
+            "type": "object",
+            "properties": {
+                "automated_screening_enabled": {
+                    "type": "boolean"
+                },
+                "declarations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_questions.Declaration"
+                    }
+                },
+                "job_id": {
+                    "type": "string"
+                },
+                "job_revision": {
+                    "type": "integer"
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_questions.FormQuestion"
+                    }
+                },
+                "warnings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Warning"
+                    }
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_draft.JobView": {
+            "type": "object",
+            "properties": {
+                "assessment_url": {
+                    "type": "string"
+                },
+                "closing_date": {
+                    "type": "string"
+                },
+                "completed_sections": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "current_step": {
+                    "type": "string"
+                },
+                "custom_industry": {
+                    "type": "string"
+                },
+                "department_id": {
+                    "type": "string"
+                },
+                "department_name": {
+                    "type": "string"
+                },
+                "description_sections": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Sections"
+                },
+                "duplicates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Duplicate"
+                    }
+                },
+                "employment_type": {
+                    "type": "string"
+                },
+                "experience_range_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "industry_id": {
+                    "type": "string"
+                },
+                "job_code": {
+                    "type": "string"
+                },
+                "job_number": {
+                    "type": "integer"
+                },
+                "lawful_basis": {
+                    "type": "string"
+                },
+                "lia_reference": {
+                    "type": "string"
+                },
+                "location_mode": {
+                    "type": "string"
+                },
+                "location_text": {
+                    "type": "string"
+                },
+                "markets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.MarketSel"
+                    }
+                },
+                "pay": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Pay"
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "retention_months": {
+                    "type": "integer"
+                },
+                "revision": {
+                    "type": "integer"
+                },
+                "seniority_level_id": {
+                    "type": "string"
+                },
+                "show_on_career_page": {
+                    "type": "boolean"
+                },
+                "skills": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Skill"
+                    }
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "travel_frequency": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "use_company_address": {
+                    "type": "boolean"
+                },
+                "visa_sponsorship": {
+                    "type": "string"
+                },
+                "warnings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Warning"
+                    }
+                },
+                "workplace_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_draft.Option": {
+            "type": "object",
+            "properties": {
+                "label": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_draft.TemplateInput": {
+            "type": "object",
+            "properties": {
+                "as_my_default": {
+                    "type": "boolean"
+                },
+                "from_job_id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_hiringtypes.CatalogItem": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_hiringtypes.Department": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_hiringtypes.ListItem": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "current_step": {
+                    "type": "string"
+                },
+                "department_name": {
+                    "type": "string"
+                },
+                "employment_type": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "job_code": {
+                    "type": "string"
+                },
+                "location_mode": {
+                    "type": "string"
+                },
+                "markets": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "revision": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_hiringtypes.Settings": {
+            "type": "object",
+            "properties": {
+                "automated_screening_enabled": {
+                    "type": "boolean"
+                },
+                "automated_screening_enabled_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_hiringtypes.Template": {
+            "type": "object",
+            "properties": {
+                "created_by": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_default": {
+                    "type": "boolean"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "payload": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_jobs.Duplicate": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "job_code": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_jobs.Market": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "currencies": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "is_open": {
+                    "type": "boolean"
+                },
+                "min_retention_months": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "warnings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Warning"
+                    }
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_jobs.MarketSel": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string"
+                },
+                "market_code": {
+                    "type": "string"
+                },
+                "subdivision": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_jobs.Patch": {
+            "type": "object",
+            "properties": {
+                "assessment_url": {
+                    "type": "string"
+                },
+                "closing_date": {
+                    "type": "string"
+                },
+                "custom_industry": {
+                    "type": "string"
+                },
+                "department_id": {
+                    "type": "string"
+                },
+                "description_sections": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "employment_type": {
+                    "type": "string"
+                },
+                "experience_range_id": {
+                    "type": "string"
+                },
+                "industry_id": {
+                    "type": "string"
+                },
+                "lawful_basis": {
+                    "type": "string"
+                },
+                "lia_reference": {
+                    "type": "string"
+                },
+                "location_mode": {
+                    "type": "string"
+                },
+                "location_text": {
+                    "type": "string"
+                },
+                "markets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.MarketSel"
+                    }
+                },
+                "pay": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.PayPatch"
+                },
+                "retention_months": {
+                    "type": "integer"
+                },
+                "seniority_level_id": {
+                    "type": "string"
+                },
+                "show_on_career_page": {
+                    "type": "boolean"
+                },
+                "skills": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Skill"
+                    }
+                },
+                "title": {
+                    "type": "string"
+                },
+                "travel_frequency": {
+                    "type": "string"
+                },
+                "use_company_address": {
+                    "type": "boolean"
+                },
+                "visa_sponsorship": {
+                    "type": "string"
+                },
+                "workplace_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_jobs.Pay": {
+            "type": "object",
+            "properties": {
+                "currency": {
+                    "type": "string"
+                },
+                "max": {
+                    "type": "integer"
+                },
+                "min": {
+                    "type": "integer"
+                },
+                "period": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "visible": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_jobs.PayPatch": {
+            "type": "object",
+            "properties": {
+                "currency": {
+                    "type": "string"
+                },
+                "max": {
+                    "type": "integer"
+                },
+                "min": {
+                    "type": "integer"
+                },
+                "period": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "visible": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_jobs.PublicJob": {
+            "type": "object",
+            "properties": {
+                "assessment_link_set": {
+                    "type": "boolean"
+                },
+                "closing_date": {
+                    "type": "string"
+                },
+                "company": {
+                    "type": "string"
+                },
+                "department": {
+                    "type": "string"
+                },
+                "description_sections": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Sections"
+                },
+                "description_text": {
+                    "type": "string"
+                },
+                "employment_type": {
+                    "type": "string"
+                },
+                "experience": {
+                    "type": "string"
+                },
+                "industry": {
+                    "type": "string"
+                },
+                "job_code": {
+                    "type": "string"
+                },
+                "location_mode": {
+                    "type": "string"
+                },
+                "location_text": {
+                    "type": "string"
+                },
+                "locations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.PublicLocation"
+                    }
+                },
+                "pay": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.PublicPay"
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.PublicQuestion"
+                    }
+                },
+                "seniority": {
+                    "type": "string"
+                },
+                "skills": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "type": "string"
+                },
+                "travel_frequency": {
+                    "type": "string"
+                },
+                "visa_sponsorship": {
+                    "type": "string"
+                },
+                "workplace_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_jobs.PublicLocation": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string"
+                },
+                "market_code": {
+                    "type": "string"
+                },
+                "subdivision": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_jobs.PublicPay": {
+            "type": "object",
+            "properties": {
+                "currency": {
+                    "type": "string"
+                },
+                "max": {
+                    "type": "integer"
+                },
+                "min": {
+                    "type": "integer"
+                },
+                "period": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_jobs.PublicQuestion": {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "description": {
+                    "type": "string"
+                },
+                "helper_text": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "required": {
+                    "type": "boolean"
+                },
+                "section": {
+                    "type": "string"
+                },
+                "sensitive": {
+                    "type": "boolean"
+                },
+                "system_key": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_jobs.Sections": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_jobs.Skill": {
+            "type": "object",
+            "properties": {
+                "custom_label": {
+                    "type": "string"
+                },
+                "name": {
+                    "description": "resolved label on output; ignored on input",
+                    "type": "string"
+                },
+                "skill_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_jobs.Timezone": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "offset": {
+                    "type": "string"
+                },
+                "offset_seconds": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_jobs.Warning": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "market": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "severity": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_questions.Declaration": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "legal_condition": {
+                    "type": "string"
+                },
+                "purpose": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_questions.FormQuestion": {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "description": {
+                    "type": "string"
+                },
+                "helper_text": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "knockout": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "label": {
+                    "type": "string"
+                },
+                "locked": {
+                    "description": "set by the server: full name and email cannot be removed or made optional",
+                    "type": "boolean"
+                },
+                "position": {
+                    "type": "integer"
+                },
+                "required": {
+                    "type": "boolean"
+                },
+                "section": {
+                    "type": "string"
+                },
+                "special_category": {
+                    "type": "string"
+                },
+                "system_key": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
                 }
             }
         },
@@ -5031,8 +7007,6 @@ const docTemplate = `{
                 }
             }
         },
-<<<<<<< HEAD
-=======
         "internal_handler.IdentificationRequirementField": {
             "type": "object",
             "properties": {
@@ -5092,7 +7066,6 @@ const docTemplate = `{
                 }
             }
         },
->>>>>>> 661519092b0171635e01370358342be351cf59f9
         "internal_handler.IndividualEnvelope": {
             "type": "object",
             "properties": {
@@ -6002,8 +7975,6 @@ const docTemplate = `{
                 }
             }
         },
-<<<<<<< HEAD
-=======
         "internal_handler.VerifyAddressEnvelope": {
             "type": "object",
             "properties": {
@@ -6114,7 +8085,6 @@ const docTemplate = `{
                 }
             }
         },
->>>>>>> 661519092b0171635e01370358342be351cf59f9
         "internal_handler.WaitlistBusinessType": {
             "type": "object",
             "properties": {
@@ -6427,6 +8397,184 @@ const docTemplate = `{
                 },
                 "wants_user_testing": {
                     "type": "boolean"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.CatalogEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Catalog"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.DepartmentEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.Department"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.DepartmentRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "Customer Support"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.DepartmentsEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.Department"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.FormEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.FormView"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.JobEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.JobView"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.JobListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.ListItem"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.MarketsRequest": {
+            "type": "object",
+            "properties": {
+                "location_mode": {
+                    "type": "string"
+                },
+                "markets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.MarketSel"
+                    }
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.PreviewEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.PublicJob"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.SettingsEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.Settings"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.SettingsRequest": {
+            "type": "object",
+            "properties": {
+                "automated_screening_enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.SkillsEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.CatalogItem"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.TemplateEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.Template"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.TemplatesEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.Template"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.TimezonesEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Timezone"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
                 }
             }
         }

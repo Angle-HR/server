@@ -2,8 +2,29 @@ package docs
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
+
+func TestServeEmbeddedOpenAPI(t *testing.T) {
+	t.Parallel()
+	h := &docHandler{host: "localhost:8080", scheme: "http"}
+	w := httptest.NewRecorder()
+	h.serveOpenAPI(w, httptest.NewRequest(http.MethodGet, "/openapi.json", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var doc struct {
+		Paths map[string]json.RawMessage `json:"paths"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("invalid OpenAPI JSON: %v", err)
+	}
+	if len(doc.Paths) == 0 {
+		t.Fatal("embedded OpenAPI document has no paths")
+	}
+}
 
 func TestPatchOpenAPISpec(t *testing.T) {
 	t.Parallel()

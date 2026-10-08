@@ -42,6 +42,10 @@ func TestAuthLogin_wrongPassword(t *testing.T) {
 		t.Fatalf("code: got %q want %q", errBody.Code, apperror.CodeUnauthorized)
 	}
 
+	if errBody.Message != "wrong email or password" {
+		t.Fatalf("message: got %q want %q", errBody.Message, "wrong email or password")
+	}
+
 	assertMocksMet(t, globalMock, regionalMock)
 }
 
@@ -155,20 +159,21 @@ func expectUnverifiedLoginMocks(t *testing.T, emailVerifiedAt *time.Time) (pgxmo
 		userAccountRows(passwordHash, emailVerifiedAt),
 	)
 
-	idSQL, idArgs, err := query.LookupPendingUserByID(testLoginUserID)
+	emailSQL, emailArgs, err := query.LookupPendingUserByEmail(testLoginEmail)
 	if err != nil {
 		t.Fatalf("LookupPendingUserByID: %v", err)
+	}
+	globalMock.ExpectQuery(emailSQL).WithArgs(emailArgs...).WillReturnRows(
+		userAccountRows(passwordHash, emailVerifiedAt),
+	)
+
+	idSQL, idArgs, err := query.LookupPendingUserByID(testLoginUserID)
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool regional: %v", err)
 	}
 	globalMock.ExpectQuery(idSQL).WithArgs(idArgs...).WillReturnRows(
 		userAccountRows(passwordHash, emailVerifiedAt),
 	)
-
-	// The holding area is global, so the regional pool is not touched.
-	regionalMock, err := pgxmock.NewPool(pgxmock.QueryMatcherOption(pgxmock.QueryMatcherEqual))
-	if err != nil {
-		t.Fatalf("pgxmock.NewPool regional: %v", err)
-	}
-	t.Cleanup(func() { regionalMock.Close() })
 
 	return globalMock, regionalMock
 }
@@ -206,14 +211,8 @@ func expectVerifiedLoginMocks(t *testing.T, emailVerifiedAt *time.Time) (pgxmock
 	if err != nil {
 		t.Fatalf("LookupAccountUserByID: %v", err)
 	}
-	// Login loads the user twice (region reconcile, then the login itself);
-	// each query needs its own row set because pgxmock rows are single-use.
-	regionalMock.ExpectQuery(userSQL).
-		WithArgs(userArgs...).
-		WillReturnRows(userAccountRows(passwordHash, emailVerifiedAt))
-	regionalMock.ExpectQuery(userSQL).
-		WithArgs(userArgs...).
-		WillReturnRows(userAccountRows(passwordHash, emailVerifiedAt))
+	regionalMock.ExpectQuery(userSQL).WithArgs(userArgs...).WillReturnRows(userAccountRows(passwordHash, emailVerifiedAt))
+	regionalMock.ExpectQuery(userSQL).WithArgs(userArgs...).WillReturnRows(userAccountRows(passwordHash, emailVerifiedAt))
 
 	return globalMock, regionalMock
 }

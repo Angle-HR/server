@@ -2656,7 +2656,11 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+<<<<<<< HEAD
+                "description": "Saves legal business name, legal full name, country, company role, BIN number, registered address, business type, and industry type for a business account.",
+=======
                 "description": "Deprecated: prefer stepped PUT /onboarding/profile → address → PUT /onboarding/business (type/industry/employees) → complete. This one-shot includes KYB-oriented fields (BIN, registered address) and does not advance onboarding progress.",
+>>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "consumes": [
                     "application/json"
                 ],
@@ -2666,8 +2670,12 @@ const docTemplate = `{
                 "tags": [
                     "onboarding/business"
                 ],
+<<<<<<< HEAD
+                "summary": "Submit business onboarding",
+=======
                 "summary": "Submit business onboarding (deprecated)",
                 "deprecated": true,
+>>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "parameters": [
                     {
                         "description": "Business onboarding payload",
@@ -2808,6 +2816,8 @@ const docTemplate = `{
                 }
             }
         },
+<<<<<<< HEAD
+=======
         "/onboarding/compliance": {
             "put": {
                 "security": [
@@ -2912,6 +2922,7 @@ const docTemplate = `{
                 }
             }
         },
+>>>>>>> 661519092b0171635e01370358342be351cf59f9
         "/onboarding/individual": {
             "post": {
                 "security": [
@@ -2919,7 +2930,11 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+<<<<<<< HEAD
+                "description": "Saves first name, last name, country of residence, business type, industry type, and number of employees for an individual account.",
+=======
                 "description": "Deprecated: prefer the stepped flow PUT /onboarding/profile then address/complete. Saves first name, last name, country, business type, industry, and employee count on the user row only.",
+>>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "consumes": [
                     "application/json"
                 ],
@@ -2929,8 +2944,12 @@ const docTemplate = `{
                 "tags": [
                     "onboarding/individual"
                 ],
+<<<<<<< HEAD
+                "summary": "Submit individual onboarding",
+=======
                 "summary": "Submit individual onboarding (deprecated)",
                 "deprecated": true,
+>>>>>>> 661519092b0171635e01370358342be351cf59f9
                 "parameters": [
                     {
                         "description": "Individual onboarding payload",
@@ -5012,6 +5031,8 @@ const docTemplate = `{
                 }
             }
         },
+<<<<<<< HEAD
+=======
         "internal_handler.IdentificationRequirementField": {
             "type": "object",
             "properties": {
@@ -5071,6 +5092,7 @@ const docTemplate = `{
                 }
             }
         },
+>>>>>>> 661519092b0171635e01370358342be351cf59f9
         "internal_handler.IndividualEnvelope": {
             "type": "object",
             "properties": {
@@ -5980,6 +6002,8 @@ const docTemplate = `{
                 }
             }
         },
+<<<<<<< HEAD
+=======
         "internal_handler.VerifyAddressEnvelope": {
             "type": "object",
             "properties": {
@@ -6090,6 +6114,7 @@ const docTemplate = `{
                 }
             }
         },
+>>>>>>> 661519092b0171635e01370358342be351cf59f9
         "internal_handler.WaitlistBusinessType": {
             "type": "object",
             "properties": {

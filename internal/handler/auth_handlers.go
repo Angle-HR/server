@@ -357,6 +357,11 @@ func (h *AuthHandler) verifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
+		var fieldErrors validator.ValidationErrors
+		if errors.As(err, &fieldErrors) && len(fieldErrors) == 1 && fieldErrors[0].Field() == "Code" {
+			response.Error(w, r, apperror.New(apperror.CodeInvalidVerificationCode, apperror.MsgIncorrectOTP))
+			return
+		}
 		response.Error(w, r, validationError(err))
 		return
 	}
@@ -364,7 +369,15 @@ func (h *AuthHandler) verifyEmail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	session, err := h.Verifier.ValidateCode(ctx, req.VerificationSessionID, req.Code)
 	if err != nil {
-		response.Error(w, r, verificationCodeError(err))
+		if errors.Is(err, auth.ErrVerificationExpired) {
+			response.Error(w, r, apperror.New(apperror.CodeVerificationExpired, apperror.MsgVerificationExpired))
+			return
+		}
+		if errors.Is(err, auth.ErrInvalidVerificationCode) {
+			response.Error(w, r, apperror.New(apperror.CodeInvalidVerificationCode, apperror.MsgIncorrectOTP))
+			return
+		}
+		response.Error(w, r, apperror.ErrNotFound)
 		return
 	}
 
@@ -575,7 +588,7 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 	reg, userID, err := h.resolveUserRegion(ctx, email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			response.Error(w, r, apperror.ErrUnauthorized)
+			response.Error(w, r, apperror.New(apperror.CodeUnauthorized, apperror.MsgInvalidCredentials))
 			return
 		}
 		response.Error(w, r, apperror.ErrInternal)
@@ -585,7 +598,7 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 	user, err := h.loadUserByID(ctx, reg, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			response.Error(w, r, apperror.ErrUnauthorized)
+			response.Error(w, r, apperror.New(apperror.CodeUnauthorized, apperror.MsgInvalidCredentials))
 			return
 		}
 		response.Error(w, r, apperror.ErrInternal)
@@ -593,9 +606,8 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !auth.CheckPassword(user.PasswordHash, req.Password) {
-		_, lockoutErr := h.PasswordLockout.RecordFailure(ctx, email)
-		besteffort.Log(ctx, "h.PasswordLockout.RecordFailure", lockoutErr)
-		response.Error(w, r, apperror.ErrUnauthorized)
+		_, _ = h.PasswordLockout.RecordFailure(ctx, email)
+		response.Error(w, r, apperror.New(apperror.CodeUnauthorized, apperror.MsgInvalidCredentials))
 		return
 	}
 	besteffort.Log(ctx, "h.PasswordLockout.Reset", h.PasswordLockout.Reset(ctx, email))

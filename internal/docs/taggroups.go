@@ -38,6 +38,16 @@ var adminTagGroup = map[string]any{
 	},
 }
 
+var hiringTagGroup = map[string]any{
+	"name": "Hiring",
+	"tags": []any{
+		"jobs",
+		"application-form",
+		"templates",
+		"hiring",
+	},
+}
+
 var apiTagDefinitions = []map[string]any{
 	{
 		"name":          "waitlist/reference",
@@ -142,11 +152,34 @@ var apiTagDefinitions = []map[string]any{
 		"description":   "Immutable audit trail of admin mutations.",
 		"x-displayName": "Audit",
 	},
+	{
+		"name": "jobs",
+		"description": "Draft jobs: create, save as draft, save and continue, markets and warnings, preview, " +
+			"duplicate-job warning and delete (drafts only).",
+		"x-displayName": "Jobs",
+	},
+	{
+		"name": "application-form",
+		"description": "The application form builder: question types, locked name and email, knockout rules " +
+			"and special category declarations.",
+		"x-displayName": "Application form",
+	},
+	{
+		"name":          "templates",
+		"description":   "Saved job setups: company templates and a user's own default (Keep this setup).",
+		"x-displayName": "Templates",
+	},
+	{
+		"name": "hiring",
+		"description": "Pick lists for the job form (catalog, time zones, skills), departments and company " +
+			"hiring settings.",
+		"x-displayName": "Hiring setup",
+	},
 }
 
 // ApplyAPITagGroups injects Scalar x-tagGroups and tag metadata into an OpenAPI document.
 func ApplyAPITagGroups(doc map[string]any) {
-	doc["x-tagGroups"] = []any{waitlistTagGroup, onboardingTagGroup, adminTagGroup}
+	doc["x-tagGroups"] = []any{waitlistTagGroup, onboardingTagGroup, adminTagGroup, hiringTagGroup}
 
 	tags := make([]any, len(apiTagDefinitions))
 	for i, tag := range apiTagDefinitions {

@@ -23,6 +23,8 @@ import (
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/docs"
 	"github.com/Angle-HR/server/internal/handler"
+	"github.com/Angle-HR/server/internal/hiring/hiringhttp"
+	"github.com/Angle-HR/server/internal/hiring/hiringstore"
 	"github.com/Angle-HR/server/internal/kyb"
 	"github.com/Angle-HR/server/internal/kyb/kybnotify"
 	"github.com/Angle-HR/server/internal/onboarding"
@@ -162,6 +164,7 @@ func Run() error {
 	kybNotifierFor := newKYBNotifierFactory(dbRouter, globalPool, fluvioClient)
 	kybHandler.NotifierFor = kybNotifierFor
 	kybHandler.Formats = onboarding.RegistrationNumberFormatOK
+	hiringHandler := newHiringHandler(dbRouter, globalPool)
 	adminHandler := handler.NewAdminHandler(
 		adminStore,
 		dbRouter,
@@ -199,6 +202,7 @@ func Run() error {
 			individualOnboardingHandler.RegisterProtectedRoutes(r)
 			businessOnboardingHandler.RegisterProtectedRoutes(r)
 			kybHandler.RegisterProtectedRoutes(r)
+			hiringHandler.RegisterProtectedRoutes(r)
 		})
 
 		r.Route("/admin", func(r chi.Router) {
@@ -255,6 +259,26 @@ func serve(server *http.Server, cfg config.Config, log *slog.Logger) error {
 
 	log.Info("server stopped")
 	return nil
+}
+
+// newHiringHandler builds the job drafts and form builder handler. Company data is read from the caller's own
+// region; markets and catalogs come from the global database.
+func newHiringHandler(router *dbrouter.DBRouter, global *pgxpool.Pool) *hiringhttp.HiringHandler {
+	dir := &hiringhttp.PostgresHiringDirectory{
+		Regional: func(reg region.Region) (hiringstore.DB, error) {
+			pool, err := router.DB(reg)
+			if err != nil {
+				return nil, err
+			}
+			return pool, nil
+		},
+		Global: global,
+	}
+	identify := func(ctx context.Context) (string, region.Region, bool) {
+		id, reg, ok := auth.UserFromContext(ctx)
+		return id.String(), reg, ok
+	}
+	return hiringhttp.NewHiringHandler(dir, identify)
 }
 
 // newKYBRegistry installs the automated company verifiers that are configured.

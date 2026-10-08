@@ -159,21 +159,21 @@ func expectUnverifiedLoginMocks(t *testing.T, emailVerifiedAt *time.Time) (pgxmo
 		userAccountRows(passwordHash, emailVerifiedAt),
 	)
 
-	emailSQL, emailArgs, err := query.LookupPendingUserByEmail(testLoginEmail)
-	if err != nil {
-		t.Fatalf("LookupPendingUserByID: %v", err)
-	}
-	globalMock.ExpectQuery(emailSQL).WithArgs(emailArgs...).WillReturnRows(
-		userAccountRows(passwordHash, emailVerifiedAt),
-	)
-
 	idSQL, idArgs, err := query.LookupPendingUserByID(testLoginUserID)
 	if err != nil {
-		t.Fatalf("pgxmock.NewPool regional: %v", err)
+		t.Fatalf("LookupPendingUserByID: %v", err)
 	}
 	globalMock.ExpectQuery(idSQL).WithArgs(idArgs...).WillReturnRows(
 		userAccountRows(passwordHash, emailVerifiedAt),
 	)
+
+	// Unverified accounts stay on the global holding pool. The router still
+	// needs a regional pool registered, and login does not query it.
+	regionalMock, err := pgxmock.NewPool(pgxmock.QueryMatcherOption(pgxmock.QueryMatcherEqual))
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool regional: %v", err)
+	}
+	t.Cleanup(func() { regionalMock.Close() })
 
 	return globalMock, regionalMock
 }

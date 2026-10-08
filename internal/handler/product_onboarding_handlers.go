@@ -92,11 +92,11 @@ type productProfileBody struct {
 type productAddressBody struct {
 	CountryID        string            `json:"country_id" validate:"required,uuid"`
 	EntryMode        string            `json:"entry_mode" validate:"required,oneof=search manual"`
-	Line1            string            `json:"line_1" validate:"required_if=EntryMode manual,max=200"`
+	Line1            string            `json:"line_1" validate:"required,max=200"`
 	Line2            *string           `json:"line_2"`
 	City             string            `json:"city" validate:"required,max=100"`
 	StateOrCounty    string            `json:"state_or_county" validate:"required,max=100"`
-	PostCode         string            `json:"post_code" validate:"required_if=EntryMode manual,max=20"`
+	PostCode         string            `json:"post_code" validate:"required,max=20"`
 	FormattedAddress *string           `json:"formatted_address"`
 	Identification   map[string]string `json:"identification"`
 }
@@ -250,11 +250,9 @@ func (h *ProductOnboardingHandler) saveIndividualProfile(
 		return ProductProfileData{}, apperror.ErrInternal
 	}
 
-		completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepProfile)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
+	if _, execErr := tx.Exec(ctx, `DELETE FROM organizations WHERE owner_user_id = $1`, userID); execErr != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
 
 	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepProfile)
 	if err != nil {
@@ -324,11 +322,13 @@ func (h *ProductOnboardingHandler) saveBusinessProfile(
 		return ProductProfileData{}, apperror.ErrInternal
 	}
 
-		completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepProfile)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
+	orgSQL, orgArgs, err := upsertOrganizationProfileSQL(reg, userID, *req.LegalBusinessName, roleID)
+	if err != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+	if _, execErr := tx.Exec(ctx, orgSQL, orgArgs...); execErr != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
 
 	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepProfile)
 	if err != nil {
@@ -554,7 +554,7 @@ func (h *ProductOnboardingHandler) persistAddress(
 		return nil, "", apperror.ErrInternal
 	}
 
-	completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepIdentificationAddress)
+	completed, currentStep, err = h.advanceProgress(ctx, tx, userID, onboarding.StepIdentificationAddress)
 	if err != nil {
 		return nil, "", apperror.ErrInternal
 	}
@@ -869,7 +869,7 @@ func (h *ProductOnboardingHandler) putCompliance(w http.ResponseWriter, r *http.
 		return
 	}
 
-	completed, currentStep, err := h.advanceProgress(ctx, tx, reg, userID, onboarding.StepCompliance)
+	completed, currentStep, err := h.advanceProgress(ctx, tx, userID, onboarding.StepCompliance)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -1259,8 +1259,13 @@ func loadComplianceState(
 	}
 }
 
-func (h *ProductOnboardingHandler) advanceProgress(ctx context.Context, tx pgx.Tx, reg region.Region, userID uuid.UUID, step string) ([]string, string, error) {
-	progressSQL, progressArgs, err := lookupOnboardingProgressSQL(reg, userID)
+func (h *ProductOnboardingHandler) advanceProgress(
+	ctx context.Context,
+	tx pgx.Tx,
+	userID uuid.UUID,
+	step string,
+) ([]string, string, error) {
+	progressSQL, progressArgs, err := query.LookupOnboardingProgress(userID)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1278,7 +1283,7 @@ func (h *ProductOnboardingHandler) advanceProgress(ctx context.Context, tx pgx.T
 
 	completed = onboarding.AdvanceCompleted(completed, step)
 	currentStep = normalizeStep(step)
-	upsertSQL, upsertArgs, err := upsertOnboardingProgressSQL(reg, userID, currentStep, completed)
+	upsertSQL, upsertArgs, err := query.UpsertOnboardingProgress(userID, currentStep, completed)
 	if err != nil {
 		return nil, "", err
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/response"
 )
 
@@ -64,8 +65,8 @@ type adminUserDetail struct {
 //	@Router			/admin/users [get]
 func (h *AdminHandler) listUsers(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	limit := parseLimit(r.URL.Query().Get("limit"), 50, 100)
-	offset := parseLimit(r.URL.Query().Get("offset"), 0, 100000)
+	limit := parseLimit(r.URL.Query().Get("limit"), defaultPageLimit, maxPageLimit)
+	offset := parseLimit(r.URL.Query().Get("offset"), 0, maxPageOffset)
 	if r.URL.Query().Get("offset") == "" {
 		offset = 0
 	}
@@ -96,7 +97,14 @@ func (h *AdminHandler) listUsers(w http.ResponseWriter, r *http.Request) {
 	var items []adminUserListItem
 	for rows.Next() {
 		var item adminUserListItem
-		if err := rows.Scan(&item.ID, &item.Email, &item.Region, &item.UserID, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(
+			&item.ID,
+			&item.Email,
+			&item.Region,
+			&item.UserID,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		); err != nil {
 			response.Error(w, r, err)
 			return
 		}
@@ -160,7 +168,7 @@ func (h *AdminHandler) patchUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body patchUserBody
-	if err := decodeJSON(r, &body); err != nil {
+	if decodeJSONErr := decodeJSON(r, &body); decodeJSONErr != nil {
 		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
 		return
 	}
@@ -238,7 +246,8 @@ func (h *AdminHandler) loadUserDetail(ctx context.Context, id uuid.UUID) (adminU
 
 	reg, err := region.ParseRegion(d.Region)
 	if err != nil {
-		return d, nil
+		// Unknown region on the registry row: return the registry detail without regional enrichment.
+		return d, nil //nolint:nilerr // intentional partial result
 	}
 	pool, err := h.Router.DB(reg)
 	if err != nil {
@@ -257,13 +266,20 @@ func (h *AdminHandler) loadUserDetail(ctx context.Context, id uuid.UUID) (adminU
 		return adminUserDetail{}, fmt.Errorf("load regional user: %w", err)
 	}
 
-	_ = pool.QueryRow(ctx, `
+	// Enrichment only: a missing row is normal, other failures are logged.
+	progressErr := pool.QueryRow(ctx, `
 		SELECT current_step, completed_steps FROM accounts.onboarding_progress WHERE user_id = $1
 	`, *d.UserID).Scan(&d.OnboardingStep, &d.CompletedSteps)
+	if !errors.Is(progressErr, pgx.ErrNoRows) {
+		besteffort.Log(ctx, "load onboarding progress", progressErr)
+	}
 
-	_ = pool.QueryRow(ctx, `
+	orgErr := pool.QueryRow(ctx, `
 		SELECT legal_name FROM accounts.organizations WHERE owner_user_id = $1
 	`, *d.UserID).Scan(&d.OrganizationLegalName)
+	if !errors.Is(orgErr, pgx.ErrNoRows) {
+		besteffort.Log(ctx, "load organization name", orgErr)
+	}
 
 	return d, nil
 }

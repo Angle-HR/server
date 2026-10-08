@@ -24,6 +24,10 @@ const (
 	TypePasswordReset        = "password_reset"
 	TypeLoginOTP             = "login_otp"
 	TypeOrgInvite            = "org_invite"
+	TypeKYBFailed            = "kyb_failed"
+	TypeKYBReviewQueued      = "kyb_review_queued"
+	TypeKYBNudge1            = "kyb_nudge_1"
+	TypeKYBNudge2            = "kyb_nudge_2"
 )
 
 // EmailArgs defines job queue arguments for email notifications.
@@ -35,6 +39,7 @@ type EmailArgs struct {
 	Token            string `json:"token,omitempty"`
 	Code             string `json:"code,omitempty"`
 	ExpiresInSeconds int    `json:"expires_in_seconds,omitempty"`
+	FailureReason    string `json:"failure_reason,omitempty"` // KYB emails: why verification failed
 }
 
 // Kind returns the job kind name.
@@ -84,6 +89,51 @@ func New(cfg Config) (*Mailer, error) {
 	}, nil
 }
 
+// selectTemplate picks the template file, subject and base URL for an email type,
+// and checks that the app URL that type needs is configured.
+func (m *Mailer) selectTemplate(emailType string) (templateName, subject, baseURL string, err error) {
+	baseURL = m.cfg.AppURL
+	needsAppURL := func(name string) error {
+		if m.cfg.AppURL == "" {
+			return fmt.Errorf("APP_URL is required for %s emails", name)
+		}
+		return nil
+	}
+
+	switch emailType {
+	case TypeWaitlistConfirmation:
+		return "waitlist_confirmation.html", "You're on the OpenHR waitlist", baseURL, nil
+	case TypeMoreInfoAck:
+		return "more_info_ack.html", "Thanks for sharing more about yourself", baseURL, nil
+	case TypeEmailVerification:
+		return "email_verification.html", "Verify your Open HR email", baseURL, nil
+	case TypeOnboardingComplete:
+		return "onboarding_complete.html", "Welcome to Open HR", baseURL, needsAppURL("onboarding_complete")
+	case TypeAdminInvite:
+		if m.cfg.AdminAppURL == "" {
+			return "", "", "", fmt.Errorf("ADMIN_APP_URL is required for admin_invite emails")
+		}
+		return "admin_invite.html", "You're invited to Open HR Admin", m.cfg.AdminAppURL, nil
+	case TypePasswordReset:
+		return "password_reset.html", "Reset your Open HR password", baseURL, needsAppURL("password_reset")
+	case TypeLoginOTP:
+		return "login_otp.html", "Your Open HR sign-in code", baseURL, nil
+	case TypeOrgInvite:
+		return "org_invite.html", "You're invited to Open HR", baseURL, needsAppURL("org_invite")
+	case TypeKYBFailed:
+		return "kyb_failed.html", "We couldn't verify your company yet", baseURL, needsAppURL("kyb_failed")
+	case TypeKYBReviewQueued:
+		return "kyb_review_queued.html", "Your company verification is in review", baseURL, nil
+	case TypeKYBNudge1:
+		return "kyb_nudge_1.html", "Finish verifying your company", baseURL, needsAppURL("kyb_nudge_1")
+	case TypeKYBNudge2:
+		return "kyb_nudge_2.html", "Your company verification still needs attention", baseURL,
+			needsAppURL("kyb_nudge_2")
+	default:
+		return "", "", "", fmt.Errorf("unknown email type: %s", emailType)
+	}
+}
+
 // Send renders and delivers the email according to the job arguments.
 func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 	m.logger.Info("email send started",
@@ -92,58 +142,8 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 		"full_name", args.FullName,
 	)
 
-	var templateName string
-	var subject string
-	baseURL := m.cfg.AppURL
-
-	switch args.Type {
-	case TypeWaitlistConfirmation:
-		templateName = "waitlist_confirmation.html"
-		subject = "You're on the OpenHR waitlist"
-	case TypeMoreInfoAck:
-		templateName = "more_info_ack.html"
-		subject = "Thanks for sharing more about yourself"
-	case TypeEmailVerification:
-		templateName = "email_verification.html"
-		subject = "Verify your Open HR email"
-	case TypeOnboardingComplete:
-		if m.cfg.AppURL == "" {
-			err := fmt.Errorf("APP_URL is required for onboarding_complete emails")
-			m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
-			return err
-		}
-		templateName = "onboarding_complete.html"
-		subject = "Welcome to Open HR"
-	case TypeAdminInvite:
-		if m.cfg.AdminAppURL == "" {
-			err := fmt.Errorf("ADMIN_APP_URL is required for admin_invite emails")
-			m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
-			return err
-		}
-		baseURL = m.cfg.AdminAppURL
-		templateName = "admin_invite.html"
-		subject = "You're invited to Open HR Admin"
-	case TypePasswordReset:
-		if m.cfg.AppURL == "" {
-			err := fmt.Errorf("APP_URL is required for password_reset emails")
-			m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
-			return err
-		}
-		templateName = "password_reset.html"
-		subject = "Reset your Open HR password"
-	case TypeLoginOTP:
-		templateName = "login_otp.html"
-		subject = "Your Open HR sign-in code"
-	case TypeOrgInvite:
-		if m.cfg.AppURL == "" {
-			err := fmt.Errorf("APP_URL is required for org_invite emails")
-			m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
-			return err
-		}
-		templateName = "org_invite.html"
-		subject = "You're invited to Open HR"
-	default:
-		err := fmt.Errorf("unknown email type: %s", args.Type)
+	templateName, subject, baseURL, err := m.selectTemplate(args.Type)
+	if err != nil {
 		m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
 		return err
 	}
@@ -244,6 +244,7 @@ func formatFromHeader(name, email string) string {
 	}
 	escaped := strings.ReplaceAll(name, `\`, `\\`)
 	escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+	//nolint:gocritic // %q would Go-escape non-ASCII names; RFC 5322 needs only \ and " escaped
 	return fmt.Sprintf(`"%s" <%s>`, escaped, email)
 }
 

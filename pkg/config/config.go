@@ -16,6 +16,15 @@ import (
 	"github.com/Angle-HR/server/pkg/logger"
 )
 
+// Default JWT lifetimes in seconds: one hour access, seven days refresh.
+// maxPort is the highest valid TCP port.
+const maxPort = 65535
+
+const (
+	defaultAccessTTLSeconds  = 3600
+	defaultRefreshTTLSeconds = 604800
+)
+
 // Config holds runtime configuration values.
 type Config struct {
 	ServerPort             string
@@ -36,6 +45,7 @@ type Config struct {
 	TOTPEncryptionKey      string
 	AddressVerifyMode      string
 	AddressSearchMode      string
+	CompaniesHouseAPIKey   string
 }
 
 // Load reads configuration from the environment.
@@ -48,6 +58,7 @@ func Load() (Config, error) {
 		ServerPort:             os.Getenv("SERVER_PORT"),
 		DBUrlGlobal:            os.Getenv("DB_URL_GLOBAL"),
 		RedisURL:               os.Getenv("REDIS_URL"),
+		CompaniesHouseAPIKey:   strings.TrimSpace(os.Getenv("COMPANIES_HOUSE_API_KEY")),
 		AppEnv:                 os.Getenv("APP_ENV"),
 		LogLevel:               strings.TrimSpace(os.Getenv("LOG_LEVEL")),
 		PublicAPIURL:           os.Getenv("PUBLIC_API_URL"),
@@ -61,24 +72,11 @@ func Load() (Config, error) {
 		AddressSearchMode:      strings.ToLower(strings.TrimSpace(os.Getenv("ADDRESS_SEARCH_MODE"))),
 	}
 
-	if cfg.JWTSecret == "" {
-		cfg.JWTSecret = "dev-insecure-jwt-secret-change-me"
-	}
-	if cfg.TOTPEncryptionKey == "" {
-		cfg.TOTPEncryptionKey = cfg.JWTSecret
-	}
+	applyDefaults(&cfg)
 
-	accessTTL, err := parsePositiveIntEnv("JWT_ACCESS_TTL", 3600)
-	if err != nil {
+	if err := loadJWTTTLs(&cfg); err != nil {
 		return Config{}, err
 	}
-	cfg.JWTAccessTTL = time.Duration(accessTTL) * time.Second
-
-	refreshTTL, err := parsePositiveIntEnv("JWT_REFRESH_TTL", 604800)
-	if err != nil {
-		return Config{}, err
-	}
-	cfg.JWTRefreshTTL = time.Duration(refreshTTL) * time.Second
 
 	defaultRegion := os.Getenv("AUTH_DEFAULT_REGION")
 	if defaultRegion == "" {
@@ -89,43 +87,7 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("invalid AUTH_DEFAULT_REGION %q", defaultRegion)
 	}
 
-	if cfg.ServerPort == "" {
-		cfg.ServerPort = "8080"
-	}
-
-	if cfg.AppEnv == "" {
-		cfg.AppEnv = "development"
-	}
-
-	if cfg.AddressVerifyMode == "" && cfg.AppEnv != "production" && cfg.AppEnv != "prod" {
-		cfg.AddressVerifyMode = "passthrough"
-	}
-	if cfg.AddressSearchMode == "" && cfg.AppEnv != "production" && cfg.AppEnv != "prod" {
-		cfg.AddressSearchMode = "passthrough"
-	}
-
-	if _, err := logger.ParseLevel(cfg.LogLevel, cfg.AppEnv); err != nil {
-		return Config{}, err
-	}
-
-	if cfg.DBUrlGlobal == "" {
-		return Config{}, errors.New("DB_URL_GLOBAL is required")
-	}
-
-	if cfg.RedisURL == "" {
-		return Config{}, errors.New("REDIS_URL is required")
-	}
-
-	port, err := strconv.Atoi(cfg.ServerPort)
-	if err != nil || port < 1 || port > 65535 {
-		return Config{}, fmt.Errorf("invalid SERVER_PORT %q", cfg.ServerPort)
-	}
-
-	if cfg.PublicAPIURL == "" {
-		cfg.PublicAPIURL = fmt.Sprintf("http://localhost:%s", cfg.ServerPort)
-	}
-
-	if err := validatePublicAPIURL(cfg.PublicAPIURL); err != nil {
+	if err := validate(&cfg); err != nil {
 		return Config{}, err
 	}
 
@@ -136,6 +98,69 @@ func Load() (Config, error) {
 	cfg.CORSAllowedOrigins = origins
 
 	return cfg, nil
+}
+
+// applyDefaults fills in development-friendly defaults for unset values.
+func applyDefaults(cfg *Config) {
+	if cfg.JWTSecret == "" {
+		cfg.JWTSecret = "dev-insecure-jwt-secret-change-me"
+	}
+	if cfg.TOTPEncryptionKey == "" {
+		cfg.TOTPEncryptionKey = cfg.JWTSecret
+	}
+	if cfg.ServerPort == "" {
+		cfg.ServerPort = "8080"
+	}
+	if cfg.AppEnv == "" {
+		cfg.AppEnv = "development"
+	}
+
+	isProd := cfg.AppEnv == "production" || cfg.AppEnv == "prod"
+	if cfg.AddressVerifyMode == "" && !isProd {
+		cfg.AddressVerifyMode = "passthrough"
+	}
+	if cfg.AddressSearchMode == "" && !isProd {
+		cfg.AddressSearchMode = "passthrough"
+	}
+}
+
+// loadJWTTTLs reads the access and refresh token lifetimes from the environment.
+func loadJWTTTLs(cfg *Config) error {
+	accessTTL, err := parsePositiveIntEnv("JWT_ACCESS_TTL", defaultAccessTTLSeconds)
+	if err != nil {
+		return err
+	}
+	cfg.JWTAccessTTL = time.Duration(accessTTL) * time.Second
+
+	refreshTTL, err := parsePositiveIntEnv("JWT_REFRESH_TTL", defaultRefreshTTLSeconds)
+	if err != nil {
+		return err
+	}
+	cfg.JWTRefreshTTL = time.Duration(refreshTTL) * time.Second
+	return nil
+}
+
+// validate checks required values and fills in the public API URL.
+func validate(cfg *Config) error {
+	if _, err := logger.ParseLevel(cfg.LogLevel, cfg.AppEnv); err != nil {
+		return err
+	}
+	if cfg.DBUrlGlobal == "" {
+		return errors.New("DB_URL_GLOBAL is required")
+	}
+	if cfg.RedisURL == "" {
+		return errors.New("REDIS_URL is required")
+	}
+
+	port, err := strconv.Atoi(cfg.ServerPort)
+	if err != nil || port < 1 || port > maxPort {
+		return fmt.Errorf("invalid SERVER_PORT %q", cfg.ServerPort)
+	}
+
+	if cfg.PublicAPIURL == "" {
+		cfg.PublicAPIURL = fmt.Sprintf("http://localhost:%s", cfg.ServerPort)
+	}
+	return validatePublicAPIURL(cfg.PublicAPIURL)
 }
 
 func parseCORSAllowedOrigins(raw string) ([]string, error) {

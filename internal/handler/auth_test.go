@@ -20,7 +20,7 @@ func TestAuthSignup_invalidBody(t *testing.T) {
 	router := chi.NewRouter()
 	router.Route("/auth", h.RegisterRoutes)
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/signup", strings.NewReader(`{`))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/auth/signup", strings.NewReader(`{`))
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -43,7 +43,7 @@ func TestAuthMiddleware_missingToken(t *testing.T) {
 		called = true
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/onboarding/status", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/onboarding/status", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -74,7 +74,7 @@ func TestProductOnboarding_verifyAddressNotImplemented(t *testing.T) {
 	router := chi.NewRouter()
 	router.Post("/onboarding/address/verify", h.verifyAddress)
 
-	req := httptest.NewRequest(http.MethodPost, "/onboarding/address/verify", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/onboarding/address/verify", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

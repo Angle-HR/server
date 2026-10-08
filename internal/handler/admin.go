@@ -12,6 +12,7 @@ import (
 	"github.com/Angle-HR/server/internal/admin"
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/internal/dbrouter"
+	"github.com/Angle-HR/server/pkg/besteffort"
 )
 
 // Admin login gets a longer window and lock than product login: fewer,
@@ -30,6 +31,7 @@ type AdminHandler struct {
 	Tokens          *auth.TokenService
 	Jobs            *fluvio.Client
 	Enqueuer        jobEnqueuer
+	KYBNotifierFor  KYBNotifierFactory // optional, emails the owner when a review rejects
 	PasswordLockout *auth.LoginLockout
 	validate        *validator.Validate
 }
@@ -99,9 +101,17 @@ func (h *AdminHandler) RegisterProtectedRoutes(r chi.Router, mw *auth.AdminMiddl
 	r.With(mw.RequirePermission(admin.PermAdminsRead)).Get("/permissions", h.listPermissions)
 
 	r.With(mw.RequirePermission(admin.PermAuditRead)).Get("/audit-logs", h.listAuditLogs)
+
+	r.With(mw.RequirePermission(admin.PermVerificationReview)).Get("/verification", h.listVerificationQueue)
+	r.With(mw.RequirePermission(admin.PermVerificationReview)).Get("/verification/{organizationID}", h.getVerificationItem)
+	r.With(mw.RequirePermission(admin.PermVerificationReview)).
+		Post("/verification/{organizationID}/review", h.reviewVerification)
 }
 
 func (h *AdminHandler) audit(r *http.Request, action, resourceType, resourceID string, meta map[string]any) {
+	if h.Store == nil {
+		return
+	}
 	actorID, _, _, ok := auth.AdminFromContext(r.Context())
 	if !ok {
 		return
@@ -109,5 +119,6 @@ func (h *AdminHandler) audit(r *http.Request, action, resourceType, resourceID s
 	if meta == nil {
 		meta = map[string]any{}
 	}
-	_ = h.Store.WriteAudit(r.Context(), actorID, action, resourceType, resourceID, meta, r.RemoteAddr)
+	besteffort.Log(r.Context(), "h.Store.WriteAudit",
+		h.Store.WriteAudit(r.Context(), actorID, action, resourceType, resourceID, meta, r.RemoteAddr))
 }

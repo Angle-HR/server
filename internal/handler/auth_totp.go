@@ -4,14 +4,16 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/internal/query"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/response"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
 var _ = apidoc.ErrorEnvelope{}
@@ -133,18 +135,19 @@ func (h *AuthHandler) totpConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.TOTPLockout.Check(ctx, userID.String()); err != nil {
+	if checkErr := h.TOTPLockout.Check(ctx, userID.String()); checkErr != nil {
 		response.Error(w, r, apperror.New(apperror.CodeTooManyAttempts, apperror.MsgTooManyAttempts))
 		return
 	}
 
 	secret, err := h.TOTPCrypto.Decrypt(*user.TOTPSecret)
 	if err != nil || !auth.ValidateTOTP(secret, req.Code) {
-		_, _ = h.TOTPLockout.RecordFailure(ctx, userID.String())
+		_, lockoutErr := h.TOTPLockout.RecordFailure(ctx, userID.String())
+		besteffort.Log(ctx, "h.TOTPLockout.RecordFailure", lockoutErr)
 		response.Error(w, r, apperror.New(apperror.CodeInvalidVerificationCode, "invalid authenticator code"))
 		return
 	}
-	_ = h.TOTPLockout.Reset(ctx, userID.String())
+	besteffort.Log(ctx, "h.TOTPLockout.Reset", h.TOTPLockout.Reset(ctx, userID.String()))
 
 	pool, err := h.Router.DB(reg)
 	if err != nil {
@@ -210,18 +213,19 @@ func (h *AuthHandler) totpDisable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.TOTPLockout.Check(ctx, userID.String()); err != nil {
+	if checkErr := h.TOTPLockout.Check(ctx, userID.String()); checkErr != nil {
 		response.Error(w, r, apperror.New(apperror.CodeTooManyAttempts, apperror.MsgTooManyAttempts))
 		return
 	}
 
 	secret, err := h.TOTPCrypto.Decrypt(*user.TOTPSecret)
 	if err != nil || !auth.ValidateTOTP(secret, req.Code) {
-		_, _ = h.TOTPLockout.RecordFailure(ctx, userID.String())
+		_, lockoutErr := h.TOTPLockout.RecordFailure(ctx, userID.String())
+		besteffort.Log(ctx, "h.TOTPLockout.RecordFailure", lockoutErr)
 		response.Error(w, r, apperror.New(apperror.CodeInvalidVerificationCode, "invalid authenticator code"))
 		return
 	}
-	_ = h.TOTPLockout.Reset(ctx, userID.String())
+	besteffort.Log(ctx, "h.TOTPLockout.Reset", h.TOTPLockout.Reset(ctx, userID.String()))
 
 	pool, err := h.Router.DB(reg)
 	if err != nil {
@@ -293,18 +297,19 @@ func (h *AuthHandler) loginTOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.TOTPLockout.Check(ctx, userID.String()); err != nil {
+	if checkErr := h.TOTPLockout.Check(ctx, userID.String()); checkErr != nil {
 		response.Error(w, r, apperror.New(apperror.CodeTooManyAttempts, apperror.MsgTooManyAttempts))
 		return
 	}
 
 	secret, err := h.TOTPCrypto.Decrypt(*user.TOTPSecret)
 	if err != nil || !auth.ValidateTOTP(secret, req.Code) {
-		_, _ = h.TOTPLockout.RecordFailure(ctx, userID.String())
+		_, lockoutErr := h.TOTPLockout.RecordFailure(ctx, userID.String())
+		besteffort.Log(ctx, "h.TOTPLockout.RecordFailure", lockoutErr)
 		response.Error(w, r, apperror.New(apperror.CodeInvalidVerificationCode, "invalid authenticator code"))
 		return
 	}
-	_ = h.TOTPLockout.Reset(ctx, userID.String())
+	besteffort.Log(ctx, "h.TOTPLockout.Reset", h.TOTPLockout.Reset(ctx, userID.String()))
 
 	h.respondAuthTokens(w, r, ctx, reg, user)
 }

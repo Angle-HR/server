@@ -45,53 +45,66 @@ var apiTagDefinitions = []map[string]any{
 		"x-displayName": "Reference",
 	},
 	{
-		"name":          "waitlist/signup",
-		"description":   "Email-only waitlist registration. Creates a regional waitlist entry and global waitlist.registry row.",
+		"name": "waitlist/signup",
+		"description": "Email-only waitlist registration. Creates a regional waitlist entry and global " +
+			"waitlist.registry row.",
 		"x-displayName": "Signup",
 	},
 	{
-		"name":          "auth",
-		"description":   "Product signup, email verification OTP (not for passwordless login), password login, passwordless login OTP (/auth/login/otp/*), TOTP MFA, password reset, logout, /auth/me, and product org invites.",
+		"name": "auth",
+		"description": "Product signup, email verification OTP (not for passwordless login), password " +
+			"login, passwordless login OTP (/auth/login/otp/*), TOTP MFA, password reset, logout, /auth/me, " +
+			"and product org invites.",
 		"x-displayName": "Auth",
 	},
 	{
-		"name":          "onboarding/reference",
-		"description":   "Product onboarding catalog endpoints (business types, industries, company roles, identification requirements). Separate from waitlist reference data.",
+		"name": "onboarding/reference",
+		"description": "Product onboarding catalog endpoints (business types, industries, company roles, " +
+			"identification requirements). Separate from waitlist reference data.",
 		"x-displayName": "Reference",
 	},
 	{
-		"name":          "onboarding/profile",
-		"description":   "Canonical profile step: account type (`individual` or `business`) and profile fields via PUT /onboarding/profile. Individual accounts set region from country_id.",
+		"name": "onboarding/profile",
+		"description": "Canonical profile step: account type (`individual` or `business`) and profile " +
+			"fields via PUT /onboarding/profile. Individual accounts set region from country_id.",
 		"x-displayName": "Profile",
 	},
 	{
-		"name":          "onboarding/address",
-		"description":   "Business identification and workspace address. POST /onboarding/address/search and POST /onboarding/address/verify accept payloads directly. Uses ADDRESS_SEARCH_MODE and ADDRESS_VERIFY_MODE passthrough in non-prod.",
+		"name": "onboarding/address",
+		"description": "Business identification and workspace address. POST /onboarding/address/search " +
+			"and POST /onboarding/address/verify accept payloads directly. Uses ADDRESS_SEARCH_MODE and " +
+			"ADDRESS_VERIFY_MODE passthrough in non-prod.",
 		"x-displayName": "Address",
 	},
 	{
-		"name":          "onboarding/compliance",
-		"description":   "Canonical compliance step: PUT /onboarding/compliance (business_type_id, industry_id, employee_count) for individual and business accounts.",
+		"name": "onboarding/compliance",
+		"description": "Canonical compliance step: PUT /onboarding/compliance (business_type_id, " +
+			"industry_id, employee_count) for individual and business accounts.",
 		"x-displayName": "Compliance",
 	},
 	{
-		"name":          "onboarding/business",
-		"description":   "Deprecated alias for PUT /onboarding/compliance. POST /onboarding/business is deprecated (KYB-oriented one-shot).",
+		"name": "onboarding/business",
+		"description": "Deprecated alias for PUT /onboarding/compliance. POST /onboarding/business is " +
+			"deprecated (KYB-oriented one-shot).",
 		"x-displayName": "Business",
 	},
 	{
-		"name":          "onboarding/individual",
-		"description":   "Deprecated one-shot POST /onboarding/individual. Prefer PUT /onboarding/profile with account_type individual.",
+		"name": "onboarding/individual",
+		"description": "Deprecated one-shot POST /onboarding/individual. Prefer PUT /onboarding/profile " +
+			"with account_type individual.",
 		"x-displayName": "Individual",
 	},
 	{
-		"name":          "onboarding/session",
-		"description":   "Onboarding progress and completion. Individual: verify_email → profile → compliance → complete. Business: verify_email → profile → identification_address → compliance → complete.",
+		"name": "onboarding/session",
+		"description": "Onboarding progress and completion. Individual: verify_email → profile → " +
+			"compliance → complete. Business: verify_email → profile → identification_address → compliance " +
+			"→ complete.",
 		"x-displayName": "Session",
 	},
 	{
-		"name":          "admin/auth",
-		"description":   "Admin console login, invite acceptance, token refresh, and current admin profile with RBAC permissions.",
+		"name": "admin/auth",
+		"description": "Admin console login, invite acceptance, token refresh, and current admin profile " +
+			"with RBAC permissions.",
 		"x-displayName": "Auth",
 	},
 	{

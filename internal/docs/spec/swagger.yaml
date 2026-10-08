@@ -386,6 +386,99 @@ definitions:
             deleted:
                 type: boolean
         type: object
+    internal_handler.AdminVerificationDetail:
+        properties:
+            address:
+                $ref: '#/definitions/internal_handler.KYBAddress'
+            address_type:
+                type: string
+            attempts:
+                type: integer
+            country_code:
+                type: string
+            identifiers:
+                additionalProperties:
+                    type: string
+                type: object
+            legal_name:
+                type: string
+            organization_id:
+                type: string
+            region:
+                type: string
+            registration_number:
+                type: string
+            status:
+                type: string
+            submitted_at:
+                type: string
+            tier:
+                type: integer
+        type: object
+    internal_handler.AdminVerificationDetailEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/internal_handler.AdminVerificationDetail'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_handler.AdminVerificationItem:
+        properties:
+            country_code:
+                type: string
+            id:
+                type: string
+            organization_id:
+                type: string
+            region:
+                type: string
+            submitted_at:
+                type: string
+        type: object
+    internal_handler.AdminVerificationListEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/internal_handler.AdminVerificationItem'
+                type: array
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_handler.AdminVerificationReviewData:
+        properties:
+            failure_reason:
+                type: string
+            organization_id:
+                type: string
+            status:
+                enum:
+                    - verified
+                    - failed
+                type: string
+        type: object
+    internal_handler.AdminVerificationReviewEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/internal_handler.AdminVerificationReviewData'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_handler.AdminVerificationReviewRequest:
+        properties:
+            decision:
+                enum:
+                    - approve
+                    - reject
+                type: string
+            reason:
+                enum:
+                    - number_not_found
+                    - name_mismatch
+                    - address_mismatch
+                    - inactive_entity
+                    - wrong_country
+                type: string
+        type: object
     internal_handler.AdminWaitlistDetailEnvelope:
         properties:
             data:
@@ -985,6 +1078,114 @@ definitions:
                 type: array
             meta:
                 $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_handler.KYBAddress:
+        properties:
+            city:
+                type: string
+            country:
+                type: string
+            line1:
+                type: string
+            line2:
+                type: string
+            post_code:
+                type: string
+            region:
+                type: string
+        type: object
+    internal_handler.KYBChangeCountryRequest:
+        properties:
+            country_code:
+                example: KE
+                type: string
+        type: object
+    internal_handler.KYBConfirmAddressRequest:
+        properties:
+            address_type:
+                enum:
+                    - registered
+                    - trading
+                type: string
+        type: object
+    internal_handler.KYBRetryRequest:
+        properties:
+            legal_name:
+                type: string
+            registration_number:
+                type: string
+        type: object
+    internal_handler.KYBStatusData:
+        properties:
+            address_confirmable:
+                type: boolean
+            can_publish:
+                type: boolean
+            can_retry:
+                type: boolean
+            checked_at:
+                type: string
+            country_code:
+                type: string
+            display:
+                enum:
+                    - verified
+                    - pending_review
+                    - action_required
+                    - failed
+                    - not_started
+                type: string
+            failure_reason:
+                type: string
+            light_retry:
+                type: boolean
+            name_confirmable:
+                type: boolean
+            registered_address:
+                type: string
+            registry_name:
+                type: string
+            status:
+                enum:
+                    - not_started
+                    - pending
+                    - verified
+                    - failed
+                type: string
+            tier:
+                type: integer
+            verified_at:
+                type: string
+        type: object
+    internal_handler.KYBStatusEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/internal_handler.KYBStatusData'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_handler.KYBSubmitRequest:
+        properties:
+            address:
+                $ref: '#/definitions/internal_handler.KYBAddress'
+            address_type:
+                enum:
+                    - registered
+                    - trading
+                type: string
+            country_code:
+                example: GB
+                type: string
+            identifiers:
+                additionalProperties:
+                    type: string
+                type: object
+            legal_name:
+                example: Acme Ltd
+                type: string
+            registration_number:
+                example: "01234567"
+                type: string
         type: object
     internal_handler.OnboardingIndustry:
         properties:
@@ -2317,6 +2518,103 @@ paths:
             summary: Update product user
             tags:
                 - admin/users
+    /admin/verification:
+        get:
+            parameters:
+                - description: Page size (max 100)
+                  in: query
+                  name: limit
+                  type: integer
+                - description: Offset
+                  in: query
+                  name: offset
+                  type: integer
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.AdminVerificationListEnvelope'
+                "401":
+                    description: Unauthorized
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: List pending company verification reviews
+            tags:
+                - admin/verification
+    /admin/verification/{organizationID}:
+        get:
+            description: Returns the submitted details from the organization's region so the operator can compare them with the government portal.
+            parameters:
+                - description: Organization ID
+                  in: path
+                  name: organizationID
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.AdminVerificationDetailEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Get a pending company verification review
+            tags:
+                - admin/verification
+    /admin/verification/{organizationID}/review:
+        post:
+            consumes:
+                - application/json
+            description: Records the operator's decision. A rejection needs a valid failure reason and emails the owner.
+            parameters:
+                - description: Organization ID
+                  in: path
+                  name: organizationID
+                  required: true
+                  type: string
+                - description: Decision
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.AdminVerificationReviewRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.AdminVerificationReviewEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Approve or reject a company verification
+            tags:
+                - admin/verification
     /admin/waitlist:
         get:
             parameters:
@@ -3583,6 +3881,194 @@ paths:
             summary: Get onboarding status
             tags:
                 - onboarding/session
+    /organization/verification:
+        get:
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.KYBStatusEnvelope'
+                "401":
+                    description: Unauthorized
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Get company verification status
+            tags:
+                - organization/verification
+        post:
+            consumes:
+                - application/json
+            description: First submission or a full resubmission after a failure. Tier 1 countries are checked immediately; others are queued for manual review (status pending).
+            parameters:
+                - description: Verification form
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.KYBSubmitRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.KYBStatusEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "503":
+                    description: Service Unavailable
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Submit company verification
+            tags:
+                - organization/verification
+    /organization/verification/change-country:
+        post:
+            consumes:
+                - application/json
+            description: Clears the registration number and country identifiers, keeps name and address, and returns the status to not_started.
+            parameters:
+                - description: Country
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.KYBChangeCountryRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.KYBStatusEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Change the registration country
+            tags:
+                - organization/verification
+    /organization/verification/confirm-address:
+        post:
+            consumes:
+                - application/json
+            description: Accepts an address_mismatch warning once the user says whether the address is registered or trading.
+            parameters:
+                - description: Address type
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.KYBConfirmAddressRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.KYBStatusEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Confirm which address was entered
+            tags:
+                - organization/verification
+    /organization/verification/confirm-name:
+        post:
+            description: 'One-click fix for a name_mismatch: the registry''s legal name replaces what was typed and the check runs again.'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.KYBStatusEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "503":
+                    description: Service Unavailable
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Confirm the registry's company name
+            tags:
+                - organization/verification
+    /organization/verification/retry:
+        post:
+            consumes:
+                - application/json
+            description: Light retry for number_not_found and name_mismatch failures. Country and address are reused.
+            parameters:
+                - description: Retry form
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.KYBRetryRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.KYBStatusEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "503":
+                    description: Service Unavailable
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Retry verification with name and number only
+            tags:
+                - organization/verification
     /organizations/invites:
         post:
             consumes:

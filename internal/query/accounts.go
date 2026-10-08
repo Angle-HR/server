@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Software78/sql-go-query-builder/builder"
+	"github.com/Software78/sql-go-query-builder/expr"
 	"github.com/google/uuid"
 )
 
@@ -115,7 +116,7 @@ func UpdateAccountUserEmail(userID uuid.UUID, email string) (string, []any, erro
 // SetAccountUserVerified returns SQL to mark a user email verified.
 func SetAccountUserVerified(userID uuid.UUID) (string, []any, error) {
 	return mustSQL(postgres.Update("users").
-		SetRaw("email_verified_at", "now()").
+		SetExpr("email_verified_at", expr.Raw{SQL: "now()"}).
 		Where("id", "=", userID).
 		WhereNull("email_verified_at").
 		WhereNull("deleted_at").
@@ -154,7 +155,7 @@ func UpdateAccountUserBusinessProfile(userID uuid.UUID, legalFullName string) (s
 // SetAccountOnboardingCompleted returns SQL to finalize onboarding.
 func SetAccountOnboardingCompleted(userID uuid.UUID) (string, []any, error) {
 	return mustSQL(postgres.Update("users").
-		SetRaw("onboarding_completed_at", "now()").
+		SetExpr("onboarding_completed_at", expr.Raw{SQL: "now()"}).
 		Where("id", "=", userID).
 		WhereNull("onboarding_completed_at").
 		WhereNull("deleted_at").
@@ -463,7 +464,7 @@ func SetAccountUserTOTPSecret(userID uuid.UUID, encryptedSecret string) (string,
 // EnableAccountUserTOTP marks TOTP as enabled after confirm.
 func EnableAccountUserTOTP(userID uuid.UUID) (string, []any, error) {
 	return mustSQL(postgres.Update("users").
-		SetRaw("totp_enabled_at", "now()").
+		SetExpr("totp_enabled_at", expr.Raw{SQL: "now()"}).
 		Where("id", "=", userID).
 		WhereNull("deleted_at").
 		WhereNotNull("totp_secret").
@@ -506,7 +507,12 @@ func InsertOrganizationMember(orgID, userID uuid.UUID, role string) (string, []a
 }
 
 // InsertOrganizationInvite stores a hashed invite token.
-func InsertOrganizationInvite(orgID uuid.UUID, email, tokenHash string, invitedBy uuid.UUID, expiresAt time.Time) (string, []any, error) {
+func InsertOrganizationInvite(
+	orgID uuid.UUID,
+	email, tokenHash string,
+	invitedBy uuid.UUID,
+	expiresAt time.Time,
+) (string, []any, error) {
 	return mustSQL(postgres.Insert("organization_invites").
 		Columns("organization_id", "email", "token_hash", "invited_by", "expires_at").
 		Values(orgID, email, tokenHash, invitedBy, expiresAt).
@@ -528,7 +534,7 @@ func LookupOrganizationInviteByTokenHash(tokenHash string) (string, []any, error
 // AcceptOrganizationInvite marks invite accepted.
 func AcceptOrganizationInvite(inviteID uuid.UUID) (string, []any, error) {
 	return mustSQL(postgres.Update("organization_invites").
-		SetRaw("accepted_at", "now()").
+		SetExpr("accepted_at", expr.Raw{SQL: "now()"}).
 		Where("id", "=", inviteID).
 		WhereNull("accepted_at").
 		Returning("id").
@@ -623,7 +629,11 @@ func UpdatePendingUserBusinessProfile(userID uuid.UUID, legalFullName string) (s
 
 // UpsertPendingOrganizationProfile returns SQL to save the business-profile
 // organization fields (legal name, role) for a still-pending account.
-func UpsertPendingOrganizationProfile(ownerUserID uuid.UUID, legalName string, companyRoleID uuid.UUID) (string, []any, error) {
+func UpsertPendingOrganizationProfile(
+	ownerUserID uuid.UUID,
+	legalName string,
+	companyRoleID uuid.UUID,
+) (string, []any, error) {
 	const sql = `
 		INSERT INTO pending_organizations (owner_user_id, legal_name, company_role_id)
 		VALUES ($1, $2, $3)
@@ -656,7 +666,11 @@ func LookupPendingOrganizationByOwnerWide(ownerUserID uuid.UUID) (string, []any,
 
 // UpsertPendingOnboardingProgress returns SQL to insert or update onboarding
 // progress for a still-pending account.
-func UpsertPendingOnboardingProgress(userID uuid.UUID, currentStep string, completedSteps []string) (string, []any, error) {
+func UpsertPendingOnboardingProgress(
+	userID uuid.UUID,
+	currentStep string,
+	completedSteps []string,
+) (string, []any, error) {
 	const sql = `
 		INSERT INTO pending_onboarding_progress (user_id, current_step, completed_steps)
 		VALUES ($1, $2, $3)
@@ -713,7 +727,11 @@ func InsertMigratedAccountUser(
 // InsertMigratedOrganization returns SQL to create the regional
 // accounts.organizations row for a business account moving out of the global
 // holding area. Idempotent for the same reason as InsertMigratedAccountUser.
-func InsertMigratedOrganization(ownerUserID uuid.UUID, legalName string, companyRoleID uuid.UUID) (string, []any, error) {
+func InsertMigratedOrganization(
+	ownerUserID uuid.UUID,
+	legalName string,
+	companyRoleID uuid.UUID,
+) (string, []any, error) {
 	const sql = `
 		INSERT INTO organizations (owner_user_id, legal_name, company_role_id)
 		VALUES ($1, $2, $3)

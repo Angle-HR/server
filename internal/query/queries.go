@@ -6,6 +6,7 @@ import (
 
 	qb "github.com/Software78/sql-go-query-builder"
 	"github.com/Software78/sql-go-query-builder/builder"
+	"github.com/Software78/sql-go-query-builder/expr"
 	"github.com/google/uuid"
 )
 
@@ -184,7 +185,7 @@ func SubmitWaitlistOnboarding(
 	roleID, teamSizeID uuid.UUID,
 ) (string, []any, error) {
 	return mustSQL(postgres.Update("waitlist").
-		SetRaw("onboarding_submitted_at", "now()").
+		SetExpr("onboarding_submitted_at", expr.Raw{SQL: "now()"}).
 		Set("wants_early_access", wantsEarlyAccess).
 		Set("wants_user_testing", wantsUserTesting).
 		Set("role_id", roleID).

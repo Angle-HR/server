@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// Verification statuses and failure reasons for address checks.
 const (
 	VerificationStatusVerified   = "verified"
 	VerificationStatusFailed     = "failed"
@@ -49,7 +50,8 @@ func (PassthroughAddressVerifier) Verify(_ context.Context, addr ProductAddress)
 		reason := FailureReasonNotVerifiable
 		return VerificationResult{Status: VerificationStatusFailed, FailureReason: &reason}, nil
 	}
-	if strings.TrimSpace(addr.Line1) == "" || strings.TrimSpace(addr.City) == "" || strings.TrimSpace(addr.PostCode) == "" {
+	if strings.TrimSpace(addr.Line1) == "" || strings.TrimSpace(addr.City) == "" ||
+		strings.TrimSpace(addr.PostCode) == "" {
 		reason := FailureReasonInvalidAddress
 		return VerificationResult{Status: VerificationStatusFailed, FailureReason: &reason}, nil
 	}

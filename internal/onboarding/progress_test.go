@@ -38,8 +38,8 @@ func TestNextStepLegacySteps(t *testing.T) {
 		t.Fatalf("legacy business steps: got %q want complete", got)
 	}
 
-	legacyAfterProfile := []string{StepVerifyEmail, StepProfile}
-	if got := NextStep(AccountBusiness, append(legacyAfterProfile, StepAddress)); got != StepCompliance {
+	legacyAfterAddress := []string{StepVerifyEmail, StepProfile, StepAddress}
+	if got := NextStep(AccountBusiness, legacyAfterAddress); got != StepCompliance {
 		t.Fatalf("legacy address only: got %q want compliance", got)
 	}
 }

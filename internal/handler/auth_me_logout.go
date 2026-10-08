@@ -6,6 +6,7 @@ import (
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/response"
 )
 
@@ -94,7 +95,7 @@ func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.Revoker != nil && claims.ExpiresAt != nil {
-		_ = h.Revoker.RevokeJTI(r.Context(), claims.ID, claims.ExpiresAt.Time)
+		besteffort.Log(r.Context(), "h.Revoker.RevokeJTI", h.Revoker.RevokeJTI(r.Context(), claims.ID, claims.ExpiresAt.Time))
 	}
 
 	response.Success(w, r, http.StatusOK, AuthMessageData{Message: "logged out"})

@@ -29,7 +29,12 @@ type LoginLockout struct {
 // different call sites (product login, admin login, TOTP checks, ...) don't
 // share counters. maxAttempts failures within window trigger a lockDuration
 // lockout.
-func NewLoginLockout(client *goredis.Client, prefix string, maxAttempts int, window, lockDuration time.Duration) *LoginLockout {
+func NewLoginLockout(
+	client *goredis.Client,
+	prefix string,
+	maxAttempts int,
+	window, lockDuration time.Duration,
+) *LoginLockout {
 	return &LoginLockout{
 		client:       client,
 		prefix:       prefix,

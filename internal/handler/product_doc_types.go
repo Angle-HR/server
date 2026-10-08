@@ -76,7 +76,8 @@ type AuthLoginRequest struct {
 	Password string `json:"password" example:"secure-password-here"`
 }
 
-// AuthLoginVerificationRequiredDetails is returned in error.details when login succeeds on password but email is unverified.
+// AuthLoginVerificationRequiredDetails is returned in error.details when login succeeds on
+// password but email is unverified.
 type AuthLoginVerificationRequiredDetails struct {
 	VerificationSessionID    string `json:"verification_session_id" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Email                    string `json:"email" example:"jerry@example.com"`

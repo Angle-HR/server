@@ -9,6 +9,7 @@ import (
 // Region is a geographic deployment region identifier.
 type Region string
 
+// Deployment regions. RegionUnknown is the zero value.
 const (
 	RegionUK      Region = "uk"
 	RegionUS      Region = "us"
@@ -43,6 +44,8 @@ func Valid(r Region) bool {
 	switch r {
 	case RegionUK, RegionUS, RegionAfrica, RegionEU, RegionAsia, RegionGlobal:
 		return true
+	case RegionUnknown:
+		return false
 	default:
 		return false
 	}

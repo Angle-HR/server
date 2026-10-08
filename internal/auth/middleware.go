@@ -22,6 +22,7 @@ func NewMiddleware(tokens *TokenService) *Middleware {
 // RequireAuth rejects requests without a valid access token.
 func (m *Middleware) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// #nosec G706 -- slog TextHandler and JSONHandler escape structured attribute values
 		slog.Info("auth check", "method", r.Method, "url", r.URL.Path)
 		if m == nil || m.Tokens == nil {
 			response.Error(w, r, apperror.ErrUnauthorized)

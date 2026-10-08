@@ -87,7 +87,7 @@ func TestListBusinessTypes_emptyCatalog(t *testing.T) {
 	router := chi.NewRouter()
 	h.RegisterRoutes(router)
 
-	req := httptest.NewRequest(http.MethodGet, "/onboarding/business-types", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/onboarding/business-types", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

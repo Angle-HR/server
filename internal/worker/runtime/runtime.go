@@ -4,22 +4,27 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
+	fluvio "github.com/software78/fluvio"
+
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/pkg/db"
 	"github.com/Angle-HR/server/pkg/logger"
-	"github.com/joho/godotenv"
-	fluvio "github.com/software78/fluvio"
 )
 
 // Run connects to the global database, applies Fluvio migrations, registers
 // workers, and blocks until a shutdown signal is received.
 func Run(workerName string, queues map[string]fluvio.QueueConfig, register func(*fluvio.Workers)) error {
-	_ = godotenv.Load()
+	if err := godotenv.Load(); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		slog.Warn("load .env failed", "error", err)
+	}
 
 	appEnv := os.Getenv("APP_ENV")
 	if appEnv == "" {
@@ -41,8 +46,8 @@ func Run(workerName string, queues map[string]fluvio.QueueConfig, register func(
 	defer dbPool.Close()
 
 	slogLogger.Info("applying Fluvio schema migrations...")
-	if err := queue.Migrate(ctx, dbPool); err != nil {
-		return fmt.Errorf("apply Fluvio migrations: %w", err)
+	if migrateErr := queue.Migrate(ctx, dbPool); migrateErr != nil {
+		return fmt.Errorf("apply Fluvio migrations: %w", migrateErr)
 	}
 	slogLogger.Info("Fluvio schema migrations applied successfully")
 

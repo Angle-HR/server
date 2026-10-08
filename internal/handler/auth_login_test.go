@@ -88,8 +88,8 @@ func TestAuthLogin_verifiedUser(t *testing.T) {
 	assertStatus(t, rec, http.StatusOK)
 
 	var envelope response.Envelope
-	if err := json.NewDecoder(rec.Body).Decode(&envelope); err != nil {
-		t.Fatalf("decode envelope: %v", err)
+	if decodeErr := json.NewDecoder(rec.Body).Decode(&envelope); decodeErr != nil {
+		t.Fatalf("decode envelope: %v", decodeErr)
 	}
 	raw, err := json.Marshal(envelope.Data)
 	if err != nil {
@@ -143,21 +143,25 @@ func expectUnverifiedLoginMocks(t *testing.T, emailVerifiedAt *time.Time) (pgxmo
 	}
 	t.Cleanup(func() { globalMock.Close() })
 
+	// Unverified signups have no registry row and sit in the global holding
+	// area (pending_users) until onboarding assigns a region.
 	registrySQL, registryArgs, err := query.LookupUsersRegistryByEmail(testLoginEmail)
 	if err != nil {
 		t.Fatalf("LookupUsersRegistryByEmail: %v", err)
 	}
 	globalMock.ExpectQuery(registrySQL).WithArgs(registryArgs...).WillReturnError(pgx.ErrNoRows)
 
-	regionalMock, err := pgxmock.NewPool(pgxmock.QueryMatcherOption(pgxmock.QueryMatcherEqual))
+	emailSQL, emailArgs, err := query.LookupPendingUserByEmail(testLoginEmail)
 	if err != nil {
-		t.Fatalf("pgxmock.NewPool regional: %v", err)
+		t.Fatalf("LookupPendingUserByEmail: %v", err)
 	}
-	t.Cleanup(func() { regionalMock.Close() })
+	globalMock.ExpectQuery(emailSQL).WithArgs(emailArgs...).WillReturnRows(
+		userAccountRows(passwordHash, emailVerifiedAt),
+	)
 
 	emailSQL, emailArgs, err := query.LookupPendingUserByEmail(testLoginEmail)
 	if err != nil {
-		t.Fatalf("LookupAccountUserByEmail: %v", err)
+		t.Fatalf("LookupPendingUserByID: %v", err)
 	}
 	globalMock.ExpectQuery(emailSQL).WithArgs(emailArgs...).WillReturnRows(
 		userAccountRows(passwordHash, emailVerifiedAt),
@@ -165,7 +169,7 @@ func expectUnverifiedLoginMocks(t *testing.T, emailVerifiedAt *time.Time) (pgxmo
 
 	idSQL, idArgs, err := query.LookupPendingUserByID(testLoginUserID)
 	if err != nil {
-		t.Fatalf("LookupAccountUserByID: %v", err)
+		t.Fatalf("pgxmock.NewPool regional: %v", err)
 	}
 	globalMock.ExpectQuery(idSQL).WithArgs(idArgs...).WillReturnRows(
 		userAccountRows(passwordHash, emailVerifiedAt),
@@ -278,7 +282,11 @@ func testRedisClient(t *testing.T) *goredis.Client {
 	t.Cleanup(mr.Close)
 
 	client := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { _ = client.Close() })
+	t.Cleanup(func() {
+		if closeErr := client.Close(); closeErr != nil {
+			t.Logf("close redis client: %v", closeErr)
+		}
+	})
 
 	return client
 }
@@ -294,7 +302,7 @@ func postAuthLogin(t *testing.T, router chi.Router, email, password string) *htt
 		t.Fatalf("marshal login body: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)

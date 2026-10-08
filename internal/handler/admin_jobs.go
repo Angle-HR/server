@@ -79,8 +79,8 @@ func (h *AdminHandler) listJobs(w http.ResponseWriter, r *http.Request) {
 	queue := r.URL.Query().Get("queue")
 	state := r.URL.Query().Get("state")
 	kind := r.URL.Query().Get("kind")
-	limit := parseLimit(r.URL.Query().Get("limit"), 50, 100)
-	offset := parseLimit(r.URL.Query().Get("offset"), 0, 100000)
+	limit := parseLimit(r.URL.Query().Get("limit"), defaultPageLimit, maxPageLimit)
+	offset := parseLimit(r.URL.Query().Get("offset"), 0, maxPageOffset)
 	if r.URL.Query().Get("offset") == "" {
 		offset = 0
 	}
@@ -91,8 +91,8 @@ func (h *AdminHandler) listJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := make([]adminJobView, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, jobView(row))
+	for i := range rows {
+		out = append(out, jobView(rows[i]))
 	}
 	response.Success(w, r, http.StatusOK, out)
 }
@@ -143,25 +143,27 @@ func (h *AdminHandler) retryJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Only dead, scheduled and failed jobs can be retried; every other state is rejected by default.
+	//exhaustive:ignore
 	switch row.State {
 	case fluvio.JobStateDead:
-		if err := h.Jobs.ReplayDeadJob(r.Context(), id); err != nil {
-			response.Error(w, r, err)
+		if replayDeadJobErr := h.Jobs.ReplayDeadJob(r.Context(), id); replayDeadJobErr != nil {
+			response.Error(w, r, replayDeadJobErr)
 			return
 		}
 	case fluvio.JobStateScheduled:
-		if err := h.Jobs.RunJobNow(r.Context(), id); err != nil {
-			response.Error(w, r, err)
+		if runJobNowErr := h.Jobs.RunJobNow(r.Context(), id); runJobNowErr != nil {
+			response.Error(w, r, runJobNowErr)
 			return
 		}
 	case fluvio.JobStateFailed:
-		_, err := h.GlobalDB.Exec(r.Context(), `
+		_, execErr := h.GlobalDB.Exec(r.Context(), `
 			UPDATE fluvio_jobs
 			SET state = 'pending', scheduled_at = now(), finalized_at = NULL, error_trace = NULL
 			WHERE id = $1 AND state = 'failed'
 		`, id)
-		if err != nil {
-			response.Error(w, r, err)
+		if execErr != nil {
+			response.Error(w, r, execErr)
 			return
 		}
 	default:

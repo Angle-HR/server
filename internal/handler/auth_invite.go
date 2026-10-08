@@ -7,6 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/internal/mailer"
@@ -16,10 +20,8 @@ import (
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/response"
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
 var _ = apidoc.ErrorEnvelope{}
@@ -118,128 +120,159 @@ func (h *AuthHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rollbackOnError(ctx, tx)
 
-	user, err := h.loadUserByEmail(ctx, reg, invite.Email)
-	var userID uuid.UUID
-	switch {
-	case err == nil:
-		userID = user.ID
-		if user.EmailVerifiedAt != nil && user.PasswordHash != "" {
-			response.Error(w, r, apperror.New(apperror.CodeEmailAlreadyRegistered, apperror.MsgEmailAlreadyRegistered))
-			return
-		}
-		updSQL, updArgs, err := query.UpdateAccountUserPassword(userID, passwordHash)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		if err := tx.QueryRow(ctx, updSQL, updArgs...).Scan(&userID); err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-	case errors.Is(err, pgx.ErrNoRows):
-		insSQL, insArgs, err := query.InsertAccountUser(invite.Email, passwordHash)
-		if err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-		if err := tx.QueryRow(ctx, insSQL, insArgs...).Scan(&userID); err != nil {
-			response.Error(w, r, apperror.ErrInternal)
-			return
-		}
-	default:
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	if req.FirstName != nil || req.LastName != nil {
-		first := stringValue(req.FirstName)
-		last := stringValue(req.LastName)
-		if first != "" && last != "" {
-			// Best-effort profile fields for invitees; country is optional for members.
-			_, _ = tx.Exec(ctx, `
-				UPDATE users
-				SET first_name = COALESCE(NULLIF($2, ''), first_name),
-				    last_name = COALESCE(NULLIF($3, ''), last_name),
-				    account_type = COALESCE(account_type, 'individual')
-				WHERE id = $1 AND deleted_at IS NULL
-			`, userID, first, last)
-		}
-	}
-
-	completeSQL, completeArgs, err := query.CompleteAccountUserOnboarding(userID)
+	userID, err := h.upsertInvitedUser(ctx, tx, reg, invite.Email, passwordHash)
 	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
+		response.Error(w, r, err)
 		return
 	}
-	if err := tx.QueryRow(ctx, completeSQL, completeArgs...).Scan(&userID); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
+	applyInviteeProfile(ctx, tx, userID, &req)
+
+	if err = joinOrganization(ctx, tx, &invite, userID); err != nil {
+		response.Error(w, r, err)
+		return
+	}
+	if err = h.commitInvitedUser(ctx, tx, reg, invite.Email, userID); err != nil {
+		response.Error(w, r, err)
 		return
 	}
 
-	memberSQL, memberArgs, err := query.InsertOrganizationMember(invite.OrganizationID, userID, org.RoleMember)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	var memberID uuid.UUID
-	if err := tx.QueryRow(ctx, memberSQL, memberArgs...).Scan(&memberID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	acceptSQL, acceptArgs, err := query.AcceptOrganizationInvite(invite.ID)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if err := tx.QueryRow(ctx, acceptSQL, acceptArgs...).Scan(&invite.ID); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	completed := onboarding.RequiredSteps(onboarding.AccountIndividual)
-	progressSQL, progressArgs, err := query.UpsertOnboardingProgress(userID, onboarding.StepComplete, completed)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if _, err := tx.Exec(ctx, progressSQL, progressArgs...); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	globalTx, err := h.GlobalDB.Begin(ctx)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	defer rollbackOnError(ctx, globalTx)
-
-	registrySQL, registryArgs, err := query.UpsertUsersRegistryProductUser(invite.Email, string(reg), regionSourceExplicit, userID)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if _, err := globalTx.Exec(ctx, registrySQL, registryArgs...); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-	if err := globalTx.Commit(ctx); err != nil {
-		response.Error(w, r, apperror.ErrInternal)
-		return
-	}
-
-	user, err = h.loadUserByID(ctx, reg, userID)
+	user, err := h.loadUserByID(ctx, reg, userID)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
 	h.respondAuthTokens(w, r, ctx, reg, user)
+}
+
+// upsertInvitedUser sets the password on the invitee's existing unverified account,
+// or creates the account if none exists. It returns the user id, or a public API error.
+func (h *AuthHandler) upsertInvitedUser(
+	ctx context.Context,
+	tx pgx.Tx,
+	reg region.Region,
+	email, passwordHash string,
+) (uuid.UUID, error) {
+	user, err := h.loadUserByEmail(ctx, reg, email)
+	var userID uuid.UUID
+	switch {
+	case err == nil:
+		userID = user.ID
+		if user.EmailVerifiedAt != nil && user.PasswordHash != "" {
+			return uuid.Nil, apperror.New(apperror.CodeEmailAlreadyRegistered, apperror.MsgEmailAlreadyRegistered)
+		}
+		sql, args, buildErr := query.UpdateAccountUserPassword(userID, passwordHash)
+		if buildErr != nil {
+			return uuid.Nil, apperror.ErrInternal
+		}
+		if scanErr := tx.QueryRow(ctx, sql, args...).Scan(&userID); scanErr != nil {
+			return uuid.Nil, apperror.ErrInternal
+		}
+	case errors.Is(err, pgx.ErrNoRows):
+		sql, args, buildErr := query.InsertAccountUser(email, passwordHash)
+		if buildErr != nil {
+			return uuid.Nil, apperror.ErrInternal
+		}
+		if scanErr := tx.QueryRow(ctx, sql, args...).Scan(&userID); scanErr != nil {
+			return uuid.Nil, apperror.ErrInternal
+		}
+	default:
+		return uuid.Nil, apperror.ErrInternal
+	}
+	return userID, nil
+}
+
+// applyInviteeProfile stores the invitee's name when both parts are given. It is
+// best-effort: country is optional for members and failures are only logged.
+func applyInviteeProfile(ctx context.Context, tx pgx.Tx, userID uuid.UUID, req *authAcceptInviteBody) {
+	if req.FirstName == nil && req.LastName == nil {
+		return
+	}
+	first := stringValue(req.FirstName)
+	last := stringValue(req.LastName)
+	if first == "" || last == "" {
+		return
+	}
+	_, err := tx.Exec(ctx, `
+		UPDATE users
+		SET first_name = COALESCE(NULLIF($2, ''), first_name),
+		    last_name = COALESCE(NULLIF($3, ''), last_name),
+		    account_type = COALESCE(account_type, 'individual')
+		WHERE id = $1 AND deleted_at IS NULL
+	`, userID, first, last)
+	besteffort.Log(ctx, "update invitee profile", err)
+}
+
+// joinOrganization completes the invitee's onboarding, adds them as a member and
+// marks the invite accepted.
+func joinOrganization(ctx context.Context, tx pgx.Tx, invite *orgInviteRow, userID uuid.UUID) error {
+	completeSQL, completeArgs, err := query.CompleteAccountUserOnboarding(userID)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	if scanErr := tx.QueryRow(ctx, completeSQL, completeArgs...).Scan(&userID); scanErr != nil {
+		return apperror.ErrInternal
+	}
+
+	memberSQL, memberArgs, err := query.InsertOrganizationMember(invite.OrganizationID, userID, org.RoleMember)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	var memberID uuid.UUID
+	if scanErr := tx.QueryRow(ctx, memberSQL, memberArgs...).Scan(&memberID); scanErr != nil &&
+		!errors.Is(scanErr, pgx.ErrNoRows) {
+		return apperror.ErrInternal
+	}
+
+	acceptSQL, acceptArgs, err := query.AcceptOrganizationInvite(invite.ID)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	if scanErr := tx.QueryRow(ctx, acceptSQL, acceptArgs...).Scan(&invite.ID); scanErr != nil {
+		return apperror.ErrInternal
+	}
+
+	completed := onboarding.RequiredSteps(onboarding.AccountIndividual)
+	progressSQL, progressArgs, err := query.UpsertOnboardingProgress(userID, onboarding.StepComplete, completed)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	if _, execErr := tx.Exec(ctx, progressSQL, progressArgs...); execErr != nil {
+		return apperror.ErrInternal
+	}
+	return nil
+}
+
+// commitInvitedUser records the user in the global registry and commits the
+// regional and global transactions.
+func (h *AuthHandler) commitInvitedUser(
+	ctx context.Context,
+	tx pgx.Tx,
+	reg region.Region,
+	email string,
+	userID uuid.UUID,
+) error {
+	globalTx, err := h.GlobalDB.Begin(ctx)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	defer rollbackOnError(ctx, globalTx)
+
+	registrySQL, registryArgs, err := query.UpsertUsersRegistryProductUser(
+		email, string(reg), regionSourceExplicit, userID,
+	)
+	if err != nil {
+		return apperror.ErrInternal
+	}
+	if _, execErr := globalTx.Exec(ctx, registrySQL, registryArgs...); execErr != nil {
+		return apperror.ErrInternal
+	}
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		return apperror.ErrInternal
+	}
+	if commitErr := globalTx.Commit(ctx); commitErr != nil {
+		return apperror.ErrInternal
+	}
+	return nil
 }
 
 // createOrgInvite godoc
@@ -289,8 +322,8 @@ func (h *AuthHandler) createOrgInvite(w http.ResponseWriter, r *http.Request) {
 
 	var orgID uuid.UUID
 	var orgName string
-	if err := pool.QueryRow(ctx, orgSQL, orgArgs...).Scan(&orgID, &orgName); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+	if scanErr := pool.QueryRow(ctx, orgSQL, orgArgs...).Scan(&orgID, &orgName); scanErr != nil {
+		if errors.Is(scanErr, pgx.ErrNoRows) {
 			response.Error(w, r, apperror.New(apperror.CodeForbidden, "only organization owners can invite members"))
 			return
 		}
@@ -408,12 +441,13 @@ func (h *AuthHandler) enqueueOrgInviteEmail(ctx context.Context, email, orgName,
 	}
 	defer rollbackOnError(ctx, tx)
 
-	_, _ = h.Enqueuer.EnqueueTx(ctx, tx, mailer.EmailArgs{
+	_, enqueueErr := h.Enqueuer.EnqueueTx(ctx, tx, mailer.EmailArgs{
 		Type:             mailer.TypeOrgInvite,
 		Recipient:        email,
 		OrganizationName: orgName,
 		Token:            token,
 		ExpiresInSeconds: int(org.InviteTTL.Seconds()),
 	}, queue.EmailEnqueueOptions()...)
-	_ = tx.Commit(ctx)
+	besteffort.Log(ctx, "Enqueuer.EnqueueTx", enqueueErr)
+	besteffort.Log(ctx, "tx.Commit", tx.Commit(ctx))
 }

@@ -20,7 +20,7 @@ use the light retry form (name and number only).
 | Name and address matching | `internal/kyb/match.go` (+ tests) |
 | Verifier interface and per-country registry (no verifier = Tier 2) | `internal/kyb/verifier.go` |
 | UK verifier (Companies House) | `internal/kyb/companieshouse.go` (+ tests, mocked HTTP) |
-| Migrations: tables, events (append-only), global queue, submitted address and nudge count | `db/migrations/000005_kyb.sql`, `000006_kyb_followups.sql`, `db/migrations/global_registry/000005_verification_queue.sql` |
+| Migrations: tables, events (append-only), global queue, submitted address and nudge count | `db/migrations/000007_kyb.sql`, `000008_kyb_followups.sql`, `db/migrations/global_registry/000005_verification_queue.sql` |
 | pgx Store (regional) and Queue (global) | `internal/kyb/kybstore/` (+ pgxmock tests) |
 | Owner endpoints under `/api/v1/organization/verification`: GET status, POST submit, `/retry`, `/confirm-name`, `/confirm-address`, `/change-country` | `internal/handler/kyb.go` (+ `kyb_test.go`) |
 | Error code `SERVICE_UNAVAILABLE` (503) | `pkg/apperror/errors.go` |
@@ -35,7 +35,7 @@ Compiled and tested in a scratch module (pass): `internal/kyb` (incl. new sweep 
 gofmt-clean but NOT compiled or tested (need pgx, fluvio and other modules): `internal/kyb/kybstore`, `kybnotify`, `internal/handler`, `internal/mailer`, `internal/app`, `cmd/kyb-sweep`.
 
 1. Admin review queue: `internal/handler/admin_verification.go` (+ test). GET `/admin/verification`, GET `/admin/verification/{organizationID}`, POST `/admin/verification/{organizationID}/review` (`{"decision":"approve|reject","reason":...}`). Permission `verification:review` (const in `internal/admin/permissions.go`, seeded for superadmin by `db/migrations/global_registry/000006_verification_review_permission.sql`). Audited.
-2. Emails: templates `kyb_failed`, `kyb_review_queued`, `kyb_nudge_1`, `kyb_nudge_2` (mailer, link goes to `{APP_URL}/dashboard`; confirm the real frontend route). `internal/kyb/kybnotify` queues them; handlers take a per-region `NotifierFor` factory (wired in `internal/app`). Sweep: `kyb.Sweeper` + `cmd/kyb-sweep` (one-shot, run hourly from a scheduler; not added to Dockerfile/CI). 30-day case only sets `deletion_flagged_at` (migration `000007_kyb_deletion_flag.sql`), deletes nothing.
+2. Emails: templates `kyb_failed`, `kyb_review_queued`, `kyb_nudge_1`, `kyb_nudge_2` (mailer, link goes to `{APP_URL}/dashboard`; confirm the real frontend route). `internal/kyb/kybnotify` queues them; handlers take a per-region `NotifierFor` factory (wired in `internal/app`). Sweep: `kyb.Sweeper` + `cmd/kyb-sweep` (one-shot, run hourly from a scheduler; not added to Dockerfile/CI). 30-day case only sets `deletion_flagged_at` (migration `000009_kyb_deletion_flag.sql`), deletes nothing.
 3. Ownership transfer: `Service.OwnershipTransferred` (`internal/kyb/lifecycle.go`). Verified/failed go back to `not_started`; pending left alone. Hook point: call after the new owner is saved.
 4. Publish gate: `kyb.RequirePublish` / `RequirePublishFor` (`ErrNotVerified`, mapped to 403 in `kybError`). Hook point: job-publish handler.
 5. `onboarding.RegistrationNumberFormatOK` set as `KYBHandler.Formats` (GB, NG, DE, KE only; others pass).

@@ -403,17 +403,6 @@ func (h *AuthHandler) verifyEmail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// verificationCodeError maps a code-validation failure to the public API error.
-func verificationCodeError(err error) error {
-	switch {
-	case errors.Is(err, auth.ErrVerificationExpired):
-		return apperror.New(apperror.CodeVerificationExpired, apperror.MsgVerificationExpired)
-	case errors.Is(err, auth.ErrInvalidVerificationCode):
-		return apperror.New(apperror.CodeInvalidVerificationCode, apperror.MsgInvalidVerificationCode)
-	default:
-		return apperror.ErrNotFound
-	}
-}
 
 // markEmailVerified marks the user verified, seeds onboarding progress in the
 // user's database and records the user in the global registry, committing both

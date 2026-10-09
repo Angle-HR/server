@@ -2488,6 +2488,82 @@ const docTemplate = `{
                 }
             }
         },
+        "/hiring/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The signed-in person's company roles and the permissions they add up to, such as job.export. Use it to show or hide actions; the server still checks every request.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "My hiring roles and permissions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.MeEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/hiring/people": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Members of the caller's company, with their roles, for the \"add people to this job\" picker. Search matches the name or email. Returns at most 50 people. Needs job.collaborator.add or job.collaborator.add_limited.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "List the company's people",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Part of a name or email",
+                        "name": "q",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.PeopleEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/hiring/settings": {
             "get": {
                 "security": [
@@ -2804,7 +2880,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Newest first. People who can only see assigned jobs get the jobs they created or were added to.",
+                "description": "Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. Applicant counts are not included yet because candidate applications do not exist in the API.",
                 "produces": [
                     "application/json"
                 ],
@@ -2827,8 +2903,68 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Search the title",
+                        "description": "Search the title or department name",
                         "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Only jobs created by this user id",
+                        "name": "created_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Only jobs this user id is on the hiring team of",
+                        "name": "assignee",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "full_time, part_time, contract or internship",
+                        "name": "employment_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "onsite, hybrid or remote",
+                        "name": "workplace_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "anywhere, specific_area or specific_timezone",
+                        "name": "location_mode",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Two-letter market code, e.g. UK",
+                        "name": "market",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Created on or after this date (YYYY-MM-DD)",
+                        "name": "created_from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Created on or before this date (YYYY-MM-DD)",
+                        "name": "created_to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "updated_at (default) or created_at",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "desc (default) or asc",
+                        "name": "order",
                         "in": "query"
                     },
                     {
@@ -2966,19 +3102,32 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Every job the caller may see, newest first. Needs job.export.",
+                "description": "Every job the caller may see, newest first, or only the jobs in ids. CSV is the default; format=json returns the same rows as on the jobs list. Needs job.export.",
                 "produces": [
-                    "text/csv"
+                    "text/csv",
+                    "application/json"
                 ],
                 "tags": [
                     "jobs"
                 ],
-                "summary": "Export jobs as CSV",
+                "summary": "Export jobs as CSV or JSON",
                 "parameters": [
                     {
                         "type": "string",
                         "description": "Comma-separated statuses",
                         "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated job ids; only these jobs are exported",
+                        "name": "ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "csv (default) or json",
+                        "name": "format",
                         "in": "query"
                     }
                 ],
@@ -3271,6 +3420,134 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/archive": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Change a job's status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Revision the client loaded",
+                        "name": "If-Match",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.TransitionEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/close": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Change a job's status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Revision the client loaded",
+                        "name": "If-Match",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.TransitionEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -3857,7 +4134,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "POST /jobs/{id}/pause, /resume, /close, /reopen, /archive, /to-draft or /withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created.",
+                "description": "One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.",
                 "produces": [
                     "application/json"
                 ],
@@ -4051,6 +4328,262 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/reopen": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Change a job's status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Revision the client loaded",
+                        "name": "If-Match",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.TransitionEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/resume": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Change a job's status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Revision the client loaded",
+                        "name": "If-Match",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.TransitionEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/to-draft": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Change a job's status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Revision the client loaded",
+                        "name": "If-Match",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.TransitionEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/withdraw": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Change a job's status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Revision the client loaded",
+                        "name": "If-Match",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.TransitionEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -5969,6 +6502,29 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_Angle-HR_server_internal_hiring_draft.MeView": {
+            "type": "object",
+            "properties": {
+                "company_name": {
+                    "type": "string"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
         "github_com_Angle-HR_server_internal_hiring_draft.MemberInput": {
             "type": "object",
             "properties": {
@@ -6210,6 +6766,9 @@ const docTemplate = `{
         "github_com_Angle-HR_server_internal_hiring_hiringtypes.ListItem": {
             "type": "object",
             "properties": {
+                "closing_date": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -6234,11 +6793,20 @@ const docTemplate = `{
                 "location_mode": {
                     "type": "string"
                 },
+                "managers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.ListPerson"
+                    }
+                },
                 "markets": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
+                },
+                "published_at": {
+                    "type": "string"
                 },
                 "revision": {
                     "type": "integer"
@@ -6250,6 +6818,20 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                },
+                "workplace_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_hiringtypes.ListPerson": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "user_id": {
                     "type": "string"
                 }
             }
@@ -6267,6 +6849,26 @@ const docTemplate = `{
                 },
                 "role": {
                     "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_hiringtypes.Person": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "user_id": {
                     "type": "string"
@@ -9658,6 +10260,17 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_hiring_hiringhttp.MeEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.MeView"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
         "internal_hiring_hiringhttp.MembersEnvelope": {
             "type": "object",
             "properties": {
@@ -9677,6 +10290,20 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.MemberInput"
                     }
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.PeopleEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.Person"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
                 }
             }
         },

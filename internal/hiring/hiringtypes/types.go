@@ -175,6 +175,9 @@ type ListItem struct {
 	PublishedAt   string       `json:"published_at,omitempty"`
 	ClosingDate   string       `json:"closing_date,omitempty"`
 	Managers      []ListPerson `json:"managers"`
+	// ApplicantCount is always 0 until candidate applications exist in the API. The field is here so clients
+	// can build against it now.
+	ApplicantCount int `json:"applicant_count"`
 }
 
 // ListPerson is a person shown on a jobs list row, such as a hiring manager.
@@ -210,6 +213,11 @@ type Template struct {
 	IsDefault bool            `json:"is_default"`
 	CreatedBy string          `json:"created_by,omitempty"`
 	UpdatedAt string          `json:"updated_at"`
+	// Pinned templates sort first for the whole company.
+	Pinned bool `json:"pinned"`
+	// UseCount is how many drafts were started from this template by id.
+	UseCount   int    `json:"use_count"`
+	LastUsedAt string `json:"last_used_at,omitempty"`
 }
 
 // Settings are company-level hiring settings.

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Angle-HR/server/internal/hiring/gates"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
@@ -340,6 +341,61 @@ func (f *Store) DeleteTemplate(_ context.Context, _, user, id string) error {
 		}
 	}
 	return hiringtypes.ErrNotFound
+}
+
+// DueJobIDs implements draft.Store.
+func (f *Store) DueJobIDs(_ context.Context, tenant string, limit int) ([]string, error) {
+	today := time.Now().UTC().Format("2006-01-02")
+	var out []string
+	for k, rec := range f.Jobs {
+		if !strings.HasPrefix(k, tenant+"|") {
+			continue
+		}
+		if rec.Job.Status == "published" && rec.Job.ClosingDate != "" && rec.Job.ClosingDate < today && len(out) < limit {
+			out = append(out, rec.Job.ID)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// RenameTemplate implements draft.Store.
+func (f *Store) RenameTemplate(_ context.Context, _, _, id, name string) (*hiringtypes.Template, error) {
+	for i, t := range f.Templates {
+		if t.ID != id || f.TplUser[id] != "" {
+			continue
+		}
+		for _, o := range f.Templates {
+			if o.ID != id && f.TplUser[o.ID] == "" && o.Kind == t.Kind && strings.EqualFold(o.Name, name) {
+				return nil, hiringtypes.ErrConflict
+			}
+		}
+		f.Templates[i].Name = name
+		return &f.Templates[i], nil
+	}
+	return nil, hiringtypes.ErrNotFound
+}
+
+// SetTemplatePinned implements draft.Store.
+func (f *Store) SetTemplatePinned(_ context.Context, _, _, id string, pinned bool) (*hiringtypes.Template, error) {
+	for i, t := range f.Templates {
+		if t.ID == id && f.TplUser[id] == "" {
+			f.Templates[i].Pinned = pinned
+			return &f.Templates[i], nil
+		}
+	}
+	return nil, hiringtypes.ErrNotFound
+}
+
+// TouchTemplate implements draft.Store.
+func (f *Store) TouchTemplate(_ context.Context, _, user, id string) error {
+	for i, t := range f.Templates {
+		if owner := f.TplUser[t.ID]; t.ID == id && (owner == "" || owner == user) {
+			f.Templates[i].UseCount++
+			return nil
+		}
+	}
+	return nil
 }
 
 // GetSettings implements draft.Store.

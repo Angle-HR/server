@@ -71,13 +71,15 @@ func (s *Store) EnsureDepartment(ctx context.Context, tenantID, name string) (*D
 }
 
 const templateColumns = `id::text, kind, name, payload, is_default, coalesce(created_by::text, ''),
-    to_char(updated_at AT TIME ZONE 'UTC', '` + tsLayout + `')`
+    to_char(updated_at AT TIME ZONE 'UTC', '` + tsLayout + `'),
+    pinned_at IS NOT NULL, use_count,
+    coalesce(to_char(last_used_at AT TIME ZONE 'UTC', '` + tsLayout + `'), '')`
 
 // Company templates are visible to everyone; a default is visible only to its owner.
 const listTemplatesSQL = `
 SELECT ` + templateColumns + ` FROM hiring.templates
 WHERE tenant_id = $1::uuid AND ($2::text = '' OR kind = $2::text) AND (user_id IS NULL OR user_id = $3::uuid)
-ORDER BY is_default DESC, lower(name), id`
+ORDER BY is_default DESC, (pinned_at IS NOT NULL) DESC, lower(name), id`
 
 const getTemplateSQL = `
 SELECT ` + templateColumns + ` FROM hiring.templates
@@ -103,7 +105,8 @@ WHERE id = $1::uuid AND tenant_id = $2::uuid AND (user_id = $3::uuid OR user_id 
 func scanTemplate(row pgx.Row) (*Template, error) {
 	var t Template
 	var payload []byte
-	if err := row.Scan(&t.ID, &t.Kind, &t.Name, &payload, &t.IsDefault, &t.CreatedBy, &t.UpdatedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.Kind, &t.Name, &payload, &t.IsDefault, &t.CreatedBy, &t.UpdatedAt,
+		&t.Pinned, &t.UseCount, &t.LastUsedAt); err != nil {
 		return nil, err
 	}
 	t.Payload = json.RawMessage(payload)
@@ -190,6 +193,61 @@ func (s *Store) DeleteTemplate(ctx context.Context, tenantID, userID, id string)
 	})
 }
 
+// Only company templates (no owner) can be renamed or pinned; a personal default keeps its fixed name.
+const renameTemplateSQL = `
+UPDATE hiring.templates SET name = $3::text
+WHERE id = $1::uuid AND tenant_id = $2::uuid AND user_id IS NULL
+RETURNING ` + templateColumns
+
+const pinTemplateSQL = `
+UPDATE hiring.templates SET pinned_at = CASE WHEN $3::boolean THEN coalesce(pinned_at, now()) END
+WHERE id = $1::uuid AND tenant_id = $2::uuid AND user_id IS NULL
+RETURNING ` + templateColumns
+
+const touchTemplateSQL = `
+UPDATE hiring.templates SET use_count = use_count + 1, last_used_at = now()
+WHERE id = $1::uuid AND tenant_id = $2::uuid AND (user_id IS NULL OR user_id = $3::uuid)`
+
+// RenameTemplate renames a company template. ErrConflict means the name is taken for that kind.
+func (s *Store) RenameTemplate(ctx context.Context, tenantID, _, id, name string) (*Template, error) {
+	var t *Template
+	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) (err error) {
+		t, err = scanTemplate(tx.QueryRow(ctx, renameTemplateSQL, id, tenantID, name))
+		return err
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, mapPgError(err)
+	}
+	return t, nil
+}
+
+// SetTemplatePinned pins or unpins a company template for everyone in the company.
+func (s *Store) SetTemplatePinned(ctx context.Context, tenantID, _, id string, pinned bool) (*Template, error) {
+	var t *Template
+	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) (err error) {
+		t, err = scanTemplate(tx.QueryRow(ctx, pinTemplateSQL, id, tenantID, pinned))
+		return err
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, mapPgError(err)
+	}
+	return t, nil
+}
+
+// TouchTemplate records that a draft was started from the template. Best effort for the caller.
+func (s *Store) TouchTemplate(ctx context.Context, tenantID, userID, id string) error {
+	return s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, touchTemplateSQL, id, tenantID, userID)
+		return err
+	})
+}
+
 const getSettingsSQL = `
 SELECT automated_screening_enabled_at IS NOT NULL,
        coalesce(to_char(automated_screening_enabled_at AT TIME ZONE 'UTC', '` + tsLayout + `'), '')
@@ -226,4 +284,54 @@ func (s *Store) SetAutomatedScreening(ctx context.Context, tenantID, actorID str
 		return nil
 	})
 	return err
+}
+
+const tenantIDsSQL = `SELECT id::text FROM accounts.organizations ORDER BY created_at, id`
+
+// Published jobs whose closing date was before today (UTC). The closing date is the last day to apply.
+const dueJobsSQL = `
+SELECT id::text FROM hiring.job_postings
+WHERE tenant_id = $1::uuid AND status = 'published' AND deleted_at IS NULL
+  AND closing_date IS NOT NULL AND closing_date < (now() AT TIME ZONE 'UTC')::date
+ORDER BY closing_date, id
+LIMIT $2`
+
+// TenantIDs lists every company in this region. Row security hides jobs until a company is chosen, so the
+// expiry sweep walks the companies one at a time.
+func (s *Store) TenantIDs(ctx context.Context) ([]string, error) {
+	rows, err := s.DB.Query(ctx, tenantIDsSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// DueJobIDs returns up to limit published jobs of the company whose closing date has passed.
+func (s *Store) DueJobIDs(ctx context.Context, tenantID string, limit int) ([]string, error) {
+	var out []string
+	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, dueJobsSQL, tenantID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			out = append(out, id)
+		}
+		return rows.Err()
+	})
+	return out, err
 }

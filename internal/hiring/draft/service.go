@@ -40,6 +40,11 @@ type Store interface {
 	SaveDefaultTemplate(ctx context.Context, tenantID, userID, kind string,
 		payload json.RawMessage) (*hiringtypes.Template, error)
 	DeleteTemplate(ctx context.Context, tenantID, userID, id string) error
+	// DueJobIDs returns up to limit published jobs of the company whose closing date has passed.
+	DueJobIDs(ctx context.Context, tenantID string, limit int) ([]string, error)
+	RenameTemplate(ctx context.Context, tenantID, userID, id, name string) (*hiringtypes.Template, error)
+	SetTemplatePinned(ctx context.Context, tenantID, userID, id string, pinned bool) (*hiringtypes.Template, error)
+	TouchTemplate(ctx context.Context, tenantID, userID, id string) error
 
 	// OrgMembers returns the people in the company among userIDs, keyed by user id. Unknown ids are absent.
 	OrgMembers(ctx context.Context, tenantID string, userIDs []string) (map[string]hiringtypes.Member, error)

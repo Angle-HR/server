@@ -165,6 +165,7 @@ func Run() error {
 	kybHandler.NotifierFor = kybNotifierFor
 	kybHandler.Formats = onboarding.RegistrationNumberFormatOK
 	hiringHandler := newHiringHandler(dbRouter, globalPool)
+	authHandler.MeAccess = hiringHandler.Access
 	adminHandler := handler.NewAdminHandler(
 		adminStore,
 		dbRouter,

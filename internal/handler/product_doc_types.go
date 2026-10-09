@@ -171,6 +171,10 @@ type AuthMeData struct {
 	Region        string                    `json:"region" example:"uk"`
 	TOTPEnabled   bool                      `json:"totp_enabled" example:"false"`
 	Onboarding    OnboardingProgressSummary `json:"onboarding"`
+	// Roles are the caller's company roles; empty until they belong to a company.
+	Roles []string `json:"roles"`
+	// Permissions are everything those roles allow, so a client can show only the actions the caller may take.
+	Permissions []string `json:"permissions"`
 }
 
 // AuthMeEnvelope wraps /auth/me.

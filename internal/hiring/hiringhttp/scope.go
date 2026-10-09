@@ -104,9 +104,22 @@ func (d *PostgresHiringDirectory) Scope(
 		Now:     d.Now,
 		Company: storeCompany{store: store},
 	}
+	if owner && !hasRole(roles, string(rbac.RoleFounder)) {
+		roles = append(roles, string(rbac.RoleFounder))
+	}
 	return svc, draft.Caller{
 		UserID: userID, OrgID: orgID, Region: string(reg), CompanyName: name, Perms: PermissionsFor(roles, owner),
+		Roles: roles,
 	}, nil
+}
+
+func hasRole(roles []string, role string) bool {
+	for _, r := range roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
 }
 
 var errOnboardingIncomplete = apperror.New(apperror.CodeOnboardingIncomplete, apperror.MsgOnboardingStepIncomplete)

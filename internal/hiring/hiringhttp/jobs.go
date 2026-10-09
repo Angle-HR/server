@@ -42,6 +42,8 @@ func (h *HiringHandler) RegisterProtectedRoutes(r chi.Router) {
 		r.Get("/catalog", h.catalog)
 		r.Get("/timezones", h.timezones)
 		r.Get("/skills", h.skills)
+		r.Get("/me", h.me)
+		r.Get("/people", h.people)
 		r.Get("/departments", h.departments)
 		r.Post("/departments", h.addDepartment)
 		r.Get("/templates", h.templates)
@@ -81,13 +83,23 @@ func (h *HiringHandler) jobID(r *http.Request) string { return chi.URLParam(r, "
 // listJobs godoc
 //
 //	@Summary		List jobs
-//	@Description	Newest first. People who can only see assigned jobs get the jobs they created or were added to.
+//	@Description	Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. Applicant counts are not included yet because candidate applications do not exist in the API.
 //	@Tags			jobs
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			status			query		string	false	"Comma-separated statuses, e.g. draft,published"
 //	@Param			department_id	query		string	false	"Only this department"
-//	@Param			q				query		string	false	"Search the title"
+//	@Param			q				query		string	false	"Search the title or department name"
+//	@Param			created_by		query		string	false	"Only jobs created by this user id"
+//	@Param			assignee		query		string	false	"Only jobs this user id is on the hiring team of"
+//	@Param			employment_type	query		string	false	"full_time, part_time, contract or internship"
+//	@Param			workplace_type	query		string	false	"onsite, hybrid or remote"
+//	@Param			location_mode	query		string	false	"anywhere, specific_area or specific_timezone"
+//	@Param			market			query		string	false	"Two-letter market code, e.g. UK"
+//	@Param			created_from	query		string	false	"Created on or after this date (YYYY-MM-DD)"
+//	@Param			created_to		query		string	false	"Created on or before this date (YYYY-MM-DD)"
+//	@Param			sort			query		string	false	"updated_at (default) or created_at"
+//	@Param			order			query		string	false	"desc (default) or asc"
 //	@Param			cursor			query		string	false	"next_cursor from the previous page"
 //	@Param			limit			query		int		false	"Page size (default 25, max 100)"
 //	@Success		200				{object}	hiringhttp.JobListEnvelope
@@ -102,6 +114,10 @@ func (h *HiringHandler) listJobs(w http.ResponseWriter, r *http.Request) {
 	qv := r.URL.Query()
 	q := draft.ListQuery{
 		DepartmentID: qv.Get("department_id"), Query: strings.TrimSpace(qv.Get("q")), Cursor: qv.Get("cursor"),
+		CreatedBy: qv.Get("created_by"), Assignee: qv.Get("assignee"), EmploymentType: qv.Get("employment_type"),
+		WorkplaceType: qv.Get("workplace_type"), LocationMode: qv.Get("location_mode"), Market: qv.Get("market"),
+		CreatedFrom: qv.Get("created_from"), CreatedTo: qv.Get("created_to"),
+		Sort: qv.Get("sort"), Order: qv.Get("order"),
 	}
 	for _, s := range strings.Split(qv.Get("status"), ",") {
 		if s = strings.TrimSpace(s); s != "" {

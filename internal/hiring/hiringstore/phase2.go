@@ -329,6 +329,69 @@ func (s *Store) OrgMembers(
 	return out, rows.Err()
 }
 
+const listPeopleSQL = `
+SELECT p.id, p.name, p.email, p.roles, p.is_owner FROM (
+  SELECT u.id::text AS id,
+         COALESCE(NULLIF(trim(concat_ws(' ', u.first_name, u.last_name)), ''), u.legal_full_name, '') AS name,
+         u.email AS email,
+         COALESCE((SELECT array_agg(r.role ORDER BY r.role)
+                   FROM accounts.organization_members m
+                   JOIN accounts.organization_member_roles r ON r.member_id = m.id
+                   WHERE m.user_id = u.id AND m.organization_id = $1::uuid), '{}') AS roles,
+         EXISTS (SELECT 1 FROM accounts.organizations o WHERE o.owner_user_id = u.id AND o.id = $1::uuid) AS is_owner
+  FROM accounts.users u
+  WHERE u.deleted_at IS NULL
+    AND (EXISTS (SELECT 1 FROM accounts.organization_members m
+                 WHERE m.user_id = u.id AND m.organization_id = $1::uuid)
+         OR EXISTS (SELECT 1 FROM accounts.organizations o WHERE o.owner_user_id = u.id AND o.id = $1::uuid))
+) p
+WHERE ($2::text IS NULL OR p.name ILIKE '%' || $2::text || '%' ESCAPE '\'
+       OR p.email ILIKE '%' || $2::text || '%' ESCAPE '\')
+ORDER BY p.name, p.id
+LIMIT $3`
+
+// ListPeople returns the people in the company, for the "add people to this job" picker. Like OrgMembers it runs
+// outside a tenant transaction; the company id in the query is the scope.
+func (s *Store) ListPeople(
+	ctx context.Context, tenantID, query string, limit int,
+) ([]hiringtypes.Person, error) {
+	var q *string
+	if t := strings.TrimSpace(query); t != "" {
+		esc := EscapeLike(t)
+		q = &esc
+	}
+	rows, err := s.DB.Query(ctx, listPeopleSQL, tenantID, q, limit)
+	if err != nil {
+		return nil, fmt.Errorf("hiringstore: list people: %w", err)
+	}
+	defer rows.Close()
+	out := []hiringtypes.Person{}
+	for rows.Next() {
+		var p hiringtypes.Person
+		var owner bool
+		if err = rows.Scan(&p.UserID, &p.Name, &p.Email, &p.Roles, &owner); err != nil {
+			return nil, fmt.Errorf("hiringstore: scan person: %w", err)
+		}
+		if p.Roles == nil {
+			p.Roles = []string{}
+		}
+		if owner && !containsString(p.Roles, "founder") {
+			p.Roles = append(p.Roles, "founder")
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func containsString(list []string, v string) bool {
+	for _, s := range list {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
 const companySetupSQL = `
 SELECT o.kyb_status,
        (SELECT a.accepted_at FROM accounts.organization_agreements a

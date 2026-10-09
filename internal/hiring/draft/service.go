@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/Angle-HR/server/internal/hiring/gates"
@@ -41,6 +43,10 @@ type Store interface {
 
 	// OrgMembers returns the people in the company among userIDs, keyed by user id. Unknown ids are absent.
 	OrgMembers(ctx context.Context, tenantID string, userIDs []string) (map[string]hiringtypes.Member, error)
+
+	// ListPeople returns up to limit people in the company whose name or email contains query (all when empty),
+	// ordered by name, with the company roles each one holds.
+	ListPeople(ctx context.Context, tenantID, query string, limit int) ([]hiringtypes.Person, error)
 
 	// Company setup: the publish prerequisites that live on the company.
 	CompanySetup(ctx context.Context, tenantID, dpaVersion string) (*hiringtypes.CompanySetup, error)
@@ -78,6 +84,7 @@ type Caller struct {
 	Region      string
 	CompanyName string
 	Perms       rbac.Set
+	Roles       []string // company roles the caller holds, e.g. founder, hr_1 (an owner always has founder)
 }
 
 func (c Caller) can(p rbac.Permission) bool { return c.Perms.Has(p) }
@@ -295,6 +302,17 @@ type ListQuery struct {
 	Query        string
 	Cursor       string
 	Limit        int
+
+	CreatedBy      string
+	Assignee       string
+	EmploymentType string
+	WorkplaceType  string
+	LocationMode   string
+	Market         string
+	CreatedFrom    string // YYYY-MM-DD
+	CreatedTo      string // YYYY-MM-DD
+	Sort           string // hiringtypes.SortUpdated (default) or hiringtypes.SortCreated
+	Order          string // "desc" (default) or "asc"
 }
 
 var knownStatuses = map[string]bool{
@@ -321,17 +339,70 @@ func (s *Service) List(ctx context.Context, c Caller, q ListQuery) ([]hiringtype
 			errs = append(errs, fe("cursor", "invalid cursor"))
 		}
 	}
+	errs = append(errs, validateListFilters(&q)...)
 	if len(errs) > 0 {
 		return nil, "", invalid(errs...)
 	}
 	f := &hiringtypes.ListFilter{
 		Statuses: q.Statuses, DepartmentID: q.DepartmentID, Query: q.Query, Cursor: q.Cursor, Limit: q.Limit,
+		CreatedBy: q.CreatedBy, Assignee: q.Assignee, EmploymentType: q.EmploymentType,
+		WorkplaceType: q.WorkplaceType, LocationMode: q.LocationMode, Market: q.Market,
+		CreatedFrom: q.CreatedFrom, CreatedTo: q.CreatedTo, Sort: q.Sort, Ascending: q.Order == "asc",
 	}
 	if !c.can(rbac.JobViewAll) {
 		f.OnlyMine = c.UserID
 	}
 	return s.Store.ListJobs(ctx, c.OrgID, f)
 }
+
+// validateListFilters checks the optional list filters and sort. It normalises q in place (market to upper case,
+// empty sort and order to their defaults).
+func validateListFilters(q *ListQuery) []jobs.FieldError {
+	var errs []jobs.FieldError
+	for _, f := range []struct{ path, val string }{{"created_by", q.CreatedBy}, {"assignee", q.Assignee}} {
+		if f.val != "" && !jobs.IsUUID(f.val) {
+			errs = append(errs, fe(f.path, "invalid user"))
+		}
+	}
+	if q.EmploymentType != "" && !jobs.EmploymentTypes[q.EmploymentType] {
+		errs = append(errs, fe("employment_type", "unknown employment type"))
+	}
+	if q.WorkplaceType != "" && !jobs.WorkplaceTypes[q.WorkplaceType] {
+		errs = append(errs, fe("workplace_type", "unknown workplace type"))
+	}
+	if q.LocationMode != "" && !jobs.LocationModes[q.LocationMode] {
+		errs = append(errs, fe("location_mode", "unknown location mode"))
+	}
+	q.Market = strings.ToUpper(strings.TrimSpace(q.Market))
+	if q.Market != "" && !marketCodeRE.MatchString(q.Market) {
+		errs = append(errs, fe("market", "use a two-letter market code, for example UK"))
+	}
+	for _, f := range []struct{ path, val string }{{"created_from", q.CreatedFrom}, {"created_to", q.CreatedTo}} {
+		if f.val == "" {
+			continue
+		}
+		if _, err := time.Parse("2006-01-02", f.val); err != nil {
+			errs = append(errs, fe(f.path, "use a date like 2026-10-31"))
+		}
+	}
+	switch q.Sort {
+	case "":
+		q.Sort = hiringtypes.SortUpdated
+	case hiringtypes.SortUpdated, hiringtypes.SortCreated:
+	default:
+		errs = append(errs, fe("sort", "sort by updated_at or created_at"))
+	}
+	switch q.Order {
+	case "":
+		q.Order = "desc"
+	case "asc", "desc":
+	default:
+		errs = append(errs, fe("order", "use asc or desc"))
+	}
+	return errs
+}
+
+var marketCodeRE = regexp.MustCompile(`^[A-Z]{2}$`)
 
 // Delete removes a draft. Only people who may edit it can.
 func (s *Service) Delete(ctx context.Context, c Caller, id string, ifMatch int) error {

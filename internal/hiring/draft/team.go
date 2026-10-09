@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
@@ -350,6 +351,38 @@ func (s *Service) Bulk(ctx context.Context, c Caller, action string, ids []strin
 	return res, nil
 }
 
+// MaxPeople bounds the people picker.
+const MaxPeople = 50
+
+// People lists the company's members so someone can be added to a hiring team. Needs one of the collaborator
+// permissions, the same ones putMembers checks.
+func (s *Service) People(ctx context.Context, c Caller, query string) ([]hiringtypes.Person, error) {
+	if !c.can(rbac.JobCollaboratorAdd) && !c.can(rbac.JobCollaboratorAddLimited) {
+		return nil, forbidden("you cannot add people to jobs")
+	}
+	return s.Store.ListPeople(ctx, c.OrgID, query, MaxPeople)
+}
+
+// MeView is what the signed-in person may do in the hiring module.
+type MeView struct {
+	UserID      string   `json:"user_id"`
+	CompanyName string   `json:"company_name"`
+	Roles       []string `json:"roles"`
+	Permissions []string `json:"permissions"`
+}
+
+// Me returns the caller's company roles and the permissions they add up to, so the client can show only the
+// actions the caller may take.
+func (s *Service) Me(c Caller) MeView {
+	perms := make([]string, 0, len(c.Perms))
+	for p := range c.Perms {
+		perms = append(perms, string(p))
+	}
+	sort.Strings(perms)
+	roles := append([]string{}, c.Roles...)
+	return MeView{UserID: c.UserID, CompanyName: c.CompanyName, Roles: roles, Permissions: perms}
+}
+
 // MaxExportRows bounds one export.
 const MaxExportRows = 5000
 
@@ -370,6 +403,31 @@ func (s *Service) Export(ctx context.Context, c Caller, statuses []string) ([]hi
 			break
 		}
 		cursor = next
+	}
+	return out, nil
+}
+
+// ExportSelected is Export limited to the given job ids (all jobs when ids is empty). Ids the caller may not see
+// are simply absent from the result.
+func (s *Service) ExportSelected(ctx context.Context, c Caller, statuses, ids []string) ([]hiringtypes.ListItem, error) {
+	for _, id := range ids {
+		if !jobs.IsUUID(id) {
+			return nil, invalid(fe("ids", "invalid job id "+id))
+		}
+	}
+	rows, err := s.Export(ctx, c, statuses)
+	if err != nil || len(ids) == 0 {
+		return rows, err
+	}
+	want := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		want[id] = true
+	}
+	out := make([]hiringtypes.ListItem, 0, len(ids))
+	for _, it := range rows {
+		if want[it.ID] {
+			out = append(out, it)
+		}
 	}
 	return out, nil
 }

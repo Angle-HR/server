@@ -60,6 +60,14 @@ type Member struct {
 	Email  string `json:"email,omitempty"` // output only
 }
 
+// Person is someone in the company who can be added to a hiring team.
+type Person struct {
+	UserID string   `json:"user_id"`
+	Name   string   `json:"name"`
+	Email  string   `json:"email"`
+	Roles  []string `json:"roles"`
+}
+
 // Hiring team roles stored in hiring.job_members.
 const (
 	MemberHiringManager = "hiring_manager"
@@ -128,7 +136,24 @@ type ListFilter struct {
 	OnlyMine     string // user id: only jobs this user created or is a member of (empty: all jobs)
 	Cursor       string
 	Limit        int
+
+	CreatedBy      string // user id: only jobs this user created
+	Assignee       string // user id: only jobs this user is a hiring team member of
+	EmploymentType string
+	WorkplaceType  string
+	LocationMode   string
+	Market         string // market code, e.g. GB
+	CreatedFrom    string // YYYY-MM-DD, inclusive
+	CreatedTo      string // YYYY-MM-DD, inclusive
+	Sort           string // SortUpdated (default) or SortCreated
+	Ascending      bool   // oldest first; the default is newest first
 }
+
+// Sort keys the jobs list accepts. Both are timestamps, so the cursor stays a (time, id) pair.
+const (
+	SortUpdated = "updated_at"
+	SortCreated = "created_at"
+)
 
 // ListItem is one row of the jobs list.
 type ListItem struct {
@@ -145,6 +170,17 @@ type ListItem struct {
 	CreatedBy      string   `json:"created_by"`
 	CreatedAt      string   `json:"created_at"`
 	UpdatedAt      string   `json:"updated_at"`
+
+	WorkplaceType string       `json:"workplace_type,omitempty"`
+	PublishedAt   string       `json:"published_at,omitempty"`
+	ClosingDate   string       `json:"closing_date,omitempty"`
+	Managers      []ListPerson `json:"managers"`
+}
+
+// ListPerson is a person shown on a jobs list row, such as a hiring manager.
+type ListPerson struct {
+	UserID string `json:"user_id"`
+	Name   string `json:"name"`
 }
 
 // DefaultListLimit and MaxListLimit bound a page.

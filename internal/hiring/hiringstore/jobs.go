@@ -21,6 +21,7 @@ type (
 	UpdateResult = hiringtypes.UpdateResult
 	ListFilter   = hiringtypes.ListFilter
 	ListItem     = hiringtypes.ListItem
+	ListPerson   = hiringtypes.ListPerson
 )
 
 // Page size bounds of the jobs list.
@@ -556,6 +557,8 @@ func loadDeclarations(ctx context.Context, tx pgx.Tx, id string) ([]questions.De
 
 // ---- list ----
 
+// listJobsSQL is the jobs list query. The two %s are the sort column and the keyset direction, both picked from
+// fixed lists in ListJobs, never from user text.
 const listJobsSQL = `
 SELECT j.id::text, j.job_number, j.status, COALESCE(j.title, ''), COALESCE(d.name, ''),
        COALESCE(j.employment_type, ''), COALESCE(j.location_mode, ''), j.current_step, j.revision,
@@ -563,19 +566,58 @@ SELECT j.id::text, j.job_number, j.status, COALESCE(j.title, ''), COALESCE(d.nam
        to_char(j.created_at AT TIME ZONE 'UTC', '` + tsLayout + `'),
        to_char(j.updated_at AT TIME ZONE 'UTC', '` + tsLayout + `'),
        COALESCE((SELECT array_agg(DISTINCT m.market_code ORDER BY m.market_code)
-                 FROM hiring.job_markets m WHERE m.job_id = j.id), '{}')
+                 FROM hiring.job_markets m WHERE m.job_id = j.id), '{}'),
+       COALESCE(j.workplace_type, ''),
+       COALESCE(to_char(j.published_at AT TIME ZONE 'UTC', '` + tsLayout + `'), ''),
+       COALESCE(to_char(j.closing_date, 'YYYY-MM-DD'), ''),
+       COALESCE((SELECT array_agg(jm.user_id::text ORDER BY jm.user_id)
+                 FROM hiring.job_members jm JOIN accounts.users u ON u.id = jm.user_id AND u.deleted_at IS NULL
+                 WHERE jm.job_id = j.id AND jm.role = 'hiring_manager'), '{}'),
+       COALESCE((SELECT array_agg(COALESCE(NULLIF(trim(concat_ws(' ', u.first_name, u.last_name)), ''),
+                                           u.legal_full_name, '') ORDER BY jm.user_id)
+                 FROM hiring.job_members jm JOIN accounts.users u ON u.id = jm.user_id AND u.deleted_at IS NULL
+                 WHERE jm.job_id = j.id AND jm.role = 'hiring_manager'), '{}')
 FROM hiring.job_postings j
 LEFT JOIN hiring.departments d ON d.id = j.department_id
 WHERE j.tenant_id = $1::uuid AND j.deleted_at IS NULL
   AND ($2::text[] IS NULL OR j.status = ANY($2::text[]))
   AND ($3::uuid IS NULL OR j.department_id = $3::uuid)
-  AND ($4::text IS NULL OR j.title ILIKE '%' || $4::text || '%' ESCAPE '\'
-       OR d.name ILIKE '%' || $4::text || '%' ESCAPE '\')
+  AND ($4::text IS NULL OR j.title ILIKE '%%' || $4::text || '%%' ESCAPE '\'
+       OR d.name ILIKE '%%' || $4::text || '%%' ESCAPE '\')
   AND ($5::uuid IS NULL OR j.created_by = $5::uuid
        OR EXISTS (SELECT 1 FROM hiring.job_members jm WHERE jm.job_id = j.id AND jm.user_id = $5::uuid))
-  AND ($6::timestamptz IS NULL OR (j.updated_at, j.id) < ($6::timestamptz, $7::uuid))
-ORDER BY j.updated_at DESC, j.id DESC
+  AND ($6::timestamptz IS NULL OR (j.%[1]s, j.id) %[2]s ($6::timestamptz, $7::uuid))
+  AND ($9::uuid IS NULL OR j.created_by = $9::uuid)
+  AND ($10::uuid IS NULL OR EXISTS (SELECT 1 FROM hiring.job_members jm
+                                    WHERE jm.job_id = j.id AND jm.user_id = $10::uuid))
+  AND ($11::text IS NULL OR j.employment_type = $11::text)
+  AND ($12::text IS NULL OR j.workplace_type = $12::text)
+  AND ($13::text IS NULL OR j.location_mode = $13::text)
+  AND ($14::text IS NULL OR EXISTS (SELECT 1 FROM hiring.job_markets m
+                                    WHERE m.job_id = j.id AND m.market_code = $14::text))
+  AND ($15::date IS NULL OR (j.created_at AT TIME ZONE 'UTC')::date >= $15::date)
+  AND ($16::date IS NULL OR (j.created_at AT TIME ZONE 'UTC')::date <= $16::date)
+ORDER BY j.%[1]s %[3]s, j.id %[3]s
 LIMIT $8`
+
+// listSQL fills in the sort column and direction. Anything not on the fixed lists falls back to newest updated.
+func listSQL(sortKey string, ascending bool) string {
+	col := "updated_at"
+	if sortKey == SortCreated {
+		col = "created_at"
+	}
+	cmp, dir := "<", "DESC"
+	if ascending {
+		cmp, dir = ">", "ASC"
+	}
+	return fmt.Sprintf(listJobsSQL, col, cmp, dir)
+}
+
+// SortCreated and SortUpdated mirror the sort keys of hiringtypes so callers in this package read plainly.
+const (
+	SortCreated = hiringtypes.SortCreated
+	SortUpdated = hiringtypes.SortUpdated
+)
 
 // EscapeLike escapes the LIKE wildcards in user text so a search for "100%" matches literally.
 func EscapeLike(s string) string {
@@ -583,7 +625,16 @@ func EscapeLike(s string) string {
 	return r.Replace(s)
 }
 
-// ListJobs returns one page, newest first, and the cursor of the next page ("" at the end).
+// optText returns a pointer to s, or nil when s is empty, so an empty filter reaches the query as NULL.
+func optText(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// ListJobs returns one page and the cursor of the next page ("" at the end). Newest first unless the filter says
+// otherwise.
 func (s *Store) ListJobs(ctx context.Context, tenantID string, f *ListFilter) ([]ListItem, string, error) {
 	limit := f.Limit
 	if limit <= 0 {
@@ -596,22 +647,16 @@ func (s *Store) ListJobs(ctx context.Context, tenantID string, f *ListFilter) ([
 		statuses []string
 		dept     *string
 		q        *string
-		mine     *string
 		curTS    *string
 		curID    *string
 	)
 	if len(f.Statuses) > 0 {
 		statuses = f.Statuses
 	}
-	if f.DepartmentID != "" {
-		dept = &f.DepartmentID
-	}
+	dept = optText(f.DepartmentID)
 	if t := strings.TrimSpace(f.Query); t != "" {
 		esc := EscapeLike(t)
 		q = &esc
-	}
-	if f.OnlyMine != "" {
-		mine = &f.OnlyMine
 	}
 	if f.Cursor != "" {
 		ts, id, err := DecodeCursor(f.Cursor)
@@ -620,11 +665,14 @@ func (s *Store) ListJobs(ctx context.Context, tenantID string, f *ListFilter) ([
 		}
 		curTS, curID = &ts, &id
 	}
+	query := listSQL(f.Sort, f.Ascending)
 
 	var items []ListItem
 	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		// One extra row tells us whether another page exists.
-		rows, err := tx.Query(ctx, listJobsSQL, tenantID, statuses, dept, q, mine, curTS, curID, limit+1)
+		rows, err := tx.Query(ctx, query, tenantID, statuses, dept, q, optText(f.OnlyMine), curTS, curID, limit+1,
+			optText(f.CreatedBy), optText(f.Assignee), optText(f.EmploymentType), optText(f.WorkplaceType),
+			optText(f.LocationMode), optText(f.Market), optText(f.CreatedFrom), optText(f.CreatedTo))
 		if err != nil {
 			return fmt.Errorf("hiringstore: list jobs: %w", err)
 		}
@@ -632,12 +680,22 @@ func (s *Store) ListJobs(ctx context.Context, tenantID string, f *ListFilter) ([
 		for rows.Next() {
 			var it ListItem
 			var number int
+			var managerIDs, managerNames []string
 			if err = rows.Scan(&it.ID, &number, &it.Status, &it.Title, &it.DepartmentName, &it.EmploymentType,
 				&it.LocationMode, &it.CurrentStep, &it.Revision, &it.CreatedBy, &it.CreatedAt, &it.UpdatedAt,
-				&it.Markets); err != nil {
+				&it.Markets, &it.WorkplaceType, &it.PublishedAt, &it.ClosingDate,
+				&managerIDs, &managerNames); err != nil {
 				return fmt.Errorf("hiringstore: scan job: %w", err)
 			}
 			it.JobCode = jobs.JobCode(number)
+			it.Managers = make([]ListPerson, 0, len(managerIDs))
+			for i, id := range managerIDs {
+				name := ""
+				if i < len(managerNames) {
+					name = managerNames[i]
+				}
+				it.Managers = append(it.Managers, ListPerson{UserID: id, Name: name})
+			}
 			items = append(items, it)
 		}
 		return rows.Err()
@@ -649,7 +707,11 @@ func (s *Store) ListJobs(ctx context.Context, tenantID string, f *ListFilter) ([
 	if len(items) > limit {
 		items = items[:limit]
 		last := items[len(items)-1]
-		next = EncodeCursor(last.UpdatedAt, last.ID)
+		stamp := last.UpdatedAt
+		if f.Sort == SortCreated {
+			stamp = last.CreatedAt
+		}
+		next = EncodeCursor(stamp, last.ID)
 	}
 	if items == nil {
 		items = []ListItem{}

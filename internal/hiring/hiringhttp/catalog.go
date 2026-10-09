@@ -32,6 +32,18 @@ type SkillsEnvelope struct {
 	Meta *apidoc.Meta              `json:"meta,omitempty"`
 }
 
+// MeEnvelope is the caller's roles and permissions.
+type MeEnvelope struct {
+	Data draft.MeView `json:"data"`
+	Meta *apidoc.Meta `json:"meta,omitempty"`
+}
+
+// PeopleEnvelope lists the company's members.
+type PeopleEnvelope struct {
+	Data []hiringtypes.Person `json:"data"`
+	Meta *apidoc.Meta         `json:"meta,omitempty"`
+}
+
 // DepartmentsEnvelope lists departments.
 type DepartmentsEnvelope struct {
 	Data []hiringtypes.Department `json:"data"`
@@ -141,6 +153,49 @@ func (h *HiringHandler) skills(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.Success(w, r, http.StatusOK, items)
+}
+
+// me godoc
+//
+//	@Summary		My hiring roles and permissions
+//	@Description	The signed-in person's company roles and the permissions they add up to, such as job.export. Use it to show or hide actions; the server still checks every request.
+//	@Tags			hiring
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Success		200	{object}	hiringhttp.MeEnvelope
+//	@Failure		401	{object}	apidoc.ErrorEnvelope
+//	@Failure		404	{object}	apidoc.ErrorEnvelope
+//	@Router			/hiring/me [get]
+func (h *HiringHandler) me(w http.ResponseWriter, r *http.Request) {
+	svc, c, ok := h.scope(w, r)
+	if !ok {
+		return
+	}
+	response.Success(w, r, http.StatusOK, svc.Me(c))
+}
+
+// people godoc
+//
+//	@Summary		List the company's people
+//	@Description	Members of the caller's company, with their roles, for the "add people to this job" picker. Search matches the name or email. Returns at most 50 people. Needs job.collaborator.add or job.collaborator.add_limited.
+//	@Tags			hiring
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			q	query		string	false	"Part of a name or email"
+//	@Success		200	{object}	hiringhttp.PeopleEnvelope
+//	@Failure		403	{object}	apidoc.ErrorEnvelope
+//	@Router			/hiring/people [get]
+func (h *HiringHandler) people(w http.ResponseWriter, r *http.Request) {
+	svc, c, ok := h.scope(w, r)
+	if !ok {
+		return
+	}
+	list, err := svc.People(r.Context(), c, strings.TrimSpace(r.URL.Query().Get("q")))
+	if err != nil {
+		response.Error(w, r, hiringError(err))
+		return
+	}
+	response.Success(w, r, http.StatusOK, list)
 }
 
 // departments godoc

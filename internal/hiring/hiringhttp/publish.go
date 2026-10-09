@@ -147,7 +147,7 @@ func (h *HiringHandler) publish(w http.ResponseWriter, r *http.Request) {
 // lifecycle serves pause, resume, close, reopen, archive, to-draft and withdraw.
 //
 //	@Summary		Change a job's status
-//	@Description	POST /jobs/{id}/pause, /resume, /close, /reopen, /archive, /to-draft or /withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created.
+//	@Description	One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.
 //	@Tags			jobs
 //	@Produce		json
 //	@Security		BearerAuth
@@ -159,6 +159,12 @@ func (h *HiringHandler) publish(w http.ResponseWriter, r *http.Request) {
 //	@Failure		409			{object}	apidoc.ErrorEnvelope
 //	@Failure		422			{object}	apidoc.ErrorEnvelope
 //	@Router			/jobs/{id}/pause [post]
+//	@Router			/jobs/{id}/resume [post]
+//	@Router			/jobs/{id}/close [post]
+//	@Router			/jobs/{id}/reopen [post]
+//	@Router			/jobs/{id}/archive [post]
+//	@Router			/jobs/{id}/to-draft [post]
+//	@Router			/jobs/{id}/withdraw [post]
 func (h *HiringHandler) lifecycle(action string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		svc, c, ok := h.scope(w, r)
@@ -456,12 +462,14 @@ func (h *HiringHandler) bulk(w http.ResponseWriter, r *http.Request) {
 
 // export godoc
 //
-//	@Summary		Export jobs as CSV
-//	@Description	Every job the caller may see, newest first. Needs job.export.
+//	@Summary		Export jobs as CSV or JSON
+//	@Description	Every job the caller may see, newest first, or only the jobs in ids. CSV is the default; format=json returns the same rows as on the jobs list. Needs job.export.
 //	@Tags			jobs
-//	@Produce		text/csv
+//	@Produce		text/csv,json
 //	@Security		BearerAuth
 //	@Param			status	query	string	false	"Comma-separated statuses"
+//	@Param			ids		query	string	false	"Comma-separated job ids; only these jobs are exported"
+//	@Param			format	query	string	false	"csv (default) or json"
 //	@Success		200		{string}	string	"CSV"
 //	@Failure		403		{object}	apidoc.ErrorEnvelope
 //	@Router			/jobs/export [get]
@@ -470,15 +478,29 @@ func (h *HiringHandler) export(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var statuses []string
+	var statuses, ids []string
 	for _, s := range strings.Split(r.URL.Query().Get("status"), ",") {
 		if s = strings.TrimSpace(s); s != "" {
 			statuses = append(statuses, s)
 		}
 	}
-	rows, err := svc.Export(r.Context(), c, statuses)
+	for _, s := range strings.Split(r.URL.Query().Get("ids"), ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			ids = append(ids, s)
+		}
+	}
+	format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
+	if format != "" && format != "csv" && format != "json" {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, "format must be csv or json"))
+		return
+	}
+	rows, err := svc.ExportSelected(r.Context(), c, statuses, ids)
 	if err != nil {
 		response.Error(w, r, hiringError(err))
+		return
+	}
+	if format == "json" {
+		response.Success(w, r, http.StatusOK, nonNilItems(rows))
 		return
 	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")

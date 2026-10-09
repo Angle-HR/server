@@ -160,11 +160,62 @@ func (f *Store) ListJobs(
 		if len(flt.Statuses) > 0 && !contains(flt.Statuses, r.Job.Status) {
 			continue
 		}
-		out = append(out, hiringtypes.ListItem{ID: r.Job.ID, Title: r.Job.Title, Status: r.Job.Status,
-			JobCode: r.Job.JobCode, CreatedBy: r.Job.CreatedBy})
+		if !fakeMatches(r, flt) {
+			continue
+		}
+		out = append(out, fakeListItem(r))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, "", nil
+}
+
+// fakeMatches applies the list filters that go beyond status and ownership.
+func fakeMatches(r *hiringtypes.JobRecord, flt *hiringtypes.ListFilter) bool {
+	d := r.Job.Details
+	switch {
+	case flt.CreatedBy != "" && r.Job.CreatedBy != flt.CreatedBy:
+		return false
+	case flt.Assignee != "" && !isMember(r, flt.Assignee):
+		return false
+	case flt.EmploymentType != "" && d.EmploymentType != flt.EmploymentType:
+		return false
+	case flt.WorkplaceType != "" && d.WorkplaceType != flt.WorkplaceType:
+		return false
+	case flt.LocationMode != "" && d.LocationMode != flt.LocationMode:
+		return false
+	}
+	if flt.Market != "" {
+		found := false
+		for _, m := range d.Markets {
+			if m.MarketCode == flt.Market {
+				found = true
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+// fakeListItem builds the list row of a stored job, with its hiring managers.
+func fakeListItem(r *hiringtypes.JobRecord) hiringtypes.ListItem {
+	d := r.Job.Details
+	markets := make([]string, 0, len(d.Markets))
+	for _, m := range d.Markets {
+		markets = append(markets, m.MarketCode)
+	}
+	managers := []hiringtypes.ListPerson{}
+	for _, m := range r.Members {
+		if m.Role == hiringtypes.MemberHiringManager {
+			managers = append(managers, hiringtypes.ListPerson{UserID: m.UserID, Name: m.Name})
+		}
+	}
+	return hiringtypes.ListItem{
+		ID: r.Job.ID, Title: r.Job.Title, Status: r.Job.Status, JobCode: r.Job.JobCode, CreatedBy: r.Job.CreatedBy,
+		EmploymentType: d.EmploymentType, LocationMode: d.LocationMode, WorkplaceType: d.WorkplaceType,
+		ClosingDate: d.ClosingDate, PublishedAt: r.Job.PublishedAt, Markets: markets, Managers: managers,
+	}
 }
 
 // DeleteDraft implements draft.Store.
@@ -473,6 +524,25 @@ func (f *Store) OrgMembers(_ context.Context, _ string, ids []string) (map[strin
 		if m, ok := f.People[id]; ok {
 			out[id] = m
 		}
+	}
+	return out, nil
+}
+
+// ListPeople implements draft.Store. Roles are not tracked by the fake, so every person comes back without any.
+func (f *Store) ListPeople(_ context.Context, _, query string, limit int) ([]hiringtypes.Person, error) {
+	out := []hiringtypes.Person{}
+	q := strings.ToLower(strings.TrimSpace(query))
+	for id, m := range f.People {
+		if q != "" && !strings.Contains(strings.ToLower(m.Name), q) && !strings.Contains(strings.ToLower(m.Email), q) {
+			continue
+		}
+		out = append(out, hiringtypes.Person{UserID: id, Name: m.Name, Email: m.Email, Roles: []string{}})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Name < out[j].Name || (out[i].Name == out[j].Name && out[i].UserID < out[j].UserID)
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
 	}
 	return out, nil
 }

@@ -332,7 +332,21 @@ func (s *Service) Create(ctx context.Context, c Caller, req CreateRequest) (*Job
 	if err != nil {
 		return nil, mapStoreError(err)
 	}
+	s.touchTemplates(ctx, c, deref(req.TemplateID), deref(req.FormTemplateID))
 	return s.view(ctx, c, rec, cat), nil
+}
+
+// touchTemplates counts a use for each template a new draft was started from by id. A failure here never
+// fails the draft.
+func (s *Service) touchTemplates(ctx context.Context, c Caller, ids ...string) {
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		if err := s.Store.TouchTemplate(ctx, c.OrgID, c.UserID, id); err != nil {
+			slog.WarnContext(ctx, "draft: could not record template use", "template_id", id, "error", err)
+		}
+	}
 }
 
 // pickTemplate finds the template a new draft starts from: the one asked for by id (explicit) or else the

@@ -1789,7 +1789,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the authenticated product user and onboarding progress.",
+                "description": "Returns the authenticated product user, onboarding progress, and the caller's company roles and permissions (empty until they belong to a company).",
                 "produces": [
                     "application/json"
                 ],
@@ -2820,6 +2820,177 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Send name, pinned or both. Only company templates can be changed; a personal default cannot. Pinned templates list first for the whole company.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "templates"
+                ],
+                "summary": "Rename or pin a template",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Template id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Changes",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.TemplatePatchRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.TemplateEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/hiring/templates/{id}/duplicate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Copies a company template. Without a name the copy is called \"\u003cname\u003e (copy)\".",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "templates"
+                ],
+                "summary": "Duplicate a template",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Template id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Copy name",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.TemplateDuplicateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.TemplateEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/hiring/templates/{id}/export": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a company template's kind, name and payload in a portable form.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "templates"
+                ],
+                "summary": "Export a template",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Template id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.TemplateExportEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
             }
         },
         "/hiring/timezones": {
@@ -2880,7 +3051,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. Applicant counts are not included yet because candidate applications do not exist in the API.",
+                "description": "Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. applicant_count is always 0 for now because candidate applications do not exist in the API yet.",
                 "produces": [
                     "application/json"
                 ],
@@ -6590,6 +6761,26 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_Angle-HR_server_internal_hiring_draft.TemplateExport": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "payload": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
         "github_com_Angle-HR_server_internal_hiring_draft.TemplateInput": {
             "type": "object",
             "properties": {
@@ -6766,6 +6957,10 @@ const docTemplate = `{
         "github_com_Angle-HR_server_internal_hiring_hiringtypes.ListItem": {
             "type": "object",
             "properties": {
+                "applicant_count": {
+                    "description": "ApplicantCount is always 0 until candidate applications exist in the API. The field is here so clients\ncan build against it now.",
+                    "type": "integer"
+                },
                 "closing_date": {
                     "type": "string"
                 },
@@ -6901,6 +7096,9 @@ const docTemplate = `{
                 "kind": {
                     "type": "string"
                 },
+                "last_used_at": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -6910,8 +7108,16 @@ const docTemplate = `{
                         "type": "integer"
                     }
                 },
+                "pinned": {
+                    "description": "Pinned templates sort first for the whole company.",
+                    "type": "boolean"
+                },
                 "updated_at": {
                     "type": "string"
+                },
+                "use_count": {
+                    "description": "UseCount is how many drafts were started from this template by id.",
+                    "type": "integer"
                 }
             }
         },
@@ -8214,9 +8420,23 @@ const docTemplate = `{
                 "onboarding": {
                     "$ref": "#/definitions/internal_handler.OnboardingProgressSummary"
                 },
+                "permissions": {
+                    "description": "Permissions are everything those roles allow, so a client can show only the actions the caller may take.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "region": {
                     "type": "string",
                     "example": "uk"
+                },
+                "roles": {
+                    "description": "Roles are the caller's company roles; empty until they belong to a company.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "totp_enabled": {
                     "type": "boolean",
@@ -10367,6 +10587,15 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_hiring_hiringhttp.TemplateDuplicateRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "Support roles (copy)"
+                }
+            }
+        },
         "internal_hiring_hiringhttp.TemplateEnvelope": {
             "type": "object",
             "properties": {
@@ -10375,6 +10604,30 @@ const docTemplate = `{
                 },
                 "meta": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.TemplateExportEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.TemplateExport"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.TemplatePatchRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "Support roles"
+                },
+                "pinned": {
+                    "type": "boolean",
+                    "example": true
                 }
             }
         },

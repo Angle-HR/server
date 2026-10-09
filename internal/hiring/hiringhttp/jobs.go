@@ -48,7 +48,10 @@ func (h *HiringHandler) RegisterProtectedRoutes(r chi.Router) {
 		r.Post("/departments", h.addDepartment)
 		r.Get("/templates", h.templates)
 		r.Post("/templates", h.saveTemplate)
+		r.Patch("/templates/{id}", h.patchTemplate)
 		r.Delete("/templates/{id}", h.deleteTemplate)
+		r.Post("/templates/{id}/duplicate", h.duplicateTemplate)
+		r.Get("/templates/{id}/export", h.exportTemplate)
 		r.Get("/settings", h.settings)
 		r.Put("/settings", h.putSettings)
 	})
@@ -83,7 +86,7 @@ func (h *HiringHandler) jobID(r *http.Request) string { return chi.URLParam(r, "
 // listJobs godoc
 //
 //	@Summary		List jobs
-//	@Description	Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. Applicant counts are not included yet because candidate applications do not exist in the API.
+//	@Description	Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. applicant_count is always 0 for now because candidate applications do not exist in the API yet.
 //	@Tags			jobs
 //	@Produce		json
 //	@Security		BearerAuth

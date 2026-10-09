@@ -173,6 +173,86 @@ func (s *Service) DeleteTemplate(ctx context.Context, c Caller, id string) error
 	return s.Store.DeleteTemplate(ctx, c.OrgID, c.UserID, id)
 }
 
+// companyTemplate loads a named company template for management. Personal defaults cannot be renamed,
+// pinned, duplicated or exported, so they read as not found here.
+func (s *Service) companyTemplate(ctx context.Context, c Caller, id string) (*hiringtypes.Template, error) {
+	if !c.can(permTemplateCreate) {
+		return nil, forbidden("you cannot manage templates")
+	}
+	if !jobs.IsUUID(id) {
+		return nil, hiringtypes.ErrNotFound
+	}
+	t, err := s.Store.GetTemplate(ctx, c.OrgID, c.UserID, id)
+	if err != nil {
+		return nil, err
+	}
+	if t.IsDefault {
+		return nil, hiringtypes.ErrNotFound
+	}
+	return t, nil
+}
+
+// RenameTemplate renames a company template.
+func (s *Service) RenameTemplate(ctx context.Context, c Caller, id, name string) (*hiringtypes.Template, error) {
+	if _, err := s.companyTemplate(ctx, c, id); err != nil {
+		return nil, err
+	}
+	clean, ok := cleanName(name)
+	if !ok {
+		return nil, invalid(fe("name", "template name must be 1 to 80 characters"))
+	}
+	t, err := s.Store.RenameTemplate(ctx, c.OrgID, c.UserID, id, clean)
+	if isConflict(err) {
+		return nil, invalid(fe("name", "a template with this name already exists"))
+	}
+	return t, err
+}
+
+// PinTemplate pins or unpins a company template. Pinned templates list first for everyone.
+func (s *Service) PinTemplate(ctx context.Context, c Caller, id string, pinned bool) (*hiringtypes.Template, error) {
+	if _, err := s.companyTemplate(ctx, c, id); err != nil {
+		return nil, err
+	}
+	return s.Store.SetTemplatePinned(ctx, c.OrgID, c.UserID, id, pinned)
+}
+
+// DuplicateTemplate copies a company template under a new name (default "<name> (copy)").
+func (s *Service) DuplicateTemplate(ctx context.Context, c Caller, id, name string) (*hiringtypes.Template, error) {
+	src, err := s.companyTemplate(ctx, c, id)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(name) == "" {
+		name = src.Name + " (copy)"
+	}
+	clean, ok := cleanName(name)
+	if !ok {
+		return nil, invalid(fe("name", "template name must be 1 to 80 characters"))
+	}
+	t, err := s.Store.CreateTemplate(ctx, c.OrgID, c.UserID, src.Kind, clean, src.Payload)
+	if isConflict(err) {
+		return nil, invalid(fe("name", "a template with this name already exists"))
+	}
+	return t, err
+}
+
+// TemplateExport is a template in a portable form.
+type TemplateExport struct {
+	Version int             `json:"version"`
+	Kind    string          `json:"kind"`
+	Name    string          `json:"name"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+// ExportTemplate returns a company template's name, kind and payload.
+func (s *Service) ExportTemplate(ctx context.Context, c Caller, id string) (*TemplateExport, error) {
+	t, err := s.companyTemplate(ctx, c, id)
+	if err != nil {
+		return nil, err
+	}
+	return &TemplateExport{Version: 1, Kind: t.Kind, Name: t.Name, Payload: t.Payload}, nil
+}
+
 // ---- settings ----
 
 // Settings returns the company's hiring settings.

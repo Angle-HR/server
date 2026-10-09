@@ -337,6 +337,136 @@ func (h *HiringHandler) deleteTemplate(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, r, http.StatusOK, map[string]bool{"deleted": true})
 }
 
+// TemplatePatchRequest renames and/or pins a company template.
+type TemplatePatchRequest struct {
+	Name   *string `json:"name" example:"Support roles"`
+	Pinned *bool   `json:"pinned" example:"true"`
+}
+
+// TemplateDuplicateRequest names the copy; the name is optional.
+type TemplateDuplicateRequest struct {
+	Name string `json:"name" example:"Support roles (copy)"`
+}
+
+// TemplateExportEnvelope is a template in portable form.
+type TemplateExportEnvelope struct {
+	Data draft.TemplateExport `json:"data"`
+	Meta *apidoc.Meta         `json:"meta,omitempty"`
+}
+
+// patchTemplate godoc
+//
+//	@Summary		Rename or pin a template
+//	@Description	Send name, pinned or both. Only company templates can be changed; a personal default cannot. Pinned templates list first for the whole company.
+//	@Tags			templates
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string							true	"Template id"
+//	@Param			body	body		hiringhttp.TemplatePatchRequest	true	"Changes"
+//	@Success		200		{object}	hiringhttp.TemplateEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		403		{object}	apidoc.ErrorEnvelope
+//	@Failure		404		{object}	apidoc.ErrorEnvelope
+//	@Router			/hiring/templates/{id} [patch]
+func (h *HiringHandler) patchTemplate(w http.ResponseWriter, r *http.Request) {
+	svc, c, ok := h.scope(w, r)
+	if !ok {
+		return
+	}
+	raw, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	var req TemplatePatchRequest
+	if err := decodeStrict(raw, &req); err != nil || (req.Name == nil && req.Pinned == nil) {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		return
+	}
+	id := h.jobID(r)
+	var t *hiringtypes.Template
+	var err error
+	if req.Name != nil {
+		if t, err = svc.RenameTemplate(r.Context(), c, id, *req.Name); err != nil {
+			response.Error(w, r, hiringError(err))
+			return
+		}
+	}
+	if req.Pinned != nil {
+		if t, err = svc.PinTemplate(r.Context(), c, id, *req.Pinned); err != nil {
+			response.Error(w, r, hiringError(err))
+			return
+		}
+	}
+	response.Success(w, r, http.StatusOK, t)
+}
+
+// duplicateTemplate godoc
+//
+//	@Summary		Duplicate a template
+//	@Description	Copies a company template. Without a name the copy is called "<name> (copy)".
+//	@Tags			templates
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string								true	"Template id"
+//	@Param			body	body		hiringhttp.TemplateDuplicateRequest	false	"Copy name"
+//	@Success		201		{object}	hiringhttp.TemplateEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		403		{object}	apidoc.ErrorEnvelope
+//	@Failure		404		{object}	apidoc.ErrorEnvelope
+//	@Router			/hiring/templates/{id}/duplicate [post]
+func (h *HiringHandler) duplicateTemplate(w http.ResponseWriter, r *http.Request) {
+	svc, c, ok := h.scope(w, r)
+	if !ok {
+		return
+	}
+	var req TemplateDuplicateRequest
+	if r.ContentLength != 0 {
+		raw, ok := readBody(w, r)
+		if !ok {
+			return
+		}
+		if len(strings.TrimSpace(string(raw))) > 0 {
+			if err := decodeStrict(raw, &req); err != nil {
+				response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+				return
+			}
+		}
+	}
+	t, err := svc.DuplicateTemplate(r.Context(), c, h.jobID(r), req.Name)
+	if err != nil {
+		response.Error(w, r, hiringError(err))
+		return
+	}
+	response.Success(w, r, http.StatusCreated, t)
+}
+
+// exportTemplate godoc
+//
+//	@Summary		Export a template
+//	@Description	Returns a company template's kind, name and payload in a portable form.
+//	@Tags			templates
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path		string	true	"Template id"
+//	@Success		200	{object}	hiringhttp.TemplateExportEnvelope
+//	@Failure		403	{object}	apidoc.ErrorEnvelope
+//	@Failure		404	{object}	apidoc.ErrorEnvelope
+//	@Router			/hiring/templates/{id}/export [get]
+func (h *HiringHandler) exportTemplate(w http.ResponseWriter, r *http.Request) {
+	svc, c, ok := h.scope(w, r)
+	if !ok {
+		return
+	}
+	out, err := svc.ExportTemplate(r.Context(), c, h.jobID(r))
+	if err != nil {
+		response.Error(w, r, hiringError(err))
+		return
+	}
+	response.Success(w, r, http.StatusOK, out)
+}
+
 // settings godoc
 //
 //	@Summary		Hiring settings

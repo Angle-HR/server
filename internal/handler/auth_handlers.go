@@ -47,7 +47,9 @@ type AuthHandler struct {
 	PasswordLockout *auth.LoginLockout
 	TOTPLockout     *auth.LoginLockout
 	Enqueuer        jobEnqueuer
-	validate        *validator.Validate
+	// MeAccess adds the caller's company roles and permissions to /auth/me. Optional: nil leaves both empty.
+	MeAccess func(ctx context.Context, userID string, reg region.Region) (roles, permissions []string)
+	validate *validator.Validate
 }
 
 // Lockout tuning: password guessing gets a longer window since a slow drip

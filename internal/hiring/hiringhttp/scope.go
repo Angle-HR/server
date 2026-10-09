@@ -236,3 +236,14 @@ func hiringError(err error) error {
 	}
 	return err
 }
+
+// Access returns the user's company roles and permissions for /auth/me. A user with no company, or any lookup
+// failure, gets nothing rather than an error, so /auth/me keeps working.
+func (h *HiringHandler) Access(ctx context.Context, userID string, reg region.Region) (roles, permissions []string) {
+	svc, c, err := h.Directory.Scope(ctx, userID, reg)
+	if err != nil {
+		return nil, nil
+	}
+	me := svc.Me(c)
+	return me.Roles, me.Permissions
+}

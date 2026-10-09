@@ -216,8 +216,10 @@ func BulkPlan(c Caller, items []BulkItem, a Action) (ok []BulkItem, skipped []Sk
 	return ok, skipped, nil
 }
 
-// BulkActions are the actions the bulk endpoint accepts. Publishing, resuming and reopening are one job at a
-// time because each runs its own checks and writes its own compliance log.
+// BulkActions are the actions the bulk endpoint accepts. Publishing stays one job at a time. Resume and reopen
+// are allowed in bulk: each job still runs its own publish checks and writes its own compliance log, and a job
+// that fails its checks is skipped with the reason while the rest go ahead.
 var BulkActions = map[Action]bool{
-	ActionPause: true, ActionClose: true, ActionArchive: true, ActionToDraft: true,
+	ActionPause: true, ActionResume: true, ActionClose: true, ActionReopen: true,
+	ActionArchive: true, ActionToDraft: true,
 }

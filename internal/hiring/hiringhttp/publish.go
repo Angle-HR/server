@@ -429,7 +429,7 @@ type BulkRequest struct {
 // bulk godoc
 //
 //	@Summary		Change several jobs at once
-//	@Description	Pause, close, archive or move to draft, for up to 100 jobs. Not all-or-nothing: each job is changed on its own, and the ones that could not be are listed with the reason. The result carries each job's earlier status so the client can offer undo.
+//	@Description	Pause, resume, close, reopen, archive or move to draft, for up to 100 jobs. Resume and reopen run the publish checks for each job; a job that fails them is skipped with the reasons. Not all-or-nothing: each job is changed on its own, and the ones that could not be are listed with the reason. The result carries each job's earlier status so the client can offer undo.
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json

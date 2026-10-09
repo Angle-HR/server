@@ -45,13 +45,13 @@ type PostgresHiringDirectory struct {
 // The user's company: the one they own, else one they are a member of. Roles come from the member's role rows;
 // an owner is always a founder, so a company that has not assigned roles yet still works.
 const orgForUserSQL = `
-SELECT o.id::text, o.legal_name, (o.owner_user_id = $1::uuid) AS is_owner,
+SELECT o.id::text, o.legal_name, coalesce(o.business_registered_address, ''), (o.owner_user_id = $1::uuid) AS is_owner,
        coalesce(array_agg(r.role) FILTER (WHERE r.role IS NOT NULL), '{}')::text[]
 FROM accounts.organizations o
 LEFT JOIN accounts.organization_members m ON m.organization_id = o.id AND m.user_id = $1::uuid
 LEFT JOIN accounts.organization_member_roles r ON r.member_id = m.id
 WHERE o.owner_user_id = $1::uuid OR m.user_id = $1::uuid
-GROUP BY o.id, o.legal_name, o.owner_user_id, o.created_at
+GROUP BY o.id, o.legal_name, o.business_registered_address, o.owner_user_id, o.created_at
 ORDER BY (o.owner_user_id = $1::uuid) DESC, o.created_at
 LIMIT 1`
 
@@ -86,11 +86,11 @@ func (d *PostgresHiringDirectory) Scope(
 		return nil, draft.Caller{}, err
 	}
 	var (
-		orgID, name string
-		owner       bool
-		roles       []string
+		orgID, name, address string
+		owner                bool
+		roles                []string
 	)
-	err = pool.QueryRow(ctx, orgForUserSQL, userID).Scan(&orgID, &name, &owner, &roles)
+	err = pool.QueryRow(ctx, orgForUserSQL, userID).Scan(&orgID, &name, &address, &owner, &roles)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, draft.Caller{}, ErrNoOrganization
 	}
@@ -108,7 +108,7 @@ func (d *PostgresHiringDirectory) Scope(
 		roles = append(roles, string(rbac.RoleFounder))
 	}
 	return svc, draft.Caller{
-		UserID: userID, OrgID: orgID, Region: string(reg), CompanyName: name, Perms: PermissionsFor(roles, owner),
+		UserID: userID, OrgID: orgID, Region: string(reg), CompanyName: name, CompanyAddress: address, Perms: PermissionsFor(roles, owner),
 		Roles: roles,
 	}, nil
 }

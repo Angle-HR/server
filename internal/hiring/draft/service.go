@@ -26,6 +26,7 @@ type Store interface {
 	UpdateJob(ctx context.Context, tenantID, actorID, id string, ifMatch int,
 		fn func(cur *hiringtypes.JobRecord) (*hiringtypes.UpdateResult, error)) (*hiringtypes.JobRecord, error)
 	ListJobs(ctx context.Context, tenantID string, f *hiringtypes.ListFilter) ([]hiringtypes.ListItem, string, error)
+	CountJobs(ctx context.Context, tenantID string, f *hiringtypes.ListFilter) (map[string]int, error)
 	DeleteDraft(ctx context.Context, tenantID, actorID, id string, ifMatch int) error
 	FindDuplicates(ctx context.Context, tenantID, jobID, titleKey, locationKey, onlyMine string) ([]jobs.Duplicate, error)
 	RecordAudit(ctx context.Context, tenantID, actorID, jobID, action string, diff map[string]any) error
@@ -84,12 +85,13 @@ type Reference interface {
 
 // Caller is who is acting and what they may do, resolved once per request.
 type Caller struct {
-	UserID      string
-	OrgID       string
-	Region      string
-	CompanyName string
-	Perms       rbac.Set
-	Roles       []string // company roles the caller holds, e.g. founder, hr_1 (an owner always has founder)
+	UserID         string
+	OrgID          string
+	Region         string
+	CompanyName    string
+	CompanyAddress string // the registered address given at onboarding; empty when none was given
+	Perms          rbac.Set
+	Roles          []string // company roles the caller holds, e.g. founder, hr_1 (an owner always has founder)
 }
 
 func (c Caller) can(p rbac.Permission) bool { return c.Perms.Has(p) }
@@ -358,6 +360,48 @@ func (s *Service) List(ctx context.Context, c Caller, q ListQuery) ([]hiringtype
 		f.OnlyMine = c.UserID
 	}
 	return s.Store.ListJobs(ctx, c.OrgID, f)
+}
+
+// JobCounts is the number of jobs per status for the jobs page tabs. Every known status is present, zero when empty.
+type JobCounts struct {
+	All      int            `json:"all"`
+	ByStatus map[string]int `json:"by_status"`
+}
+
+// Counts returns the tab counts for the jobs the caller may see, narrowed by the same filters as List (status,
+// cursor, limit and sort are ignored, so every tab gets its number).
+func (s *Service) Counts(ctx context.Context, c Caller, q ListQuery) (*JobCounts, error) {
+	if !c.can(rbac.JobViewAll) && !c.can(rbac.JobViewAssigned) {
+		return nil, forbidden("you cannot view jobs")
+	}
+	q.Statuses, q.Cursor, q.Limit = nil, "", 0
+	var errs []jobs.FieldError
+	if q.DepartmentID != "" && !jobs.IsUUID(q.DepartmentID) {
+		errs = append(errs, fe("department_id", "invalid department"))
+	}
+	errs = append(errs, validateListFilters(&q)...)
+	if len(errs) > 0 {
+		return nil, invalid(errs...)
+	}
+	f := &hiringtypes.ListFilter{
+		DepartmentID: q.DepartmentID, Query: q.Query,
+		CreatedBy: q.CreatedBy, Assignee: q.Assignee, EmploymentType: q.EmploymentType,
+		WorkplaceType: q.WorkplaceType, LocationMode: q.LocationMode, Market: q.Market,
+		CreatedFrom: q.CreatedFrom, CreatedTo: q.CreatedTo,
+	}
+	if !c.can(rbac.JobViewAll) {
+		f.OnlyMine = c.UserID
+	}
+	got, err := s.Store.CountJobs(ctx, c.OrgID, f)
+	if err != nil {
+		return nil, err
+	}
+	out := &JobCounts{ByStatus: make(map[string]int, len(knownStatuses))}
+	for st := range knownStatuses {
+		out.ByStatus[st] = got[st]
+		out.All += got[st]
+	}
+	return out, nil
 }
 
 // validateListFilters checks the optional list filters and sort. It normalises q in place (market to upper case,

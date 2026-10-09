@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
@@ -308,7 +309,7 @@ type BulkDone struct {
 	After  string `json:"after"`
 }
 
-// Bulk applies pause, close, archive or to_draft to a selection of jobs.
+// Bulk applies pause, resume, close, reopen, archive or to_draft to a selection of jobs.
 func (s *Service) Bulk(ctx context.Context, c Caller, action string, ids []string) (*BulkResult, error) {
 	a, err := lifecycle.Parse(action)
 	if err != nil {
@@ -343,12 +344,26 @@ func (s *Service) Bulk(ctx context.Context, c Caller, action string, ids []strin
 	for _, it := range ok {
 		out, terr := s.transition(ctx, c, it.ID, a, 0)
 		if terr != nil {
-			res.Skipped = append(res.Skipped, lifecycle.Skipped{ID: it.ID, Reason: terr.Error()})
+			res.Skipped = append(res.Skipped, lifecycle.Skipped{ID: it.ID, Reason: bulkReason(terr)})
 			continue
 		}
 		res.Done = append(res.Done, BulkDone{ID: it.ID, Before: it.Status, After: out.Job.Status})
 	}
 	return res, nil
+}
+
+// bulkReason explains why one job in a bulk action was skipped. A job that fails the publish checks (resume and
+// reopen) lists what blocked it, in the checks' own words, instead of a generic message.
+func bulkReason(err error) string {
+	var be *BlockedError
+	if errors.As(err, &be) && be.Report != nil && len(be.Report.Blocking) > 0 {
+		msgs := make([]string, 0, len(be.Report.Blocking))
+		for _, is := range be.Report.Blocking {
+			msgs = append(msgs, is.Message)
+		}
+		return "cannot go live: " + strings.Join(msgs, "; ")
+	}
+	return err.Error()
 }
 
 // MaxPeople bounds the people picker.
@@ -365,10 +380,12 @@ func (s *Service) People(ctx context.Context, c Caller, query string) ([]hiringt
 
 // MeView is what the signed-in person may do in the hiring module.
 type MeView struct {
-	UserID      string   `json:"user_id"`
-	CompanyName string   `json:"company_name"`
-	Roles       []string `json:"roles"`
-	Permissions []string `json:"permissions"`
+	UserID      string `json:"user_id"`
+	CompanyName string `json:"company_name"`
+	// CompanyAddress is the company's registered address, for "Same as company address". Empty when none is set.
+	CompanyAddress string   `json:"company_address"`
+	Roles          []string `json:"roles"`
+	Permissions    []string `json:"permissions"`
 }
 
 // Me returns the caller's company roles and the permissions they add up to, so the client can show only the
@@ -380,7 +397,7 @@ func (s *Service) Me(c Caller) MeView {
 	}
 	sort.Strings(perms)
 	roles := append([]string{}, c.Roles...)
-	return MeView{UserID: c.UserID, CompanyName: c.CompanyName, Roles: roles, Permissions: perms}
+	return MeView{UserID: c.UserID, CompanyName: c.CompanyName, CompanyAddress: c.CompanyAddress, Roles: roles, Permissions: perms}
 }
 
 // MaxExportRows bounds one export.

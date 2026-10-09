@@ -803,3 +803,56 @@ func (s *Store) RecordAudit(ctx context.Context, tenantID, actorID, jobID, actio
 		return err
 	})
 }
+
+// countJobsSQL counts the caller's jobs per status with the same filters as the list, except status, cursor and
+// sort, so the tab counts match what each tab would show.
+const countJobsSQL = `
+SELECT j.status, count(*)
+FROM hiring.job_postings j
+LEFT JOIN hiring.departments d ON d.id = j.department_id
+WHERE j.tenant_id = $1::uuid AND j.deleted_at IS NULL
+  AND ($2::uuid IS NULL OR j.department_id = $2::uuid)
+  AND ($3::text IS NULL OR j.title ILIKE '%' || $3::text || '%' ESCAPE '\'
+       OR d.name ILIKE '%' || $3::text || '%' ESCAPE '\')
+  AND ($4::uuid IS NULL OR j.created_by = $4::uuid
+       OR EXISTS (SELECT 1 FROM hiring.job_members jm WHERE jm.job_id = j.id AND jm.user_id = $4::uuid))
+  AND ($5::uuid IS NULL OR j.created_by = $5::uuid)
+  AND ($6::uuid IS NULL OR EXISTS (SELECT 1 FROM hiring.job_members jm
+                                   WHERE jm.job_id = j.id AND jm.user_id = $6::uuid))
+  AND ($7::text IS NULL OR j.employment_type = $7::text)
+  AND ($8::text IS NULL OR j.workplace_type = $8::text)
+  AND ($9::text IS NULL OR j.location_mode = $9::text)
+  AND ($10::text IS NULL OR EXISTS (SELECT 1 FROM hiring.job_markets m
+                                    WHERE m.job_id = j.id AND m.market_code = $10::text))
+  AND ($11::date IS NULL OR (j.created_at AT TIME ZONE 'UTC')::date >= $11::date)
+  AND ($12::date IS NULL OR (j.created_at AT TIME ZONE 'UTC')::date <= $12::date)
+GROUP BY j.status`
+
+// CountJobs returns the number of matching jobs per status. Statuses with no jobs are absent.
+func (s *Store) CountJobs(ctx context.Context, tenantID string, f *ListFilter) (map[string]int, error) {
+	var q *string
+	if t := strings.TrimSpace(f.Query); t != "" {
+		esc := EscapeLike(t)
+		q = &esc
+	}
+	out := map[string]int{}
+	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, countJobsSQL, tenantID, optText(f.DepartmentID), q, optText(f.OnlyMine),
+			optText(f.CreatedBy), optText(f.Assignee), optText(f.EmploymentType), optText(f.WorkplaceType),
+			optText(f.LocationMode), optText(f.Market), optText(f.CreatedFrom), optText(f.CreatedTo))
+		if err != nil {
+			return fmt.Errorf("hiringstore: count jobs: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var status string
+			var n int
+			if err = rows.Scan(&status, &n); err != nil {
+				return fmt.Errorf("hiringstore: scan count: %w", err)
+			}
+			out[status] = n
+		}
+		return rows.Err()
+	})
+	return out, err
+}

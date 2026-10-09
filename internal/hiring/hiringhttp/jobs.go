@@ -24,6 +24,7 @@ func (h *HiringHandler) RegisterProtectedRoutes(r chi.Router) {
 	r.Route("/jobs", func(r chi.Router) {
 		r.Get("/", h.listJobs)
 		r.Post("/", h.createJob)
+		r.Get("/counts", h.jobCounts)
 		h.registerPublishJobRoutes(r)
 		r.Route("/{id}", func(r chi.Router) {
 			h.registerPublishItemRoutes(r)
@@ -142,6 +143,53 @@ func (h *HiringHandler) listJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	more := next != ""
 	response.SuccessWithMeta(w, r, http.StatusOK, nonNilItems(items), &response.Meta{NextCursor: next, HasMore: &more})
+}
+
+// JobCountsEnvelope is the per-status job counts.
+type JobCountsEnvelope struct {
+	Data draft.JobCounts `json:"data"`
+	Meta *apidoc.Meta    `json:"meta,omitempty"`
+}
+
+// jobCounts godoc
+//
+//	@Summary		Count jobs per status
+//	@Description	The numbers for the status tabs, in one call instead of loading every job. Takes the same filters as the jobs list (search, department, creator, assignee, employment and workplace type, location mode, market, created dates); status, cursor, limit and sort are ignored. Every status is present, zero when there are none, and all is the total. People who can only see assigned jobs are counted on those jobs only.
+//	@Tags			jobs
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			q				query		string	false	"Search title or department"
+//	@Param			department_id	query		string	false	"Only this department"
+//	@Param			created_by		query		string	false	"Only jobs created by this user id"
+//	@Param			assignee		query		string	false	"Only jobs this user id is on the hiring team of"
+//	@Param			employment_type	query		string	false	"full_time, part_time, contract or internship"
+//	@Param			workplace_type	query		string	false	"onsite, hybrid or remote"
+//	@Param			location_mode	query		string	false	"anywhere, specific_area or specific_timezone"
+//	@Param			market			query		string	false	"Two-letter market code, e.g. UK"
+//	@Param			created_from	query		string	false	"Created on or after this date (YYYY-MM-DD)"
+//	@Param			created_to		query		string	false	"Created on or before this date (YYYY-MM-DD)"
+//	@Success		200				{object}	hiringhttp.JobCountsEnvelope
+//	@Failure		400				{object}	apidoc.ErrorEnvelope
+//	@Failure		403				{object}	apidoc.ErrorEnvelope
+//	@Router			/jobs/counts [get]
+func (h *HiringHandler) jobCounts(w http.ResponseWriter, r *http.Request) {
+	svc, c, ok := h.scope(w, r)
+	if !ok {
+		return
+	}
+	qv := r.URL.Query()
+	q := draft.ListQuery{
+		DepartmentID: qv.Get("department_id"), Query: strings.TrimSpace(qv.Get("q")),
+		CreatedBy: qv.Get("created_by"), Assignee: qv.Get("assignee"), EmploymentType: qv.Get("employment_type"),
+		WorkplaceType: qv.Get("workplace_type"), LocationMode: qv.Get("location_mode"), Market: qv.Get("market"),
+		CreatedFrom: qv.Get("created_from"), CreatedTo: qv.Get("created_to"),
+	}
+	out, err := svc.Counts(r.Context(), c, q)
+	if err != nil {
+		response.Error(w, r, hiringError(err))
+		return
+	}
+	response.Success(w, r, http.StatusOK, out)
 }
 
 func nonNilItems(in []hiringtypes.ListItem) []hiringtypes.ListItem {

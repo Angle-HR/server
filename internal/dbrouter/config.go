@@ -11,13 +11,13 @@ import (
 
 // RegionConfig holds per-region PostgreSQL and Cloudflare R2 connection settings.
 type RegionConfig struct {
-	Region       region.Region
-	PostgresDSN  string
-	R2Endpoint   string
-	R2AccessKey  string
-	R2SecretKey  string
-	R2Bucket     string
-	R2UseSSL     bool
+	Region      region.Region
+	PostgresDSN string
+	R2Endpoint  string
+	R2AccessKey string
+	R2SecretKey string
+	R2Bucket    string
+	R2UseSSL    bool
 }
 
 func allRegions() []region.Region {
@@ -47,6 +47,8 @@ func envSuffix(reg region.Region) string {
 		return "EU"
 	case region.RegionAsia:
 		return "ASIA"
+	case region.RegionUnknown, region.RegionGlobal:
+		return strings.ToUpper(string(reg))
 	default:
 		return strings.ToUpper(string(reg))
 	}

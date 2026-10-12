@@ -76,7 +76,8 @@ type AuthLoginRequest struct {
 	Password string `json:"password" example:"secure-password-here"`
 }
 
-// AuthLoginVerificationRequiredDetails is returned in error.details when login succeeds on password but email is unverified.
+// AuthLoginVerificationRequiredDetails is returned in error.details when login succeeds on
+// password but email is unverified.
 type AuthLoginVerificationRequiredDetails struct {
 	VerificationSessionID    string `json:"verification_session_id" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Email                    string `json:"email" example:"jerry@example.com"`
@@ -170,6 +171,10 @@ type AuthMeData struct {
 	Region        string                    `json:"region" example:"uk"`
 	TOTPEnabled   bool                      `json:"totp_enabled" example:"false"`
 	Onboarding    OnboardingProgressSummary `json:"onboarding"`
+	// Roles are the caller's company roles; empty until they belong to a company.
+	Roles []string `json:"roles"`
+	// Permissions are everything those roles allow, so a client can show only the actions the caller may take.
+	Permissions []string `json:"permissions"`
 }
 
 // AuthMeEnvelope wraps /auth/me.

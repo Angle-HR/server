@@ -84,6 +84,7 @@ func logInternalError(r *http.Request, err error, status int, code string) {
 			"request_id", middleware.GetReqID(r.Context()),
 		)
 	}
+	// #nosec G706 -- slog TextHandler and JSONHandler escape structured attribute values
 	slog.Error("internal error", attrs...)
 }
 

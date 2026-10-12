@@ -6,6 +6,7 @@ import (
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/response"
 )
 
@@ -14,7 +15,7 @@ var _ = apidoc.ErrorEnvelope{}
 // me godoc
 //
 //	@Summary		Current product user
-//	@Description	Returns the authenticated product user and onboarding progress.
+//	@Description	Returns the authenticated product user, onboarding progress, and the caller's company roles and permissions (empty until they belong to a company).
 //	@Tags			auth
 //	@Produce		json
 //	@Security		BearerAuth
@@ -48,6 +49,13 @@ func (h *AuthHandler) me(w http.ResponseWriter, r *http.Request) {
 		countryID = &s
 	}
 
+	roles, perms := []string{}, []string{}
+	if h.MeAccess != nil {
+		if rs, ps := h.MeAccess(ctx, user.ID.String(), reg); rs != nil || ps != nil {
+			roles, perms = append(roles, rs...), append(perms, ps...)
+		}
+	}
+
 	response.Success(w, r, http.StatusOK, AuthMeData{
 		ID:            user.ID.String(),
 		Email:         user.Email,
@@ -60,6 +68,8 @@ func (h *AuthHandler) me(w http.ResponseWriter, r *http.Request) {
 		Region:        string(reg),
 		TOTPEnabled:   h.userTOTPEnabled(user),
 		Onboarding:    summary,
+		Roles:         roles,
+		Permissions:   perms,
 	})
 }
 
@@ -94,7 +104,7 @@ func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.Revoker != nil && claims.ExpiresAt != nil {
-		_ = h.Revoker.RevokeJTI(r.Context(), claims.ID, claims.ExpiresAt.Time)
+		besteffort.Log(r.Context(), "h.Revoker.RevokeJTI", h.Revoker.RevokeJTI(r.Context(), claims.ID, claims.ExpiresAt.Time))
 	}
 
 	response.Success(w, r, http.StatusOK, AuthMessageData{Message: "logged out"})

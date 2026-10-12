@@ -41,7 +41,7 @@ func TestIssueAndParseAdminPair(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tokens.ParseAdminAccess(product.AccessToken); err == nil {
+	if _, parseAdminAccessErr := tokens.ParseAdminAccess(product.AccessToken); parseAdminAccessErr == nil {
 		t.Fatal("expected product token to fail admin parse")
 	}
 

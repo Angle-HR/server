@@ -7,6 +7,8 @@ import (
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
+
+	"github.com/Angle-HR/server/pkg/besteffort"
 )
 
 const defaultDialTimeout = 5 * time.Second
@@ -24,7 +26,7 @@ func NewClient(ctx context.Context, redisURL string) (*goredis.Client, error) {
 
 	client := goredis.NewClient(opts)
 	if err := client.Ping(ctx).Err(); err != nil {
-		_ = client.Close()
+		besteffort.Log(ctx, "client.Close", client.Close())
 		return nil, fmt.Errorf("ping redis: %w", err)
 	}
 

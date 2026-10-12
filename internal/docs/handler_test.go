@@ -67,8 +67,8 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 	t.Helper()
 
 	groups, ok := doc["x-tagGroups"].([]any)
-	if !ok || len(groups) != 3 {
-		t.Fatalf("x-tagGroups: got %v, want Waitlist, Onboarding, and Admin groups", doc["x-tagGroups"])
+	if !ok || len(groups) != 4 {
+		t.Fatalf("x-tagGroups: got %v, want Waitlist, Onboarding, Admin, and Hiring groups", doc["x-tagGroups"])
 	}
 
 	assertTagGroup(t, groups[0], "Waitlist", []string{
@@ -95,10 +95,16 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 		"admin/roles",
 		"admin/audit",
 	})
+	assertTagGroup(t, groups[3], "Hiring", []string{
+		"jobs",
+		"application-form",
+		"templates",
+		"hiring",
+	})
 
 	tagDefs, ok := doc["tags"].([]any)
-	if !ok || len(tagDefs) != 18 {
-		t.Fatalf("tags: got %v, want 18 tag definitions", doc["tags"])
+	if !ok || len(tagDefs) != 22 {
+		t.Fatalf("tags: got %v, want 22 tag definitions", doc["tags"])
 	}
 	wantTagNames := []string{
 		"waitlist/reference",
@@ -119,6 +125,10 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 		"admin/staff",
 		"admin/roles",
 		"admin/audit",
+		"jobs",
+		"application-form",
+		"templates",
+		"hiring",
 	}
 	for i, want := range wantTagNames {
 		tagDef, ok := tagDefs[i].(map[string]any)

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,7 +18,11 @@ import (
 
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 )
+
+// randomTokenBytes is the entropy of generated tokens (256 bits).
+const randomTokenBytes = 32
 
 // InviteTTL is how long an admin invite token remains valid.
 const InviteTTL = 72 * time.Hour
@@ -116,7 +121,7 @@ func HashInviteToken(raw string) string {
 
 // NewInviteToken generates a URL-safe opaque invite token.
 func NewInviteToken() (string, error) {
-	buf := make([]byte, 32)
+	buf := make([]byte, randomTokenBytes)
 	if _, err := rand.Read(buf); err != nil {
 		return "", fmt.Errorf("generate invite token: %w", err)
 	}
@@ -131,7 +136,13 @@ func (s *Store) CountUsers(ctx context.Context) (int, error) {
 }
 
 // CreateUser inserts an admin user and returns it. passwordHash may be nil for pending invites.
-func (s *Store) CreateUser(ctx context.Context, email string, passwordHash *string, name string, active bool) (User, error) {
+func (s *Store) CreateUser(
+	ctx context.Context,
+	email string,
+	passwordHash *string,
+	name string,
+	active bool,
+) (User, error) {
 	var u User
 	err := s.DB.QueryRow(ctx, `
 		INSERT INTO admin.users (email, password_hash, name, is_active)
@@ -161,7 +172,8 @@ func (s *Store) AssignRoleBySlug(ctx context.Context, userID uuid.UUID, roleSlug
 	}
 	if tag.RowsAffected() == 0 {
 		var exists bool
-		if err := s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM admin.roles WHERE slug = $1)`, roleSlug).Scan(&exists); err != nil {
+		if err := s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM admin.roles WHERE slug = $1)`, roleSlug).
+			Scan(&exists); err != nil {
 			return err
 		}
 		if !exists {
@@ -294,7 +306,16 @@ func (s *Store) ListStaff(ctx context.Context) ([]StaffMember, error) {
 	var out []StaffMember
 	for rows.Next() {
 		var m StaffMember
-		if err := rows.Scan(&m.ID, &m.Email, &m.Name, &m.IsActive, &m.InvitePending, &m.CreatedAt, &m.UpdatedAt, &m.Roles); err != nil {
+		if err := rows.Scan(
+			&m.ID,
+			&m.Email,
+			&m.Name,
+			&m.IsActive,
+			&m.InvitePending,
+			&m.CreatedAt,
+			&m.UpdatedAt,
+			&m.Roles,
+		); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -356,27 +377,20 @@ func guardLastSuperadmin(ctx context.Context, q interface {
 }
 
 // UpdateStaff patches staff fields and optionally replaces roles.
-func (s *Store) UpdateStaff(ctx context.Context, id uuid.UUID, name *string, isActive *bool, roleSlugs *[]string) (StaffMember, error) {
+func (s *Store) UpdateStaff(
+	ctx context.Context,
+	id uuid.UUID,
+	name *string,
+	isActive *bool,
+	roleSlugs *[]string,
+) (StaffMember, error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return StaffMember{}, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() { besteffort.Log(ctx, "tx.Rollback", tx.Rollback(ctx)) }()
 
-	var currentActive bool
-	var currentHasSuperadmin bool
-	err = tx.QueryRow(ctx, `
-		SELECT u.is_active,
-			EXISTS(
-				SELECT 1 FROM admin.user_roles ur
-				JOIN admin.roles r ON r.id = ur.role_id
-				WHERE ur.user_id = u.id AND r.slug = $2
-			)
-		FROM admin.users u WHERE u.id = $1
-	`, id, RoleSuperadmin).Scan(&currentActive, &currentHasSuperadmin)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return StaffMember{}, apperror.ErrNotFound
-	}
+	currentActive, currentHasSuperadmin, err := loadStaffFlags(ctx, tx, id)
 	if err != nil {
 		return StaffMember{}, err
 	}
@@ -387,17 +401,10 @@ func (s *Store) UpdateStaff(ctx context.Context, id uuid.UUID, name *string, isA
 	}
 	willHaveSuperadmin := currentHasSuperadmin
 	if roleSlugs != nil {
-		willHaveSuperadmin = false
-		for _, slug := range *roleSlugs {
-			if slug == RoleSuperadmin {
-				willHaveSuperadmin = true
-				break
-			}
-		}
+		willHaveSuperadmin = slices.Contains(*roleSlugs, RoleSuperadmin)
 	}
-
-	if err := guardLastSuperadmin(ctx, tx, id, willBeActive && willHaveSuperadmin); err != nil {
-		return StaffMember{}, err
+	if guardErr := guardLastSuperadmin(ctx, tx, id, willBeActive && willHaveSuperadmin); guardErr != nil {
+		return StaffMember{}, guardErr
 	}
 
 	if name != nil || isActive != nil {
@@ -414,24 +421,8 @@ func (s *Store) UpdateStaff(ctx context.Context, id uuid.UUID, name *string, isA
 	}
 
 	if roleSlugs != nil {
-		if _, err := tx.Exec(ctx, `DELETE FROM admin.user_roles WHERE user_id = $1`, id); err != nil {
-			return StaffMember{}, err
-		}
-		for _, slug := range *roleSlugs {
-			tag, err := tx.Exec(ctx, `
-				INSERT INTO admin.user_roles (user_id, role_id)
-				SELECT $1, r.id FROM admin.roles r WHERE r.slug = $2
-			`, id, slug)
-			if err != nil {
-				return StaffMember{}, err
-			}
-			if tag.RowsAffected() == 0 {
-				return StaffMember{}, apperror.NewWithDetails(
-					apperror.CodeValidationError,
-					"unknown role",
-					map[string]any{"role": slug},
-				)
-			}
+		if rolesErr := replaceStaffRoles(ctx, tx, id, *roleSlugs); rolesErr != nil {
+			return StaffMember{}, rolesErr
 		}
 	}
 
@@ -452,8 +443,51 @@ func (s *Store) UpdateStaff(ctx context.Context, id uuid.UUID, name *string, isA
 	return m, nil
 }
 
+// loadStaffFlags returns whether the staff member is active and holds the superadmin role.
+func loadStaffFlags(ctx context.Context, tx pgx.Tx, id uuid.UUID) (active, hasSuperadmin bool, err error) {
+	err = tx.QueryRow(ctx, `
+		SELECT u.is_active,
+			EXISTS(
+				SELECT 1 FROM admin.user_roles ur
+				JOIN admin.roles r ON r.id = ur.role_id
+				WHERE ur.user_id = u.id AND r.slug = $2
+			)
+		FROM admin.users u WHERE u.id = $1
+	`, id, RoleSuperadmin).Scan(&active, &hasSuperadmin)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, false, apperror.ErrNotFound
+	}
+	return active, hasSuperadmin, err
+}
+
+// replaceStaffRoles replaces all of a staff member's roles with the given role slugs.
+func replaceStaffRoles(ctx context.Context, tx pgx.Tx, id uuid.UUID, roleSlugs []string) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM admin.user_roles WHERE user_id = $1`, id); err != nil {
+		return err
+	}
+	for _, slug := range roleSlugs {
+		tag, err := tx.Exec(ctx, `
+			INSERT INTO admin.user_roles (user_id, role_id)
+			SELECT $1, r.id FROM admin.roles r WHERE r.slug = $2
+		`, id, slug)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return apperror.NewWithDetails(apperror.CodeValidationError, "unknown role", map[string]any{"role": slug})
+		}
+	}
+	return nil
+}
+
 // WriteAudit inserts an audit log row.
-func (s *Store) WriteAudit(ctx context.Context, actorID uuid.UUID, action, resourceType, resourceID string, meta map[string]any, ip string) error {
+func (s *Store) WriteAudit(
+	ctx context.Context,
+	actorID uuid.UUID,
+	action, resourceType, resourceID string,
+	meta map[string]any,
+	ip string,
+) error {
 	metaJSON, err := json.Marshal(meta)
 	if err != nil {
 		metaJSON = []byte("{}")
@@ -474,7 +508,12 @@ func (s *Store) WriteAudit(ctx context.Context, actorID uuid.UUID, action, resou
 }
 
 // ListAuditLogs returns audit logs with optional filters.
-func (s *Store) ListAuditLogs(ctx context.Context, actorID *uuid.UUID, action, resourceType string, limit, offset int) ([]AuditLog, error) {
+func (s *Store) ListAuditLogs(
+	ctx context.Context,
+	actorID *uuid.UUID,
+	action, resourceType string,
+	limit, offset int,
+) ([]AuditLog, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}

@@ -18,7 +18,11 @@ func TestVerificationStore_CanResendByEmail(t *testing.T) {
 	t.Cleanup(mr.Close)
 
 	client := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { _ = client.Close() })
+	t.Cleanup(func() {
+		if closeErr := client.Close(); closeErr != nil {
+			t.Logf("close redis client: %v", closeErr)
+		}
+	})
 
 	store := NewVerificationStore(client)
 	ctx := context.Background()
@@ -32,8 +36,8 @@ func TestVerificationStore_CanResendByEmail(t *testing.T) {
 		t.Fatal("expected resend allowed before marker is set")
 	}
 
-	if err := store.MarkResentByEmail(ctx, email); err != nil {
-		t.Fatalf("MarkResentByEmail: %v", err)
+	if markResentByEmailErr := store.MarkResentByEmail(ctx, email); markResentByEmailErr != nil {
+		t.Fatalf("MarkResentByEmail: %v", markResentByEmailErr)
 	}
 
 	ok, err = store.CanResendByEmail(ctx, email)

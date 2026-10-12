@@ -105,8 +105,8 @@ func (h *ProductOnboardingHandler) identificationRequirements(w http.ResponseWri
 	}
 
 	ctx := r.Context()
-	if err := h.ensureActiveCountry(ctx, countryID); err != nil {
-		response.Error(w, r, err)
+	if ensureActiveCountryErr := h.ensureActiveCountry(ctx, countryID); ensureActiveCountryErr != nil {
+		response.Error(w, r, ensureActiveCountryErr)
 		return
 	}
 
@@ -118,7 +118,11 @@ func (h *ProductOnboardingHandler) identificationRequirements(w http.ResponseWri
 
 	req, ok := onboarding.IdentificationRequirementsForCountry(slug)
 	if !ok {
-		response.Error(w, r, apperror.New(apperror.CodeNotFound, "identification requirements not configured for country"))
+		response.Error(
+			w,
+			r,
+			apperror.New(apperror.CodeNotFound, "identification requirements not configured for country"),
+		)
 		return
 	}
 

@@ -14,6 +14,9 @@ const (
 	PermAdminsRead    = "admins:read"
 	PermAdminsWrite   = "admins:write"
 	PermAuditRead     = "audit:read"
+
+	// PermVerificationReview covers the company verification (KYB) review queue.
+	PermVerificationReview = "verification:review"
 )
 
 // RoleSuperadmin is the bootstrap role slug.

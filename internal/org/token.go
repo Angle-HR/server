@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+// randomTokenBytes is the entropy of generated tokens (256 bits).
+const randomTokenBytes = 32
+
 // InviteTTL is how long a product organization invite remains valid.
 const InviteTTL = 72 * time.Hour
 
@@ -26,7 +29,7 @@ func HashInviteToken(raw string) string {
 
 // NewInviteToken generates a URL-safe opaque invite token.
 func NewInviteToken() (string, error) {
-	buf := make([]byte, 32)
+	buf := make([]byte, randomTokenBytes)
 	if _, err := rand.Read(buf); err != nil {
 		return "", fmt.Errorf("generate invite token: %w", err)
 	}

@@ -97,7 +97,7 @@ func (h *AdminHandler) patchRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body patchRoleBody
-	if err := decodeJSON(r, &body); err != nil {
+	if decodeJSONErr := decodeJSON(r, &body); decodeJSONErr != nil {
 		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
 		return
 	}

@@ -2,6 +2,7 @@ package logger
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -11,6 +12,8 @@ import (
 	"unicode/utf8"
 
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+
+	"github.com/Angle-HR/server/pkg/besteffort"
 )
 
 const maxBodyLogBytes = 8192
@@ -29,7 +32,7 @@ func RequestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 
 			var reqBody string
 			if logBodies {
-				reqBody = captureRequestBody(r)
+				reqBody = captureRequestBody(r.Context(), r)
 			}
 
 			ww := chimiddleware.NewWrapResponseWriter(w, r.ProtoMajor)
@@ -39,25 +42,15 @@ func RequestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 				ww.Tee(&respBuf)
 			}
 
-			defer func() {
-				attrs := []any{
-					"method", r.Method,
-					"path", r.URL.Path,
-					"query", r.URL.RawQuery,
-					"status", ww.Status(),
-					"bytes", ww.BytesWritten(),
-					"duration_ms", time.Since(start).Milliseconds(),
-					"request_id", chimiddleware.GetReqID(r.Context()),
-					"remote", r.RemoteAddr,
-					"user_agent", r.UserAgent(),
-				}
+			defer func() { //nolint:contextcheck // r.Context() is the request context; flagged falsely for a closure capturing r
+				attrs := requestAttrs(r, ww, start)
 				if logBodies {
 					attrs = append(attrs,
 						"request_body", reqBody,
 						"response_body", formatLoggedBody(respBuf.Bytes(), respBuf.truncated),
 					)
 				}
-				log.Info("http request", attrs...)
+				log.InfoContext(r.Context(), "http request", attrs...)
 			}()
 
 			next.ServeHTTP(ww, r)
@@ -65,7 +58,22 @@ func RequestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 	}
 }
 
-func captureRequestBody(r *http.Request) string {
+// requestAttrs returns the log attributes describing a finished request.
+func requestAttrs(r *http.Request, ww chimiddleware.WrapResponseWriter, start time.Time) []any {
+	return []any{
+		"method", r.Method,
+		"path", r.URL.Path,
+		"query", r.URL.RawQuery,
+		"status", ww.Status(),
+		"bytes", ww.BytesWritten(),
+		"duration_ms", time.Since(start).Milliseconds(),
+		"request_id", chimiddleware.GetReqID(r.Context()),
+		"remote", r.RemoteAddr,
+		"user_agent", r.UserAgent(),
+	}
+}
+
+func captureRequestBody(ctx context.Context, r *http.Request) string {
 	if r.Body == nil || r.Body == http.NoBody {
 		return ""
 	}
@@ -74,7 +82,7 @@ func captureRequestBody(r *http.Request) string {
 	}
 
 	body, err := io.ReadAll(r.Body)
-	_ = r.Body.Close()
+	besteffort.Log(ctx, "r.Body.Close", r.Body.Close())
 	if err != nil {
 		r.Body = io.NopCloser(bytes.NewReader(nil))
 		return ""

@@ -10,8 +10,10 @@ import (
 	"github.com/software78/fluvio/postgres"
 )
 
+// DefaultMaxAttempts is how many times a job is attempted before it is marked dead.
 const DefaultMaxAttempts int16 = 10
 
+// Queue names.
 const (
 	QueueEmail = "email"
 )
@@ -54,7 +56,12 @@ func NewInsertClient(pool *pgxpool.Pool) (*fluvio.Client, error) {
 }
 
 // NewWorkerClient returns a Fluvio client configured to process jobs from the given queues.
-func NewWorkerClient(pool *pgxpool.Pool, queues map[string]fluvio.QueueConfig, workers *fluvio.Workers, logger *slog.Logger) (*fluvio.Client, error) {
+func NewWorkerClient(
+	pool *pgxpool.Pool,
+	queues map[string]fluvio.QueueConfig,
+	workers *fluvio.Workers,
+	logger *slog.Logger,
+) (*fluvio.Client, error) {
 	return fluvio.NewClient(driver(pool), &fluvio.Config{
 		Queues:   queues,
 		Workers:  workers,

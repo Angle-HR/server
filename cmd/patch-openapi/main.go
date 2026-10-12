@@ -7,8 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Angle-HR/server/internal/docs"
 	"gopkg.in/yaml.v3"
+
+	"github.com/Angle-HR/server/internal/docs"
 )
 
 func main() {
@@ -18,50 +19,63 @@ func main() {
 	}
 }
 
-func run() error {
-	specDir := filepath.Join("internal", "docs", "spec")
-	jsonPath := filepath.Join(specDir, "swagger.json")
-	yamlPath := filepath.Join(specDir, "swagger.yaml")
+// specFileMode keeps the generated API spec world-readable.
+const specFileMode = 0o644
 
-	jsonContent, err := os.ReadFile(jsonPath)
+func run() (err error) {
+	specDir := filepath.Join("internal", "docs", "spec")
+	root, err := os.OpenRoot(specDir)
 	if err != nil {
-		return fmt.Errorf("read %s: %w", jsonPath, err)
+		return fmt.Errorf("open %s: %w", specDir, err)
+	}
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close %s: %w", specDir, closeErr)
+		}
+	}()
+
+	const jsonName = "swagger.json"
+	const yamlName = "swagger.yaml"
+
+	jsonContent, err := root.ReadFile(jsonName)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", jsonName, err)
 	}
 
 	var doc map[string]any
-	if err := json.Unmarshal(jsonContent, &doc); err != nil {
-		return fmt.Errorf("unmarshal %s: %w", jsonPath, err)
+	if unmarshalErr := json.Unmarshal(jsonContent, &doc); unmarshalErr != nil {
+		return fmt.Errorf("unmarshal %s: %w", jsonName, unmarshalErr)
 	}
 
 	docs.ApplyAPITagGroups(doc)
 
 	patchedJSON, err := json.MarshalIndent(doc, "", "    ")
 	if err != nil {
-		return fmt.Errorf("marshal %s: %w", jsonPath, err)
+		return fmt.Errorf("marshal %s: %w", jsonName, err)
 	}
 	patchedJSON = append(patchedJSON, '\n')
-	if err := os.WriteFile(jsonPath, patchedJSON, 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", jsonPath, err)
+	if writeErr := root.WriteFile(jsonName, patchedJSON, specFileMode); writeErr != nil {
+		return fmt.Errorf("write %s: %w", jsonName, writeErr)
 	}
 
-	yamlContent, err := os.ReadFile(yamlPath)
+	yamlContent, err := root.ReadFile(yamlName)
 	if err != nil {
-		return fmt.Errorf("read %s: %w", yamlPath, err)
+		return fmt.Errorf("read %s: %w", yamlName, err)
 	}
 
 	var yamlDoc map[string]any
-	if err := yaml.Unmarshal(yamlContent, &yamlDoc); err != nil {
-		return fmt.Errorf("unmarshal %s: %w", yamlPath, err)
+	if unmarshalErr := yaml.Unmarshal(yamlContent, &yamlDoc); unmarshalErr != nil {
+		return fmt.Errorf("unmarshal %s: %w", yamlName, unmarshalErr)
 	}
 
 	docs.ApplyAPITagGroups(yamlDoc)
 
 	patchedYAML, err := yaml.Marshal(yamlDoc)
 	if err != nil {
-		return fmt.Errorf("marshal %s: %w", yamlPath, err)
+		return fmt.Errorf("marshal %s: %w", yamlName, err)
 	}
-	if err := os.WriteFile(yamlPath, patchedYAML, 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", yamlPath, err)
+	if writeErr := root.WriteFile(yamlName, patchedYAML, specFileMode); writeErr != nil {
+		return fmt.Errorf("write %s: %w", yamlName, writeErr)
 	}
 
 	return nil

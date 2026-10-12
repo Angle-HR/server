@@ -2,6 +2,7 @@ package onboarding
 
 import "slices"
 
+// Onboarding step identifiers.
 const (
 	StepVerifyEmail           = "verify_email"
 	StepProfile               = "profile"
@@ -13,11 +14,13 @@ const (
 	StepComplete              = "complete"
 )
 
+// Onboarding progress statuses.
 const (
 	StatusInProgress = "in_progress"
 	StatusCompleted  = "completed"
 )
 
+// Account types.
 const (
 	AccountIndividual = "individual"
 	AccountBusiness   = "business"

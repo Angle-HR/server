@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 )
 
 // InviteResult is returned after creating or rotating an invite.
@@ -21,7 +22,12 @@ type InviteResult struct {
 
 // InviteStaff creates an inactive admin user with roles and a pending invite.
 // RawToken must be delivered out-of-band (email); only its hash is stored.
-func (s *Store) InviteStaff(ctx context.Context, email, name string, roleSlugs []string, invitedBy uuid.UUID) (InviteResult, error) {
+func (s *Store) InviteStaff(
+	ctx context.Context,
+	email, name string,
+	roleSlugs []string,
+	invitedBy uuid.UUID,
+) (InviteResult, error) {
 	rawToken, err := NewInviteToken()
 	if err != nil {
 		return InviteResult{}, err
@@ -33,7 +39,7 @@ func (s *Store) InviteStaff(ctx context.Context, email, name string, roleSlugs [
 	if err != nil {
 		return InviteResult{}, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() { besteffort.Log(ctx, "tx.Rollback", tx.Rollback(ctx)) }()
 
 	var u User
 	err = tx.QueryRow(ctx, `
@@ -49,12 +55,12 @@ func (s *Store) InviteStaff(ctx context.Context, email, name string, roleSlugs [
 	}
 
 	for _, slug := range roleSlugs {
-		tag, err := tx.Exec(ctx, `
+		tag, execErr := tx.Exec(ctx, `
 			INSERT INTO admin.user_roles (user_id, role_id)
 			SELECT $1, r.id FROM admin.roles r WHERE r.slug = $2
 		`, u.ID, slug)
-		if err != nil {
-			return InviteResult{}, err
+		if execErr != nil {
+			return InviteResult{}, execErr
 		}
 		if tag.RowsAffected() == 0 {
 			return InviteResult{}, apperror.NewWithDetails(
@@ -105,7 +111,7 @@ func (s *Store) ResendInvite(ctx context.Context, userID uuid.UUID) (InviteResul
 	if err != nil {
 		return InviteResult{}, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() { besteffort.Log(ctx, "tx.Rollback", tx.Rollback(ctx)) }()
 
 	var acceptedAt *time.Time
 	var passwordHash *string
@@ -205,7 +211,7 @@ func (s *Store) AcceptInvite(ctx context.Context, rawToken, name, passwordHash s
 	if err != nil {
 		return AcceptInviteResult{}, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() { besteffort.Log(ctx, "tx.Rollback", tx.Rollback(ctx)) }()
 
 	var userID uuid.UUID
 	var expiresAt time.Time

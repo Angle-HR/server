@@ -5,12 +5,13 @@ import (
 	"log"
 	"os"
 
+	fluvio "github.com/software78/fluvio"
+
 	"github.com/Angle-HR/server/internal/mailer"
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/worker"
 	"github.com/Angle-HR/server/internal/worker/runtime"
 	"github.com/Angle-HR/server/pkg/logger"
-	fluvio "github.com/software78/fluvio"
 )
 
 func main() {

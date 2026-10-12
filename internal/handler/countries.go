@@ -81,7 +81,7 @@ func (h *CountriesHandler) loadCountries(ctx context.Context) ([]Country, error)
 	}
 	defer rows.Close()
 
-	countries := make([]Country, 0, 8)
+	countries := make([]Country, 0, catalogCapacityHint)
 	for rows.Next() {
 		country, err := scanCountry(rows)
 		if err != nil {

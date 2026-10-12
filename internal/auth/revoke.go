@@ -11,6 +11,9 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
+// defaultRevokeTTL is how long a revocation marker lives when no refresh TTL is configured.
+const defaultRevokeTTL = 7 * 24 * time.Hour
+
 const (
 	revokeJTIPrefix  = "auth:revoke:"
 	revokeUserPrefix = "auth:user_revoke:"
@@ -69,7 +72,7 @@ func (s *RevocationStore) RevokeUserSessions(ctx context.Context, userID uuid.UU
 	key := revokeUserPrefix + userID.String()
 	ttl := refreshTTL
 	if ttl <= 0 {
-		ttl = 7 * 24 * time.Hour
+		ttl = defaultRevokeTTL
 	}
 	return s.client.Set(ctx, key, strconv.FormatInt(now, 10), ttl).Err()
 }
@@ -91,7 +94,8 @@ func (s *RevocationStore) UserSessionsRevokedAt(ctx context.Context, userID uuid
 
 	ts, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
-		return 0, nil
+		// Fail closed: a corrupt revocation marker must not silently count as "not revoked".
+		return 0, fmt.Errorf("parse user revoke timestamp: %w", err)
 	}
 	return ts, nil
 }
@@ -110,7 +114,8 @@ func (s *RevocationStore) IsRefreshValid(ctx context.Context, claims RefreshClai
 
 	userID, err := uuid.Parse(claims.Subject)
 	if err != nil {
-		return false, nil
+		// A malformed subject is an invalid token, not a server error.
+		return false, nil //nolint:nilerr // invalid token is reported as "not valid", not as an error
 	}
 
 	revokedAt, err := s.UserSessionsRevokedAt(ctx, userID)

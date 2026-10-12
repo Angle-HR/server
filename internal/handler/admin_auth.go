@@ -5,12 +5,14 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/response"
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 var _ = apidoc.ErrorEnvelope{}
@@ -67,11 +69,12 @@ func (h *AdminHandler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !user.IsActive || user.PasswordHash == nil || !auth.CheckPassword(*user.PasswordHash, req.Password) {
-		_, _ = h.PasswordLockout.RecordFailure(ctx, req.Email)
+		_, lockoutErr := h.PasswordLockout.RecordFailure(ctx, req.Email)
+		besteffort.Log(ctx, "h.PasswordLockout.RecordFailure", lockoutErr)
 		response.Error(w, r, apperror.ErrUnauthorized)
 		return
 	}
-	_ = h.PasswordLockout.Reset(ctx, req.Email)
+	besteffort.Log(ctx, "h.PasswordLockout.Reset", h.PasswordLockout.Reset(ctx, req.Email))
 
 	pair, err := h.Tokens.IssueAdminPair(user.ID)
 	if err != nil {
@@ -244,7 +247,15 @@ func (h *AdminHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.Store.WriteAudit(r.Context(), result.User.ID, "staff.invite_accept", "staff", result.User.ID.String(), nil, r.RemoteAddr)
+	besteffort.Log(r.Context(), "Store.WriteAudit", h.Store.WriteAudit(
+		r.Context(),
+		result.User.ID,
+		"staff.invite_accept",
+		"staff",
+		result.User.ID.String(),
+		nil,
+		r.RemoteAddr,
+	))
 
 	pair, err := h.Tokens.IssueAdminPair(result.User.ID)
 	if err != nil {

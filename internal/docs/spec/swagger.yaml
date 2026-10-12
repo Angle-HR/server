@@ -104,6 +104,921 @@ definitions:
                 example: abc123
                 type: string
         type: object
+    github_com_Angle-HR_server_internal_hiring_draft.BulkDone:
+        properties:
+            after:
+                type: string
+            before:
+                type: string
+            id:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.BulkResult:
+        properties:
+            action:
+                type: string
+            done:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.BulkDone'
+                type: array
+            skipped:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_lifecycle.Skipped'
+                type: array
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.Catalog:
+        properties:
+            currencies:
+                items:
+                    type: string
+                type: array
+            description_sections:
+                items:
+                    type: string
+                type: array
+            employment_types:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option'
+                type: array
+            experience_ranges:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.CatalogItem'
+                type: array
+            industries:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.CatalogItem'
+                type: array
+            lawful_bases:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option'
+                type: array
+            location_modes:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option'
+                type: array
+            markets:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Market'
+                type: array
+            max_title_length:
+                type: integer
+            pay_periods:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option'
+                type: array
+            pay_types:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option'
+                type: array
+            retention_months:
+                items:
+                    type: integer
+                type: array
+            seniority_levels:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.CatalogItem'
+                type: array
+            travel_frequencies:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option'
+                type: array
+            visa_policies:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option'
+                type: array
+            workplace_types:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Option'
+                type: array
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.CreateRequest:
+        properties:
+            assessment_url:
+                type: string
+            closing_date:
+                type: string
+            custom_industry:
+                type: string
+            department_id:
+                type: string
+            description_sections:
+                additionalProperties:
+                    items:
+                        type: integer
+                    type: array
+                type: object
+            employment_type:
+                type: string
+            experience_range_id:
+                type: string
+            form_template_id:
+                description: FormTemplateID starts the application form from a saved form template.
+                type: string
+            industry_id:
+                type: string
+            lawful_basis:
+                type: string
+            lia_reference:
+                type: string
+            location_mode:
+                type: string
+            location_text:
+                type: string
+            markets:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.MarketSel'
+                type: array
+            pay:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.PayPatch'
+            retention_months:
+                type: integer
+            seniority_level_id:
+                type: string
+            show_on_career_page:
+                type: boolean
+            skills:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Skill'
+                type: array
+            template_id:
+                description: TemplateID starts the draft from a saved job-details template instead of the caller's default.
+                type: string
+            title:
+                type: string
+            travel_frequency:
+                type: string
+            use_company_address:
+                type: boolean
+            visa_sponsorship:
+                type: string
+            workplace_type:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.DPIAInput:
+        properties:
+            reference:
+                description: where the full assessment lives
+                type: string
+            summary:
+                description: what automated screening the DPIA covers
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.FormInput:
+        properties:
+            declarations:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_questions.Declaration'
+                type: array
+            questions:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_questions.FormQuestion'
+                type: array
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.FormView:
+        properties:
+            automated_screening_enabled:
+                type: boolean
+            declarations:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_questions.Declaration'
+                type: array
+            job_id:
+                type: string
+            job_revision:
+                type: integer
+            questions:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_questions.FormQuestion'
+                type: array
+            warnings:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Warning'
+                type: array
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.JobView:
+        properties:
+            assessment_url:
+                type: string
+            closing_date:
+                type: string
+            completed_sections:
+                items:
+                    type: string
+                type: array
+            created_at:
+                type: string
+            created_by:
+                type: string
+            current_step:
+                type: string
+            custom_industry:
+                type: string
+            department_id:
+                type: string
+            department_name:
+                type: string
+            description_sections:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Sections'
+            duplicates:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Duplicate'
+                type: array
+            employment_type:
+                type: string
+            experience_range_id:
+                type: string
+            id:
+                type: string
+            industry_id:
+                type: string
+            job_code:
+                type: string
+            job_number:
+                type: integer
+            lawful_basis:
+                type: string
+            lia_reference:
+                type: string
+            location_mode:
+                type: string
+            location_text:
+                type: string
+            markets:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.MarketSel'
+                type: array
+            members:
+                description: Members is the hiring team, shown to people who may see the access list.
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.Member'
+                type: array
+            pay:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Pay'
+            public_id:
+                type: string
+            published_at:
+                type: string
+            retention_months:
+                type: integer
+            revision:
+                type: integer
+            seniority_level_id:
+                type: string
+            show_on_career_page:
+                type: boolean
+            skills:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Skill'
+                type: array
+            status:
+                type: string
+            title:
+                type: string
+            travel_frequency:
+                type: string
+            updated_at:
+                type: string
+            use_company_address:
+                type: boolean
+            visa_sponsorship:
+                type: string
+            warnings:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Warning'
+                type: array
+            workplace_type:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.MeView:
+        properties:
+            company_name:
+                type: string
+            permissions:
+                items:
+                    type: string
+                type: array
+            roles:
+                items:
+                    type: string
+                type: array
+            user_id:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.MemberInput:
+        properties:
+            role:
+                type: string
+            user_id:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.Option:
+        properties:
+            label:
+                type: string
+            value:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.PrivacyContactInput:
+        properties:
+            dpo_contact:
+                type: string
+            privacy_contact_email:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.RulesInput:
+        properties:
+            dpia_scope_confirmed:
+                description: |-
+                    DPIAScopeConfirmed is the job owner's confirmation that this job's screening is covered by the company
+                    DPIA. Nil leaves it as it is; saving different rules clears it, so it has to be confirmed again.
+                type: boolean
+            rules:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_screening.Rule'
+                type: array
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.RulesView:
+        properties:
+            automated_screening_enabled:
+                type: boolean
+            dpia_scope_confirmed:
+                type: boolean
+            rules:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_screening.Rule'
+                type: array
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.TemplateExport:
+        properties:
+            kind:
+                type: string
+            name:
+                type: string
+            payload:
+                items:
+                    type: integer
+                type: array
+            version:
+                type: integer
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.TemplateInput:
+        properties:
+            as_my_default:
+                type: boolean
+            from_job_id:
+                type: string
+            kind:
+                type: string
+            name:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_draft.TransitionResult:
+        properties:
+            job:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.JobView'
+            warnings:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_gates.Issue'
+                type: array
+        type: object
+    github_com_Angle-HR_server_internal_hiring_gates.Issue:
+        properties:
+            code:
+                type: string
+            gate_id:
+                type: string
+            message:
+                type: string
+            path:
+                type: string
+            severity:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_gates.Report:
+        properties:
+            blocking:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_gates.Issue'
+                type: array
+            gates:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_gates.State'
+                type: array
+            warnings:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_gates.Issue'
+                type: array
+        type: object
+    github_com_Angle-HR_server_internal_hiring_gates.State:
+        properties:
+            auto:
+                description: Auto is true when the server answers the gate from the job's own data and nobody confirms it.
+                type: boolean
+            confirmed:
+                type: boolean
+            detail:
+                type: string
+            id:
+                type: string
+            legal_basis:
+                type: string
+            market_code:
+                type: string
+            platform:
+                type: boolean
+            requirement:
+                type: string
+            severity:
+                type: string
+            stale:
+                description: confirmed against an older version of the wording
+                type: boolean
+            version:
+                type: integer
+        type: object
+    github_com_Angle-HR_server_internal_hiring_hiringtypes.CatalogItem:
+        properties:
+            id:
+                type: string
+            name:
+                type: string
+            slug:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_hiringtypes.CompanySetup:
+        properties:
+            automated_screening_enabled:
+                type: boolean
+            dpa_accepted:
+                type: boolean
+            dpa_accepted_at:
+                type: string
+            dpa_version:
+                description: the version that must be accepted
+                type: string
+            dpia_recorded_at:
+                type: string
+            dpia_version:
+                description: 0 = not recorded
+                type: integer
+            dpo_contact:
+                type: string
+            kyb_status:
+                type: string
+            privacy_contact_email:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_hiringtypes.Department:
+        properties:
+            id:
+                type: string
+            name:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_hiringtypes.ListItem:
+        properties:
+            applicant_count:
+                description: |-
+                    ApplicantCount is always 0 until candidate applications exist in the API. The field is here so clients
+                    can build against it now.
+                type: integer
+            closing_date:
+                type: string
+            created_at:
+                type: string
+            created_by:
+                type: string
+            current_step:
+                type: string
+            department_name:
+                type: string
+            employment_type:
+                type: string
+            id:
+                type: string
+            job_code:
+                type: string
+            location_mode:
+                type: string
+            managers:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.ListPerson'
+                type: array
+            markets:
+                items:
+                    type: string
+                type: array
+            published_at:
+                type: string
+            revision:
+                type: integer
+            status:
+                type: string
+            title:
+                type: string
+            updated_at:
+                type: string
+            workplace_type:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_hiringtypes.ListPerson:
+        properties:
+            name:
+                type: string
+            user_id:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_hiringtypes.Member:
+        properties:
+            email:
+                description: output only
+                type: string
+            name:
+                description: output only
+                type: string
+            role:
+                type: string
+            user_id:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_hiringtypes.Person:
+        properties:
+            email:
+                type: string
+            name:
+                type: string
+            roles:
+                items:
+                    type: string
+                type: array
+            user_id:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_hiringtypes.Settings:
+        properties:
+            automated_screening_enabled:
+                type: boolean
+            automated_screening_enabled_at:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_hiringtypes.Template:
+        properties:
+            created_by:
+                type: string
+            id:
+                type: string
+            is_default:
+                type: boolean
+            kind:
+                type: string
+            last_used_at:
+                type: string
+            name:
+                type: string
+            payload:
+                items:
+                    type: integer
+                type: array
+            pinned:
+                description: Pinned templates sort first for the whole company.
+                type: boolean
+            updated_at:
+                type: string
+            use_count:
+                description: UseCount is how many drafts were started from this template by id.
+                type: integer
+        type: object
+    github_com_Angle-HR_server_internal_hiring_jobs.Duplicate:
+        properties:
+            id:
+                type: string
+            job_code:
+                type: string
+            status:
+                type: string
+            title:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_jobs.Market:
+        properties:
+            code:
+                type: string
+            currencies:
+                items:
+                    type: string
+                type: array
+            is_open:
+                type: boolean
+            min_retention_months:
+                type: integer
+            name:
+                type: string
+            warnings:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Warning'
+                type: array
+        type: object
+    github_com_Angle-HR_server_internal_hiring_jobs.MarketSel:
+        properties:
+            city:
+                type: string
+            market_code:
+                type: string
+            subdivision:
+                type: string
+            timezone:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_jobs.Patch:
+        properties:
+            assessment_url:
+                type: string
+            closing_date:
+                type: string
+            custom_industry:
+                type: string
+            department_id:
+                type: string
+            description_sections:
+                additionalProperties:
+                    items:
+                        type: integer
+                    type: array
+                type: object
+            employment_type:
+                type: string
+            experience_range_id:
+                type: string
+            industry_id:
+                type: string
+            lawful_basis:
+                type: string
+            lia_reference:
+                type: string
+            location_mode:
+                type: string
+            location_text:
+                type: string
+            markets:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.MarketSel'
+                type: array
+            pay:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.PayPatch'
+            retention_months:
+                type: integer
+            seniority_level_id:
+                type: string
+            show_on_career_page:
+                type: boolean
+            skills:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Skill'
+                type: array
+            title:
+                type: string
+            travel_frequency:
+                type: string
+            use_company_address:
+                type: boolean
+            visa_sponsorship:
+                type: string
+            workplace_type:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_jobs.Pay:
+        properties:
+            currency:
+                type: string
+            max:
+                type: integer
+            min:
+                type: integer
+            period:
+                type: string
+            type:
+                type: string
+            visible:
+                type: boolean
+        type: object
+    github_com_Angle-HR_server_internal_hiring_jobs.PayPatch:
+        properties:
+            currency:
+                type: string
+            max:
+                type: integer
+            min:
+                type: integer
+            period:
+                type: string
+            type:
+                type: string
+            visible:
+                type: boolean
+        type: object
+    github_com_Angle-HR_server_internal_hiring_jobs.PublicJob:
+        properties:
+            assessment_link_set:
+                type: boolean
+            closing_date:
+                type: string
+            company:
+                type: string
+            department:
+                type: string
+            description_sections:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Sections'
+            description_text:
+                type: string
+            employment_type:
+                type: string
+            experience:
+                type: string
+            industry:
+                type: string
+            job_code:
+                type: string
+            location_mode:
+                type: string
+            location_text:
+                type: string
+            locations:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.PublicLocation'
+                type: array
+            pay:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.PublicPay'
+            questions:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.PublicQuestion'
+                type: array
+            seniority:
+                type: string
+            skills:
+                items:
+                    type: string
+                type: array
+            title:
+                type: string
+            travel_frequency:
+                type: string
+            visa_sponsorship:
+                type: string
+            workplace_type:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_jobs.PublicLocation:
+        properties:
+            city:
+                type: string
+            market_code:
+                type: string
+            subdivision:
+                type: string
+            timezone:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_jobs.PublicPay:
+        properties:
+            currency:
+                type: string
+            max:
+                type: integer
+            min:
+                type: integer
+            period:
+                type: string
+            type:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_jobs.PublicQuestion:
+        properties:
+            config:
+                items:
+                    type: integer
+                type: array
+            description:
+                type: string
+            helper_text:
+                type: string
+            id:
+                type: string
+            label:
+                type: string
+            required:
+                type: boolean
+            section:
+                type: string
+            sensitive:
+                type: boolean
+            system_key:
+                type: string
+            type:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_jobs.Sections:
+        additionalProperties:
+            items:
+                type: integer
+            type: array
+        type: object
+    github_com_Angle-HR_server_internal_hiring_jobs.Skill:
+        properties:
+            custom_label:
+                type: string
+            name:
+                description: resolved label on output; ignored on input
+                type: string
+            skill_id:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_jobs.Timezone:
+        properties:
+            name:
+                type: string
+            offset:
+                type: string
+            offset_seconds:
+                type: integer
+        type: object
+    github_com_Angle-HR_server_internal_hiring_jobs.Warning:
+        properties:
+            code:
+                type: string
+            market:
+                type: string
+            message:
+                type: string
+            severity:
+                type: string
+            title:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_lifecycle.Skipped:
+        properties:
+            id:
+                type: string
+            reason:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_questions.Declaration:
+        properties:
+            category:
+                type: string
+            legal_condition:
+                type: string
+            purpose:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_questions.FormQuestion:
+        properties:
+            config:
+                items:
+                    type: integer
+                type: array
+            description:
+                type: string
+            helper_text:
+                type: string
+            id:
+                type: string
+            knockout:
+                items:
+                    type: integer
+                type: array
+            label:
+                type: string
+            locked:
+                description: 'set by the server: full name and email cannot be removed or made optional'
+                type: boolean
+            position:
+                type: integer
+            required:
+                type: boolean
+            section:
+                type: string
+            special_category:
+                type: string
+            system_key:
+                type: string
+            type:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_screening.Rule:
+        properties:
+            id:
+                type: string
+            operator:
+                type: string
+            question_id:
+                type: string
+            reason:
+                type: string
+            value:
+                items:
+                    type: integer
+                type: array
+        type: object
     internal_handler.AddressSearchData:
         properties:
             suggestions:
@@ -386,6 +1301,99 @@ definitions:
             deleted:
                 type: boolean
         type: object
+    internal_handler.AdminVerificationDetail:
+        properties:
+            address:
+                $ref: '#/definitions/internal_handler.KYBAddress'
+            address_type:
+                type: string
+            attempts:
+                type: integer
+            country_code:
+                type: string
+            identifiers:
+                additionalProperties:
+                    type: string
+                type: object
+            legal_name:
+                type: string
+            organization_id:
+                type: string
+            region:
+                type: string
+            registration_number:
+                type: string
+            status:
+                type: string
+            submitted_at:
+                type: string
+            tier:
+                type: integer
+        type: object
+    internal_handler.AdminVerificationDetailEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/internal_handler.AdminVerificationDetail'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_handler.AdminVerificationItem:
+        properties:
+            country_code:
+                type: string
+            id:
+                type: string
+            organization_id:
+                type: string
+            region:
+                type: string
+            submitted_at:
+                type: string
+        type: object
+    internal_handler.AdminVerificationListEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/internal_handler.AdminVerificationItem'
+                type: array
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_handler.AdminVerificationReviewData:
+        properties:
+            failure_reason:
+                type: string
+            organization_id:
+                type: string
+            status:
+                enum:
+                    - verified
+                    - failed
+                type: string
+        type: object
+    internal_handler.AdminVerificationReviewEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/internal_handler.AdminVerificationReviewData'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_handler.AdminVerificationReviewRequest:
+        properties:
+            decision:
+                enum:
+                    - approve
+                    - reject
+                type: string
+            reason:
+                enum:
+                    - number_not_found
+                    - name_mismatch
+                    - address_mismatch
+                    - inactive_entity
+                    - wrong_country
+                type: string
+        type: object
     internal_handler.AdminWaitlistDetailEnvelope:
         properties:
             data:
@@ -538,9 +1546,19 @@ definitions:
                 type: string
             onboarding:
                 $ref: '#/definitions/internal_handler.OnboardingProgressSummary'
+            permissions:
+                description: Permissions are everything those roles allow, so a client can show only the actions the caller may take.
+                items:
+                    type: string
+                type: array
             region:
                 example: uk
                 type: string
+            roles:
+                description: Roles are the caller's company roles; empty until they belong to a company.
+                items:
+                    type: string
+                type: array
             totp_enabled:
                 example: false
                 type: boolean
@@ -985,6 +2003,114 @@ definitions:
                 type: array
             meta:
                 $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_handler.KYBAddress:
+        properties:
+            city:
+                type: string
+            country:
+                type: string
+            line1:
+                type: string
+            line2:
+                type: string
+            post_code:
+                type: string
+            region:
+                type: string
+        type: object
+    internal_handler.KYBChangeCountryRequest:
+        properties:
+            country_code:
+                example: KE
+                type: string
+        type: object
+    internal_handler.KYBConfirmAddressRequest:
+        properties:
+            address_type:
+                enum:
+                    - registered
+                    - trading
+                type: string
+        type: object
+    internal_handler.KYBRetryRequest:
+        properties:
+            legal_name:
+                type: string
+            registration_number:
+                type: string
+        type: object
+    internal_handler.KYBStatusData:
+        properties:
+            address_confirmable:
+                type: boolean
+            can_publish:
+                type: boolean
+            can_retry:
+                type: boolean
+            checked_at:
+                type: string
+            country_code:
+                type: string
+            display:
+                enum:
+                    - verified
+                    - pending_review
+                    - action_required
+                    - failed
+                    - not_started
+                type: string
+            failure_reason:
+                type: string
+            light_retry:
+                type: boolean
+            name_confirmable:
+                type: boolean
+            registered_address:
+                type: string
+            registry_name:
+                type: string
+            status:
+                enum:
+                    - not_started
+                    - pending
+                    - verified
+                    - failed
+                type: string
+            tier:
+                type: integer
+            verified_at:
+                type: string
+        type: object
+    internal_handler.KYBStatusEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/internal_handler.KYBStatusData'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_handler.KYBSubmitRequest:
+        properties:
+            address:
+                $ref: '#/definitions/internal_handler.KYBAddress'
+            address_type:
+                enum:
+                    - registered
+                    - trading
+                type: string
+            country_code:
+                example: GB
+                type: string
+            identifiers:
+                additionalProperties:
+                    type: string
+                type: object
+            legal_name:
+                example: Acme Ltd
+                type: string
+            registration_number:
+                example: "01234567"
+                type: string
         type: object
     internal_handler.OnboardingIndustry:
         properties:
@@ -1711,6 +2837,223 @@ definitions:
             wants_user_testing:
                 type: boolean
         type: object
+    internal_hiring_hiringhttp.AcceptRequest:
+        properties:
+            version:
+                type: string
+        type: object
+    internal_hiring_hiringhttp.BulkEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.BulkResult'
+        type: object
+    internal_hiring_hiringhttp.BulkRequest:
+        properties:
+            action:
+                type: string
+            ids:
+                items:
+                    type: string
+                type: array
+        type: object
+    internal_hiring_hiringhttp.CatalogEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.Catalog'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.CompanySetupEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.CompanySetup'
+        type: object
+    internal_hiring_hiringhttp.ConfirmRequest:
+        properties:
+            confirmed:
+                type: boolean
+        type: object
+    internal_hiring_hiringhttp.DepartmentEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.Department'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.DepartmentRequest:
+        properties:
+            name:
+                example: Customer Support
+                type: string
+        type: object
+    internal_hiring_hiringhttp.DepartmentsEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.Department'
+                type: array
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.FormEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.FormView'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.GatesEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_gates.State'
+                type: array
+        type: object
+    internal_hiring_hiringhttp.JobEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.JobView'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.JobListEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.ListItem'
+                type: array
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.MarketsRequest:
+        properties:
+            location_mode:
+                type: string
+            markets:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.MarketSel'
+                type: array
+        type: object
+    internal_hiring_hiringhttp.MeEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.MeView'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.MembersEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.Member'
+                type: array
+        type: object
+    internal_hiring_hiringhttp.MembersRequest:
+        properties:
+            members:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.MemberInput'
+                type: array
+        type: object
+    internal_hiring_hiringhttp.PeopleEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.Person'
+                type: array
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.PreviewEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.PublicJob'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.ReportEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_gates.Report'
+        type: object
+    internal_hiring_hiringhttp.RulesEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.RulesView'
+        type: object
+    internal_hiring_hiringhttp.SettingsEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.Settings'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.SettingsRequest:
+        properties:
+            automated_screening_enabled:
+                type: boolean
+        type: object
+    internal_hiring_hiringhttp.SkillsEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.CatalogItem'
+                type: array
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.TemplateDuplicateRequest:
+        properties:
+            name:
+                example: Support roles (copy)
+                type: string
+        type: object
+    internal_hiring_hiringhttp.TemplateEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.Template'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.TemplateExportEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.TemplateExport'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.TemplatePatchRequest:
+        properties:
+            name:
+                example: Support roles
+                type: string
+            pinned:
+                example: true
+                type: boolean
+        type: object
+    internal_hiring_hiringhttp.TemplatesEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_hiringtypes.Template'
+                type: array
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.TimezonesEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Timezone'
+                type: array
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.TransitionEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.TransitionResult'
+        type: object
 host: localhost:8080
 info:
     contact: {}
@@ -2317,6 +3660,103 @@ paths:
             summary: Update product user
             tags:
                 - admin/users
+    /admin/verification:
+        get:
+            parameters:
+                - description: Page size (max 100)
+                  in: query
+                  name: limit
+                  type: integer
+                - description: Offset
+                  in: query
+                  name: offset
+                  type: integer
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.AdminVerificationListEnvelope'
+                "401":
+                    description: Unauthorized
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: List pending company verification reviews
+            tags:
+                - admin/verification
+    /admin/verification/{organizationID}:
+        get:
+            description: Returns the submitted details from the organization's region so the operator can compare them with the government portal.
+            parameters:
+                - description: Organization ID
+                  in: path
+                  name: organizationID
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.AdminVerificationDetailEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Get a pending company verification review
+            tags:
+                - admin/verification
+    /admin/verification/{organizationID}/review:
+        post:
+            consumes:
+                - application/json
+            description: Records the operator's decision. A rejection needs a valid failure reason and emails the owner.
+            parameters:
+                - description: Organization ID
+                  in: path
+                  name: organizationID
+                  required: true
+                  type: string
+                - description: Decision
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.AdminVerificationReviewRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.AdminVerificationReviewEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Approve or reject a company verification
+            tags:
+                - admin/verification
     /admin/waitlist:
         get:
             parameters:
@@ -2745,7 +4185,7 @@ paths:
                 - auth
     /auth/me:
         get:
-            description: Returns the authenticated product user and onboarding progress.
+            description: Returns the authenticated product user, onboarding progress, and the caller's company roles and permissions (empty until they belong to a company).
             produces:
                 - application/json
             responses:
@@ -3132,6 +4572,402 @@ paths:
             summary: List hiring tools
             tags:
                 - waitlist/reference
+    /hiring/catalog:
+        get:
+            description: Fixed lists (employment type, pay, travel, visa, lawful basis, currencies, retention options), seniority, experience, industries and every market with its warnings and whether it is open.
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.CatalogEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Job form pick lists
+            tags:
+                - hiring
+    /hiring/departments:
+        get:
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.DepartmentsEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: List departments
+            tags:
+                - hiring
+        post:
+            consumes:
+                - application/json
+            description: Names are unique per company ignoring case; adding an existing name returns the existing department.
+            parameters:
+                - description: Department
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_hiringhttp.DepartmentRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.DepartmentEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Add a department
+            tags:
+                - hiring
+    /hiring/me:
+        get:
+            description: The signed-in person's company roles and the permissions they add up to, such as job.export. Use it to show or hide actions; the server still checks every request.
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.MeEnvelope'
+                "401":
+                    description: Unauthorized
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: My hiring roles and permissions
+            tags:
+                - hiring
+    /hiring/people:
+        get:
+            description: Members of the caller's company, with their roles, for the "add people to this job" picker. Search matches the name or email. Returns at most 50 people. Needs job.collaborator.add or job.collaborator.add_limited.
+            parameters:
+                - description: Part of a name or email
+                  in: query
+                  name: q
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.PeopleEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: List the company's people
+            tags:
+                - hiring
+    /hiring/settings:
+        get:
+            description: Company-level switches. Automated screening (knockout questions) is off until the company's legal contact turns it on.
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.SettingsEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Hiring settings
+            tags:
+                - hiring
+        put:
+            consumes:
+                - application/json
+            description: Needs form.automated_screening.enable (Legal).
+            parameters:
+                - description: Settings
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_hiringhttp.SettingsRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.SettingsEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Change hiring settings
+            tags:
+                - hiring
+    /hiring/skills:
+        get:
+            parameters:
+                - description: Start of the skill name
+                  in: query
+                  name: q
+                  type: string
+                - description: Most results (default 20, max 50)
+                  in: query
+                  name: limit
+                  type: integer
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.SkillsEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Search skills
+            tags:
+                - hiring
+    /hiring/templates:
+        get:
+            description: Company templates plus the caller's own default setup.
+            parameters:
+                - description: job_details or application_form
+                  enum:
+                    - job_details
+                    - application_form
+                  in: query
+                  name: kind
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.TemplatesEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: List templates
+            tags:
+                - templates
+        post:
+            consumes:
+                - application/json
+            description: The template is made from an existing job, so it always matches what the builders produce. Set as_my_default to keep the setup for the caller's future jobs ("Keep this setup"); otherwise name it to share it with the company. Titles and closing dates are never saved, and pay and retention only when the caller may set them.
+            parameters:
+                - description: Template
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.TemplateInput'
+            produces:
+                - application/json
+            responses:
+                "201":
+                    description: Created
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.TemplateEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Save a job's setup as a template
+            tags:
+                - templates
+    /hiring/templates/{id}:
+        delete:
+            parameters:
+                - description: Template id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        additionalProperties:
+                            type: boolean
+                        type: object
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Delete a template
+            tags:
+                - templates
+        patch:
+            consumes:
+                - application/json
+            description: Send name, pinned or both. Only company templates can be changed; a personal default cannot. Pinned templates list first for the whole company.
+            parameters:
+                - description: Template id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Changes
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_hiringhttp.TemplatePatchRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.TemplateEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Rename or pin a template
+            tags:
+                - templates
+    /hiring/templates/{id}/duplicate:
+        post:
+            consumes:
+                - application/json
+            description: Copies a company template. Without a name the copy is called "<name> (copy)".
+            parameters:
+                - description: Template id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Copy name
+                  in: body
+                  name: body
+                  schema:
+                    $ref: '#/definitions/internal_hiring_hiringhttp.TemplateDuplicateRequest'
+            produces:
+                - application/json
+            responses:
+                "201":
+                    description: Created
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.TemplateEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Duplicate a template
+            tags:
+                - templates
+    /hiring/templates/{id}/export:
+        get:
+            description: Returns a company template's kind, name and payload in a portable form.
+            parameters:
+                - description: Template id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.TemplateExportEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Export a template
+            tags:
+                - templates
+    /hiring/timezones:
+        get:
+            description: Time zones with their current UTC offset, for jobs that are open to a time zone rather than a place.
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.TimezonesEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Time zones
+            tags:
+                - hiring
     /industries:
         get:
             description: Returns active industry options for onboarding.
@@ -3149,6 +4985,1103 @@ paths:
             summary: List industries
             tags:
                 - waitlist/reference
+    /jobs:
+        get:
+            description: Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. applicant_count is always 0 for now because candidate applications do not exist in the API yet.
+            parameters:
+                - description: Comma-separated statuses, e.g. draft,published
+                  in: query
+                  name: status
+                  type: string
+                - description: Only this department
+                  in: query
+                  name: department_id
+                  type: string
+                - description: Search the title or department name
+                  in: query
+                  name: q
+                  type: string
+                - description: Only jobs created by this user id
+                  in: query
+                  name: created_by
+                  type: string
+                - description: Only jobs this user id is on the hiring team of
+                  in: query
+                  name: assignee
+                  type: string
+                - description: full_time, part_time, contract or internship
+                  in: query
+                  name: employment_type
+                  type: string
+                - description: onsite, hybrid or remote
+                  in: query
+                  name: workplace_type
+                  type: string
+                - description: anywhere, specific_area or specific_timezone
+                  in: query
+                  name: location_mode
+                  type: string
+                - description: Two-letter market code, e.g. UK
+                  in: query
+                  name: market
+                  type: string
+                - description: Created on or after this date (YYYY-MM-DD)
+                  in: query
+                  name: created_from
+                  type: string
+                - description: Created on or before this date (YYYY-MM-DD)
+                  in: query
+                  name: created_to
+                  type: string
+                - description: updated_at (default) or created_at
+                  in: query
+                  name: sort
+                  type: string
+                - description: desc (default) or asc
+                  in: query
+                  name: order
+                  type: string
+                - description: next_cursor from the previous page
+                  in: query
+                  name: cursor
+                  type: string
+                - description: Page size (default 25, max 100)
+                  in: query
+                  name: limit
+                  type: integer
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.JobListEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: List jobs
+            tags:
+                - jobs
+        post:
+            consumes:
+                - application/json
+            description: All fields are optional, so the page can create a draft the first time the user saves. The draft starts from the caller's saved default setup and the standard application form unless template_id or form_template_id say otherwise.
+            parameters:
+                - description: Job fields
+                  in: body
+                  name: body
+                  schema:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.CreateRequest'
+            produces:
+                - application/json
+            responses:
+                "201":
+                    description: Created
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.JobEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Create a draft job
+            tags:
+                - jobs
+    /jobs/{id}:
+        delete:
+            description: Only drafts can be deleted. Everything else is closed or archived instead.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        additionalProperties:
+                            type: boolean
+                        type: object
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Delete a draft
+            tags:
+                - jobs
+        get:
+            description: Returns the job with warnings (market rules, pay advice, possible duplicates). The ETag header carries the revision to send back in If-Match.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.JobEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Get a job
+            tags:
+                - jobs
+        patch:
+            consumes:
+                - application/json
+            description: '"Save as draft": send only the fields that changed. Formats are checked, required fields are not. Pay needs job.salary_range.set and retention needs job.retention.set.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+                - description: Fields to change
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Patch'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.JobEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Save a draft
+            tags:
+                - jobs
+    /jobs/{id}/application-form:
+        get:
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.FormEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Get the application form
+            tags:
+                - application-form
+        put:
+            consumes:
+                - application/json
+            description: Replaces the whole form. Full name and email are locked, the CV accepts PDF only, questions about current or past pay are refused, knockout rules need automated screening enabled for the company, and special category questions need a declaration and a lawful basis on the job. A knockout flags a candidate for a person to review; it never rejects anyone.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+                - description: Form
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.FormInput'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.FormEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Save the application form
+            tags:
+                - application-form
+    /jobs/{id}/archive:
+        post:
+            description: 'One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.TransitionEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "422":
+                    description: Unprocessable Entity
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Change a job's status
+            tags:
+                - jobs
+    /jobs/{id}/close:
+        post:
+            description: 'One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.TransitionEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "422":
+                    description: Unprocessable Entity
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Change a job's status
+            tags:
+                - jobs
+    /jobs/{id}/compliance:
+        get:
+            description: The gates that apply to the job's markets, special categories and screening, with where each stands. Gates marked auto are answered from the job's own details.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.GatesEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: List a job's compliance gates
+            tags:
+                - jobs
+    /jobs/{id}/compliance/{gate_id}:
+        put:
+            consumes:
+                - application/json
+            description: The confirmation is the company's own and is written to the append-only compliance log against the caller. A confirmation stops counting when the gate's wording changes.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Gate id, e.g. uk-lawful
+                  in: path
+                  name: gate_id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+                - description: Confirmation
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_hiringhttp.ConfirmRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.GatesEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Confirm or withdraw a compliance gate
+            tags:
+                - jobs
+    /jobs/{id}/details:
+        put:
+            consumes:
+                - application/json
+            description: Same body as PATCH, but the required fields (title, department, hiring option, travel, visa, employment type and, for people who can set pay, pay) must be present once applied. Moves the draft to the application form step.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+                - description: Fields to change
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.Patch'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.JobEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Save and continue on the job details step
+            tags:
+                - jobs
+    /jobs/{id}/disqualification-rules:
+        get:
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.RulesEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Get a job's screening rules
+            tags:
+                - jobs
+        put:
+            consumes:
+                - application/json
+            description: Replaces the rules. A rule flags a candidate for a person to review; it never rejects anyone. Rules count as automated screening, so they need Legal to have enabled screening for the company and, before publishing, the company DPIA and this job's DPIA scope confirmation.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+                - description: Rules
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.RulesInput'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.RulesEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Set a draft's screening rules
+            tags:
+                - jobs
+    /jobs/{id}/duplicate:
+        post:
+            description: Copies the details and application form into a new draft owned by the caller. The copy has no team, no screening rules, no confirmations and no public id.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "201":
+                    description: Created
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.JobEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Duplicate a job
+            tags:
+                - jobs
+    /jobs/{id}/duplicates/dismiss:
+        post:
+            description: Records in the audit log that the user saw the warning and kept going. The warning still shows if the job is opened again.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        additionalProperties:
+                            type: boolean
+                        type: object
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Acknowledge the duplicate-job warning
+            tags:
+                - jobs
+    /jobs/{id}/markets:
+        put:
+            consumes:
+                - application/json
+            description: Replaces the places a job is open to. Closed markets are rejected, an anywhere job takes no places, and the retention period is raised to the strictest minimum of the chosen markets. The response carries the market warnings.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+                - description: Markets
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_hiringhttp.MarketsRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.JobEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Set the hiring option and markets
+            tags:
+                - jobs
+    /jobs/{id}/members:
+        get:
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.MembersEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: List a job's hiring team
+            tags:
+                - jobs
+        put:
+            consumes:
+                - application/json
+            description: Replaces the team (the Permissions step). The creator already has access and is not listed. Team members see the job and its candidates but gain no edit rights. HR 2 can add and remove viewers on its own jobs only.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+                - description: The whole team
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_hiringhttp.MembersRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.MembersEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Set a job's hiring team
+            tags:
+                - jobs
+    /jobs/{id}/pause:
+        post:
+            description: 'One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.TransitionEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "422":
+                    description: Unprocessable Entity
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Change a job's status
+            tags:
+                - jobs
+    /jobs/{id}/preview:
+        get:
+            description: The candidate-facing view, built the same way as the live page. It never contains knockout rules, the lawful basis, retention or the assessment link.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.PreviewEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Preview the posting
+            tags:
+                - jobs
+    /jobs/{id}/publish:
+        post:
+            description: 'Runs every publish check inside the same transaction as the status change: a verified company, an accepted DPA, a privacy contact, complete details, an open market, a lawful basis, the screening prerequisites and every required compliance gate. People who may not publish submit the job for approval instead. A blocked publish returns 422 with every issue.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.TransitionEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "422":
+                    description: Unprocessable Entity
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Publish a job
+            tags:
+                - jobs
+    /jobs/{id}/publish-check:
+        get:
+            description: 'The dry run of publishing: the same checks, nothing written. Blocking issues stop a publish; warnings do not. Also lists the compliance gates that apply and where each stands.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.ReportEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Check whether a job can publish
+            tags:
+                - jobs
+    /jobs/{id}/reopen:
+        post:
+            description: 'One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.TransitionEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "422":
+                    description: Unprocessable Entity
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Change a job's status
+            tags:
+                - jobs
+    /jobs/{id}/resume:
+        post:
+            description: 'One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.TransitionEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "422":
+                    description: Unprocessable Entity
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Change a job's status
+            tags:
+                - jobs
+    /jobs/{id}/to-draft:
+        post:
+            description: 'One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.TransitionEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "422":
+                    description: Unprocessable Entity
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Change a job's status
+            tags:
+                - jobs
+    /jobs/{id}/withdraw:
+        post:
+            description: 'One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Revision the client loaded
+                  in: header
+                  name: If-Match
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.TransitionEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "422":
+                    description: Unprocessable Entity
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Change a job's status
+            tags:
+                - jobs
+    /jobs/bulk:
+        post:
+            consumes:
+                - application/json
+            description: 'Pause, close, archive or move to draft, for up to 100 jobs. Not all-or-nothing: each job is changed on its own, and the ones that could not be are listed with the reason. The result carries each job''s earlier status so the client can offer undo.'
+            parameters:
+                - description: Action and job ids
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_hiringhttp.BulkRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.BulkEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Change several jobs at once
+            tags:
+                - jobs
+    /jobs/export:
+        get:
+            description: Every job the caller may see, newest first, or only the jobs in ids. CSV is the default; format=json returns the same rows as on the jobs list. Needs job.export.
+            parameters:
+                - description: Comma-separated statuses
+                  in: query
+                  name: status
+                  type: string
+                - description: Comma-separated job ids; only these jobs are exported
+                  in: query
+                  name: ids
+                  type: string
+                - description: csv (default) or json
+                  in: query
+                  name: format
+                  type: string
+            produces:
+                - text/csv
+                - application/json
+            responses:
+                "200":
+                    description: CSV
+                    schema:
+                        type: string
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Export jobs as CSV or JSON
+            tags:
+                - jobs
     /onboarding/address:
         put:
             consumes:
@@ -3583,6 +6516,304 @@ paths:
             summary: Get onboarding status
             tags:
                 - onboarding/session
+    /organization/agreements:
+        get:
+            description: Verification status, the DPA version to accept and whether it is accepted, the privacy contact and the DPIA.
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.CompanySetupEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Show the company's publishing requirements
+            tags:
+                - jobs
+        post:
+            consumes:
+                - application/json
+            description: Only a Founder or Legal can. The version must be the current one shown by GET.
+            parameters:
+                - description: Version
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_hiringhttp.AcceptRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.CompanySetupEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Accept the terms and data processing agreement
+            tags:
+                - jobs
+    /organization/dpia:
+        put:
+            consumes:
+                - application/json
+            description: Legal records the data protection impact assessment before the first screening job publishes. Each call stores a new version.
+            parameters:
+                - description: Where the assessment is kept and what it covers
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.DPIAInput'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.CompanySetupEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Record the company's DPIA
+            tags:
+                - jobs
+    /organization/privacy-contact:
+        put:
+            consumes:
+                - application/json
+            description: The address applicants are told to write to, and an optional DPO contact. Needed before publishing.
+            parameters:
+                - description: Contact
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.PrivacyContactInput'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.CompanySetupEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Set the privacy contact
+            tags:
+                - jobs
+    /organization/verification:
+        get:
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.KYBStatusEnvelope'
+                "401":
+                    description: Unauthorized
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Get company verification status
+            tags:
+                - organization/verification
+        post:
+            consumes:
+                - application/json
+            description: First submission or a full resubmission after a failure. Tier 1 countries are checked immediately; others are queued for manual review (status pending).
+            parameters:
+                - description: Verification form
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.KYBSubmitRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.KYBStatusEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "503":
+                    description: Service Unavailable
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Submit company verification
+            tags:
+                - organization/verification
+    /organization/verification/change-country:
+        post:
+            consumes:
+                - application/json
+            description: Clears the registration number and country identifiers, keeps name and address, and returns the status to not_started.
+            parameters:
+                - description: Country
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.KYBChangeCountryRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.KYBStatusEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Change the registration country
+            tags:
+                - organization/verification
+    /organization/verification/confirm-address:
+        post:
+            consumes:
+                - application/json
+            description: Accepts an address_mismatch warning once the user says whether the address is registered or trading.
+            parameters:
+                - description: Address type
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.KYBConfirmAddressRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.KYBStatusEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Confirm which address was entered
+            tags:
+                - organization/verification
+    /organization/verification/confirm-name:
+        post:
+            description: 'One-click fix for a name_mismatch: the registry''s legal name replaces what was typed and the check runs again.'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.KYBStatusEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "503":
+                    description: Service Unavailable
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Confirm the registry's company name
+            tags:
+                - organization/verification
+    /organization/verification/retry:
+        post:
+            consumes:
+                - application/json
+            description: Light retry for number_not_found and name_mismatch failures. Country and address are reused.
+            parameters:
+                - description: Retry form
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_handler.KYBRetryRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_handler.KYBStatusEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "503":
+                    description: Service Unavailable
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - BearerAuth: []
+            summary: Retry verification with name and number only
+            tags:
+                - organization/verification
     /organizations/invites:
         post:
             consumes:
@@ -3753,6 +6984,18 @@ tags:
     - description: Immutable audit trail of admin mutations.
       name: admin/audit
       x-displayName: Audit
+    - description: 'Draft jobs: create, save as draft, save and continue, markets and warnings, preview, duplicate-job warning and delete (drafts only).'
+      name: jobs
+      x-displayName: Jobs
+    - description: 'The application form builder: question types, locked name and email, knockout rules and special category declarations.'
+      name: application-form
+      x-displayName: Application form
+    - description: 'Saved job setups: company templates and a user''s own default (Keep this setup).'
+      name: templates
+      x-displayName: Templates
+    - description: Pick lists for the job form (catalog, time zones, skills), departments and company hiring settings.
+      name: hiring
+      x-displayName: Hiring setup
 x-tagGroups:
     - name: Waitlist
       tags:
@@ -3778,3 +7021,9 @@ x-tagGroups:
         - admin/staff
         - admin/roles
         - admin/audit
+    - name: Hiring
+      tags:
+        - jobs
+        - application-form
+        - templates
+        - hiring

@@ -107,6 +107,9 @@ linters:
         - diagnostic
         - style
         - performance
+      disabled-checks:
+        - unnamedResult # style only; naming results risks shadowing err
+        - hugeParam # only matters on hot paths
 
     misspell:
       locale: US
@@ -142,8 +145,13 @@ linters:
       - path: "migration"
         linters:
           - mnd
+      # swag annotations must stay on one line; struct tags cannot be wrapped.
+      - linters:
+          - lll
+        source: '^\s*//\s*@|`(json|enums|validate|example):'
       - path: "internal/docs/spec"
         linters:
+          - lll
           - godot
           - goimports
           - gci

@@ -73,7 +73,7 @@ func (h *AdminHandler) listWaitlist(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	onboarding := strings.TrimSpace(r.URL.Query().Get("onboarding"))
 	includeDeleted := r.URL.Query().Get("include_deleted") == "true"
-	limit := parseLimit(r.URL.Query().Get("limit"), 50, 100)
+	limit := parseLimit(r.URL.Query().Get("limit"), defaultPageLimit, maxPageLimit)
 
 	regionFilter := strings.TrimSpace(r.URL.Query().Get("region"))
 	if regionFilter != "" {
@@ -184,7 +184,7 @@ func (h *AdminHandler) patchWaitlist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body patchWaitlistBody
-	if err := decodeJSON(r, &body); err != nil {
+	if decodeJSONErr := decodeJSON(r, &body); decodeJSONErr != nil {
 		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
 		return
 	}
@@ -305,7 +305,11 @@ func (h *AdminHandler) restoreWaitlist(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, r, http.StatusOK, detail)
 }
 
-func (h *AdminHandler) findWaitlistRegion(ctx context.Context, id uuid.UUID, regionHint string) (region.Region, dbrouter.PgxPool, error) {
+func (h *AdminHandler) findWaitlistRegion(
+	ctx context.Context,
+	id uuid.UUID,
+	regionHint string,
+) (region.Region, dbrouter.PgxPool, error) {
 	var regStr string
 	err := h.GlobalDB.QueryRow(ctx, `
 		SELECT region FROM waitlist.registry WHERE waitlist_token = $1
@@ -323,8 +327,8 @@ func (h *AdminHandler) findWaitlistRegion(ctx context.Context, id uuid.UUID, reg
 	}
 
 	if hint := strings.TrimSpace(regionHint); hint != "" {
-		hintReg, err := region.ParseRegion(hint)
-		if err != nil {
+		hintReg, parseRegionErr := region.ParseRegion(hint)
+		if parseRegionErr != nil {
 			return region.RegionUnknown, nil, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRegion)
 		}
 		if hintReg != reg {
@@ -339,9 +343,13 @@ func (h *AdminHandler) findWaitlistRegion(ctx context.Context, id uuid.UUID, reg
 	return reg, pool, nil
 }
 
-func (h *AdminHandler) queryWaitlistRegistry(ctx context.Context, regionFilter, q string, limit int) ([]waitlistRegistryRow, error) {
+func (h *AdminHandler) queryWaitlistRegistry(
+	ctx context.Context,
+	regionFilter, q string,
+	limit int,
+) ([]waitlistRegistryRow, error) {
 	// Recent window (supports name search after regional hydrate).
-	fetchLimit := limit * 5
+	fetchLimit := limit * waitlistFetchMultiplier
 	rows, err := h.GlobalDB.Query(ctx, `
 		SELECT waitlist_token, region
 		FROM waitlist.registry
@@ -356,17 +364,16 @@ func (h *AdminHandler) queryWaitlistRegistry(ctx context.Context, regionFilter, 
 
 	seen := map[uuid.UUID]struct{}{}
 	var out []waitlistRegistryRow
-	appendRow := func(token uuid.UUID, regStr string) error {
+	appendRow := func(token uuid.UUID, regStr string) {
 		if _, ok := seen[token]; ok {
-			return nil
+			return
 		}
 		reg, err := region.ParseRegion(regStr)
 		if err != nil {
-			return nil
+			return
 		}
 		seen[token] = struct{}{}
 		out = append(out, waitlistRegistryRow{Token: token, Region: reg})
-		return nil
 	}
 
 	for rows.Next() {
@@ -375,7 +382,7 @@ func (h *AdminHandler) queryWaitlistRegistry(ctx context.Context, regionFilter, 
 		if err := rows.Scan(&token, &regStr); err != nil {
 			return nil, err
 		}
-		_ = appendRow(token, regStr)
+		appendRow(token, regStr)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -402,7 +409,7 @@ func (h *AdminHandler) queryWaitlistRegistry(ctx context.Context, regionFilter, 
 			if err := emailRows.Scan(&token, &regStr); err != nil {
 				return nil, err
 			}
-			_ = appendRow(token, regStr)
+			appendRow(token, regStr)
 		}
 		if err := emailRows.Err(); err != nil {
 			return nil, err
@@ -430,7 +437,9 @@ func queryWaitlistByUUIDs(
 		FROM waitlist.waitlist
 		WHERE uuid = ANY($1)
 		  AND ($2 = '' OR email ILIKE '%' || $2 || '%' OR full_name ILIKE '%' || $2 || '%')
-		  AND ($3 = '' OR ($3 = 'pending' AND onboarding_submitted_at IS NULL) OR ($3 = 'complete' AND onboarding_submitted_at IS NOT NULL))
+		  AND ($3 = ''
+			    OR ($3 = 'pending' AND onboarding_submitted_at IS NULL)
+			    OR ($3 = 'complete' AND onboarding_submitted_at IS NOT NULL))
 		  AND ($4 OR deleted_at IS NULL)
 		ORDER BY created_at DESC
 	`, tokens, q, onboarding, includeDeleted)
@@ -470,15 +479,36 @@ func queryWaitlistDetail(ctx context.Context, pool dbrouter.PgxPool, id uuid.UUI
 		return adminWaitlistDetail{}, err
 	}
 
-	d.IndustryIDs, err = queryUUIDColumn(ctx, pool, `SELECT industry_id FROM waitlist.waitlist_industries wi JOIN waitlist.waitlist w ON w.id = wi.waitlist_id WHERE w.uuid = $1`, id)
+	d.IndustryIDs, err = queryUUIDColumn(
+		ctx,
+		pool,
+		`SELECT industry_id FROM waitlist.waitlist_industries wi
+			JOIN waitlist.waitlist w ON w.id = wi.waitlist_id
+			WHERE w.uuid = $1`,
+		id,
+	)
 	if err != nil {
 		return adminWaitlistDetail{}, err
 	}
-	d.HiringToolIDs, err = queryUUIDColumn(ctx, pool, `SELECT hiring_tool_id FROM waitlist.waitlist_hiring_tools wi JOIN waitlist.waitlist w ON w.id = wi.waitlist_id WHERE w.uuid = $1`, id)
+	d.HiringToolIDs, err = queryUUIDColumn(
+		ctx,
+		pool,
+		`SELECT hiring_tool_id FROM waitlist.waitlist_hiring_tools wi
+			JOIN waitlist.waitlist w ON w.id = wi.waitlist_id
+			WHERE w.uuid = $1`,
+		id,
+	)
 	if err != nil {
 		return adminWaitlistDetail{}, err
 	}
-	d.FrustrationIDs, err = queryUUIDColumn(ctx, pool, `SELECT frustration_id FROM waitlist.waitlist_frustrations wi JOIN waitlist.waitlist w ON w.id = wi.waitlist_id WHERE w.uuid = $1`, id)
+	d.FrustrationIDs, err = queryUUIDColumn(
+		ctx,
+		pool,
+		`SELECT frustration_id FROM waitlist.waitlist_frustrations wi
+			JOIN waitlist.waitlist w ON w.id = wi.waitlist_id
+			WHERE w.uuid = $1`,
+		id,
+	)
 	if err != nil {
 		return adminWaitlistDetail{}, err
 	}
@@ -511,7 +541,17 @@ func queryUUIDColumn(ctx context.Context, pool dbrouter.PgxPool, sql string, id 
 	return out, rows.Err()
 }
 
-func parseLimit(raw string, def, max int) int {
+// waitlistFetchMultiplier over-fetches registry rows so de-duplication still fills a page.
+const waitlistFetchMultiplier = 5
+
+// Admin list pagination defaults and bounds.
+const (
+	defaultPageLimit = 50
+	maxPageLimit     = 100
+	maxPageOffset    = 100000
+)
+
+func parseLimit(raw string, def, upper int) int {
 	if raw == "" {
 		return def
 	}
@@ -519,8 +559,8 @@ func parseLimit(raw string, def, max int) int {
 	if err != nil || n < 1 {
 		return def
 	}
-	if n > max {
-		return max
+	if n > upper {
+		return upper
 	}
 	return n
 }

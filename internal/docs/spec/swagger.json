@@ -714,6 +714,26 @@
             },
             "type": "object"
         },
+        "github_com_Angle-HR_server_internal_hiring_draft.TemplateExport": {
+            "properties": {
+                "kind": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "payload": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "type": "array"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            },
+            "type": "object"
+        },
         "github_com_Angle-HR_server_internal_hiring_draft.TemplateInput": {
             "properties": {
                 "as_my_default": {

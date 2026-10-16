@@ -3051,7 +3051,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. applicant_count is always 0 for now because candidate applications do not exist in the API yet.",
+                "description": "Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. applicant_count is the number of applications received and new_applicant_count the number nobody has opened yet.",
                 "produces": [
                     "application/json"
                 ],
@@ -3228,7 +3228,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Pause, close, archive or move to draft, for up to 100 jobs. Not all-or-nothing: each job is changed on its own, and the ones that could not be are listed with the reason. The result carries each job's earlier status so the client can offer undo.",
+                "description": "Pause, resume, close, reopen, archive or move to draft, for up to 100 jobs. Resume and reopen run the publish checks for each job; a job that fails them is skipped with the reasons. Not all-or-nothing: each job is changed on its own, and the ones that could not be are listed with the reason. The result carries each job's earlier status so the client can offer undo.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3259,6 +3259,105 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/counts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The numbers for the status tabs, in one call instead of loading every job. Takes the same filters as the jobs list (search, department, creator, assignee, employment and workplace type, location mode, market, created dates); status, cursor, limit and sort are ignored. Every status is present, zero when there are none, and all is the total. People who can only see assigned jobs are counted on those jobs only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Count jobs per status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search title or department",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Only this department",
+                        "name": "department_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Only jobs created by this user id",
+                        "name": "created_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Only jobs this user id is on the hiring team of",
+                        "name": "assignee",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "full_time, part_time, contract or internship",
+                        "name": "employment_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "onsite, hybrid or remote",
+                        "name": "workplace_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "anywhere, specific_area or specific_timezone",
+                        "name": "location_mode",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Two-letter market code, e.g. UK",
+                        "name": "market",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Created on or after this date (YYYY-MM-DD)",
+                        "name": "created_from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Created on or before this date (YYYY-MM-DD)",
+                        "name": "created_to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.JobCountsEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -4634,6 +4733,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/jobs/{id}/share-kit": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The job's public link and ready-made share links for WhatsApp, X, Facebook, LinkedIn, Telegram and email. Each link carries its channel as src, so applications show which link brought the candidate. Available once the job has been published.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Share kit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.ShareKitEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/jobs/{id}/to-draft": {
             "post": {
                 "security": [
@@ -5980,6 +6125,207 @@ const docTemplate = `{
                 }
             }
         },
+        "/public/jobs/{public_id}": {
+            "get": {
+                "description": "The job and its application form as a candidate sees it. No sign-in. Knockout rules, the lawful basis and the assessment link are never included. Closed, paused and archived jobs say so in state.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Public job",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Public job id",
+                        "name": "public_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.PublicJobEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "410": {
+                        "description": "Gone",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/public/jobs/{public_id}/applications": {
+            "post": {
+                "description": "Sends an application. No sign-in. The answers are checked against the form that was frozen when the job was published. A failed knockout or screening rule flags the application for a person to review; it never rejects it. Applying again with the same email returns the same success and changes nothing. Rate limited.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Apply for a job",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Public job id",
+                        "name": "public_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "A random 8 to 64 character key; a retry with the same key never creates a second application",
+                        "name": "Idempotency-Key",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Application",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationReceiptEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "410": {
+                        "description": "Gone",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/public/jobs/{public_id}/uploads": {
+            "post": {
+                "description": "Returns a one-time URL to PUT a file to (a CV, for example). Only the file types and size the question allows are accepted: a CV is PDF only, 5 MB on the free plan and 10 MB on paid plans. Send the file with PUT and exactly the returned headers within the time shown, then give the token as the answer to the question when applying. The file is scanned for malware when the application is submitted; a file that fails is discarded. No sign-in. Rate limited.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Get an upload URL",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Public job id",
+                        "name": "public_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "File to upload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.UploadRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.UploadTargetEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "410": {
+                        "description": "Gone",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/roles": {
             "get": {
                 "description": "Returns active role options for onboarding.",
@@ -6532,6 +6878,20 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_Angle-HR_server_internal_hiring_draft.JobCounts": {
+            "type": "object",
+            "properties": {
+                "all": {
+                    "type": "integer"
+                },
+                "by_status": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "github_com_Angle-HR_server_internal_hiring_draft.JobView": {
             "type": "object",
             "properties": {
@@ -6676,6 +7036,10 @@ const docTemplate = `{
         "github_com_Angle-HR_server_internal_hiring_draft.MeView": {
             "type": "object",
             "properties": {
+                "company_address": {
+                    "description": "CompanyAddress is the company's registered address, for \"Same as company address\". Empty when none is set.",
+                    "type": "string"
+                },
                 "company_name": {
                     "type": "string"
                 },
@@ -6958,7 +7322,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "applicant_count": {
-                    "description": "ApplicantCount is always 0 until candidate applications exist in the API. The field is here so clients\ncan build against it now.",
+                    "description": "ApplicantCount is how many people have applied. NewApplicantCount is how many of them nobody on the hiring\nteam has opened yet.",
                     "type": "integer"
                 },
                 "closing_date": {
@@ -6999,6 +7363,9 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "new_applicant_count": {
+                    "type": "integer"
                 },
                 "published_at": {
                     "type": "string"
@@ -7533,6 +7900,34 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_public.ShareKit": {
+            "type": "object",
+            "properties": {
+                "job_url": {
+                    "type": "string"
+                },
+                "links": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_public.ShareLink"
+                    }
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_public.ShareLink": {
+            "type": "object",
+            "properties": {
+                "channel": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "url": {
                     "type": "string"
                 }
             }
@@ -10336,6 +10731,55 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_hiring_hiringhttp.ApplicationReceipt": {
+            "type": "object",
+            "properties": {
+                "received": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.ApplicationReceiptEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationReceipt"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.ApplicationRequest": {
+            "type": "object",
+            "properties": {
+                "answers": {
+                    "description": "Answers maps a question id to the answer, in the shape that question's type expects.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "candidate_country": {
+                    "description": "CandidateCountry is the candidate's country, ISO 3166-1 alpha-2. It must belong to one of the job's markets.",
+                    "type": "string"
+                },
+                "consent": {
+                    "description": "Consent is required only when the job's lawful basis is consent (see consent_required).",
+                    "type": "boolean"
+                },
+                "privacy_notice_acknowledged": {
+                    "type": "boolean"
+                },
+                "source": {
+                    "description": "Source is the share channel the candidate came from (the src of the link); anything else is \"direct\".",
+                    "type": "string"
+                }
+            }
+        },
         "internal_hiring_hiringhttp.BulkEnvelope": {
             "type": "object",
             "properties": {
@@ -10441,6 +10885,17 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_hiring_hiringhttp.JobCountsEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.JobCounts"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
         "internal_hiring_hiringhttp.JobEnvelope": {
             "type": "object",
             "properties": {
@@ -10538,6 +10993,55 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_hiring_hiringhttp.PublicJobData": {
+            "type": "object",
+            "properties": {
+                "accepting": {
+                    "type": "boolean"
+                },
+                "consent_required": {
+                    "type": "boolean"
+                },
+                "job": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_jobs.PublicJob"
+                },
+                "markets": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "privacy_contact_email": {
+                    "type": "string"
+                },
+                "privacy_notice_url": {
+                    "type": "string"
+                },
+                "privacy_notice_version": {
+                    "type": "string"
+                },
+                "public_id": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.PublicJobEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_hiring_hiringhttp.PublicJobData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
         "internal_hiring_hiringhttp.ReportEnvelope": {
             "type": "object",
             "properties": {
@@ -10570,6 +11074,17 @@ const docTemplate = `{
             "properties": {
                 "automated_screening_enabled": {
                     "type": "boolean"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.ShareKitEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_public.ShareKit"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
                 }
             }
         },
@@ -10664,6 +11179,62 @@ const docTemplate = `{
             "properties": {
                 "data": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.TransitionResult"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.UploadRequest": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "description": "ContentType must be one the question accepts, e.g. application/pdf for a CV.",
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string"
+                },
+                "question_id": {
+                    "description": "QuestionID is the file question the upload answers.",
+                    "type": "string"
+                },
+                "size_bytes": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.UploadTarget": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "max_bytes": {
+                    "type": "integer"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.UploadTargetEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_hiring_hiringhttp.UploadTarget"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
                 }
             }
         }

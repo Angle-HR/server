@@ -576,7 +576,9 @@ SELECT j.id::text, j.job_number, j.status, COALESCE(j.title, ''), COALESCE(d.nam
        COALESCE((SELECT array_agg(COALESCE(NULLIF(trim(concat_ws(' ', u.first_name, u.last_name)), ''),
                                            u.legal_full_name, '') ORDER BY jm.user_id)
                  FROM hiring.job_members jm JOIN accounts.users u ON u.id = jm.user_id AND u.deleted_at IS NULL
-                 WHERE jm.job_id = j.id AND jm.role = 'hiring_manager'), '{}')
+                 WHERE jm.job_id = j.id AND jm.role = 'hiring_manager'), '{}'),
+       COALESCE((SELECT c.applicant_count FROM hiring.job_applicant_counts c WHERE c.job_id = j.id), 0),
+       COALESCE((SELECT c.new_applicant_count FROM hiring.job_applicant_counts c WHERE c.job_id = j.id), 0)
 FROM hiring.job_postings j
 LEFT JOIN hiring.departments d ON d.id = j.department_id
 WHERE j.tenant_id = $1::uuid AND j.deleted_at IS NULL
@@ -684,7 +686,7 @@ func (s *Store) ListJobs(ctx context.Context, tenantID string, f *ListFilter) ([
 			if err = rows.Scan(&it.ID, &number, &it.Status, &it.Title, &it.DepartmentName, &it.EmploymentType,
 				&it.LocationMode, &it.CurrentStep, &it.Revision, &it.CreatedBy, &it.CreatedAt, &it.UpdatedAt,
 				&it.Markets, &it.WorkplaceType, &it.PublishedAt, &it.ClosingDate,
-				&managerIDs, &managerNames); err != nil {
+				&managerIDs, &managerNames, &it.ApplicantCount, &it.NewApplicantCount); err != nil {
 				return fmt.Errorf("hiringstore: scan job: %w", err)
 			}
 			it.JobCode = jobs.JobCode(number)

@@ -39,6 +39,7 @@ func (h *HiringHandler) registerPublishItemRoutes(r chi.Router) {
 		r.Post("/"+segment, h.lifecycle(action))
 	}
 	r.Post("/duplicate", h.duplicate)
+	r.Get("/share-kit", h.shareKit)
 	r.Get("/compliance", h.compliance)
 	r.Put("/compliance/{gate_id}", h.confirmGate)
 	r.Get("/members", h.getMembers)

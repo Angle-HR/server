@@ -14,6 +14,7 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/draft"
 	"github.com/Angle-HR/server/internal/hiring/hiringstore"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
+	"github.com/Angle-HR/server/internal/hiring/public"
 	"github.com/Angle-HR/server/internal/rbac"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
@@ -142,6 +143,8 @@ var (
 type HiringHandler struct {
 	Directory HiringDirectory
 	Identify  HiringIdentify
+	// Public builds public job links for the share kit. Nil leaves the share kit unavailable.
+	Public *public.Service
 }
 
 // NewHiringHandler returns a handler that resolves callers through dir.

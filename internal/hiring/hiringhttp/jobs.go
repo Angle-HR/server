@@ -87,7 +87,7 @@ func (h *HiringHandler) jobID(r *http.Request) string { return chi.URLParam(r, "
 // listJobs godoc
 //
 //	@Summary		List jobs
-//	@Description	Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. applicant_count is always 0 for now because candidate applications do not exist in the API yet.
+//	@Description	Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. applicant_count is the number of applications received and new_applicant_count the number nobody has opened yet.
 //	@Tags			jobs
 //	@Produce		json
 //	@Security		BearerAuth

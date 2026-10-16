@@ -165,6 +165,9 @@ func Run() error {
 	kybHandler.NotifierFor = kybNotifierFor
 	kybHandler.Formats = onboarding.RegistrationNumberFormatOK
 	hiringHandler := newHiringHandler(dbRouter, globalPool)
+	publicHandler := newPublicHandler(cfg, dbRouter, globalPool, redisClient, log)
+	hiringHandler.Public = publicHandler.Public
+	hiringHandler.Applications = newApplicationsService(cfg, dbRouter, log)
 	authHandler.MeAccess = hiringHandler.Access
 	adminHandler := handler.NewAdminHandler(
 		adminStore,
@@ -191,11 +194,14 @@ func Run() error {
 		router.Handle("/fluvio/*", fluviui.Handler(fluvioClient, fluviui.WithAllowedOrigin(fluvioUIOrigin)))
 	}
 
+	publicHandler.RegisterPages(router)
+
 	router.Route("/api/v1", func(r chi.Router) {
 		countriesHandler.RegisterRoutes(r)
 		waitlistHandler.RegisterRoutes(r)
 		r.Route("/auth", authHandler.RegisterRoutes)
 		productOnboardingHandler.RegisterRoutes(r)
+		publicHandler.RegisterRoutes(r)
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.RequireAuth)
 			authHandler.RegisterProtectedRoutes(r)

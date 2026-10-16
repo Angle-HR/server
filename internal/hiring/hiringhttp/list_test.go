@@ -121,3 +121,51 @@ func TestPeopleListNeedsCollaboratorPermission(t *testing.T) {
 		t.Fatalf("employee people: %d", r.Status)
 	}
 }
+
+func TestMeShowsCompanyAddress(t *testing.T) {
+	e := newEnv(rbac.RoleFounder)
+	e.dir.caller.CompanyAddress = "1 High Street, London"
+	r := e.do(t, "GET", "/hiring/me", "")
+	var me struct {
+		CompanyAddress string `json:"company_address"`
+	}
+	if err := json.Unmarshal(r.Data, &me); err != nil || r.Status != 200 || me.CompanyAddress != "1 High Street, London" {
+		t.Fatalf("me address: %d %s", r.Status, r.Data)
+	}
+}
+
+func TestJobCountsPerStatusAndFilters(t *testing.T) {
+	e := newEnv(rbac.RoleFounder)
+	e.create(t, `{"title":"Remote cook","workplace_type":"remote"}`)
+	e.create(t, `{"title":"Onsite chef","workplace_type":"onsite"}`)
+
+	counts := func(path string) (int, map[string]int) {
+		t.Helper()
+		r := e.do(t, "GET", path, "")
+		if r.Status != 200 {
+			t.Fatalf("%s: %d %s", path, r.Status, r.Data)
+		}
+		var out struct {
+			All      int            `json:"all"`
+			ByStatus map[string]int `json:"by_status"`
+		}
+		if err := json.Unmarshal(r.Data, &out); err != nil {
+			t.Fatal(err)
+		}
+		return out.All, out.ByStatus
+	}
+	all, by := counts("/jobs/counts")
+	if all != 2 || by["draft"] != 2 || by["published"] != 0 || len(by) != 7 {
+		t.Fatalf("counts: %d %v", all, by)
+	}
+	if all, _ = counts("/jobs/counts?workplace_type=remote"); all != 1 {
+		t.Fatalf("filtered all = %d", all)
+	}
+	// Status is ignored: every tab still gets its number.
+	if all, _ = counts("/jobs/counts?status=published"); all != 2 {
+		t.Fatalf("status must be ignored, all = %d", all)
+	}
+	if r := e.do(t, "GET", "/jobs/counts?workplace_type=moon", ""); r.Status != 400 {
+		t.Fatalf("bad filter: %d", r.Status)
+	}
+}

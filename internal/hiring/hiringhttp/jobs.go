@@ -24,6 +24,7 @@ func (h *HiringHandler) RegisterProtectedRoutes(r chi.Router) {
 	r.Route("/jobs", func(r chi.Router) {
 		r.Get("/", h.listJobs)
 		r.Post("/", h.createJob)
+		r.Get("/counts", h.jobCounts)
 		h.registerPublishJobRoutes(r)
 		r.Route("/{id}", func(r chi.Router) {
 			h.registerPublishItemRoutes(r)
@@ -36,6 +37,7 @@ func (h *HiringHandler) RegisterProtectedRoutes(r chi.Router) {
 			r.Put("/application-form", h.putForm)
 			r.Get("/preview", h.preview)
 			r.Post("/duplicates/dismiss", h.dismissDuplicate)
+			h.registerApplicationRoutes(r)
 		})
 	})
 	r.Route("/hiring", func(r chi.Router) {
@@ -49,11 +51,15 @@ func (h *HiringHandler) RegisterProtectedRoutes(r chi.Router) {
 		r.Get("/templates", h.templates)
 		r.Post("/templates", h.saveTemplate)
 		r.Patch("/templates/{id}", h.patchTemplate)
+		r.Patch("/templates/{id}", h.patchTemplate)
 		r.Delete("/templates/{id}", h.deleteTemplate)
+		r.Post("/templates/{id}/duplicate", h.duplicateTemplate)
+		r.Get("/templates/{id}/export", h.exportTemplate)
 		r.Post("/templates/{id}/duplicate", h.duplicateTemplate)
 		r.Get("/templates/{id}/export", h.exportTemplate)
 		r.Get("/settings", h.settings)
 		r.Put("/settings", h.putSettings)
+		h.registerApplicantSettingsRoutes(r)
 	})
 }
 
@@ -86,7 +92,7 @@ func (h *HiringHandler) jobID(r *http.Request) string { return chi.URLParam(r, "
 // listJobs godoc
 //
 //	@Summary		List jobs
-//	@Description	Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. applicant_count is always 0 for now because candidate applications do not exist in the API yet.
+//	@Description	Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. applicant_count is the number of applications received and new_applicant_count the number nobody has opened yet.
 //	@Tags			jobs
 //	@Produce		json
 //	@Security		BearerAuth
@@ -142,6 +148,53 @@ func (h *HiringHandler) listJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	more := next != ""
 	response.SuccessWithMeta(w, r, http.StatusOK, nonNilItems(items), &response.Meta{NextCursor: next, HasMore: &more})
+}
+
+// JobCountsEnvelope is the per-status job counts.
+type JobCountsEnvelope struct {
+	Data draft.JobCounts `json:"data"`
+	Meta *apidoc.Meta    `json:"meta,omitempty"`
+}
+
+// jobCounts godoc
+//
+//	@Summary		Count jobs per status
+//	@Description	The numbers for the status tabs, in one call instead of loading every job. Takes the same filters as the jobs list (search, department, creator, assignee, employment and workplace type, location mode, market, created dates); status, cursor, limit and sort are ignored. Every status is present, zero when there are none, and all is the total. People who can only see assigned jobs are counted on those jobs only.
+//	@Tags			jobs
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			q				query		string	false	"Search title or department"
+//	@Param			department_id	query		string	false	"Only this department"
+//	@Param			created_by		query		string	false	"Only jobs created by this user id"
+//	@Param			assignee		query		string	false	"Only jobs this user id is on the hiring team of"
+//	@Param			employment_type	query		string	false	"full_time, part_time, contract or internship"
+//	@Param			workplace_type	query		string	false	"onsite, hybrid or remote"
+//	@Param			location_mode	query		string	false	"anywhere, specific_area or specific_timezone"
+//	@Param			market			query		string	false	"Two-letter market code, e.g. UK"
+//	@Param			created_from	query		string	false	"Created on or after this date (YYYY-MM-DD)"
+//	@Param			created_to		query		string	false	"Created on or before this date (YYYY-MM-DD)"
+//	@Success		200				{object}	hiringhttp.JobCountsEnvelope
+//	@Failure		400				{object}	apidoc.ErrorEnvelope
+//	@Failure		403				{object}	apidoc.ErrorEnvelope
+//	@Router			/jobs/counts [get]
+func (h *HiringHandler) jobCounts(w http.ResponseWriter, r *http.Request) {
+	svc, c, ok := h.scope(w, r)
+	if !ok {
+		return
+	}
+	qv := r.URL.Query()
+	q := draft.ListQuery{
+		DepartmentID: qv.Get("department_id"), Query: strings.TrimSpace(qv.Get("q")),
+		CreatedBy: qv.Get("created_by"), Assignee: qv.Get("assignee"), EmploymentType: qv.Get("employment_type"),
+		WorkplaceType: qv.Get("workplace_type"), LocationMode: qv.Get("location_mode"), Market: qv.Get("market"),
+		CreatedFrom: qv.Get("created_from"), CreatedTo: qv.Get("created_to"),
+	}
+	out, err := svc.Counts(r.Context(), c, q)
+	if err != nil {
+		response.Error(w, r, hiringError(err))
+		return
+	}
+	response.Success(w, r, http.StatusOK, out)
 }
 
 func nonNilItems(in []hiringtypes.ListItem) []hiringtypes.ListItem {

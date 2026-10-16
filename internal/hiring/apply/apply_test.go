@@ -1,7 +1,9 @@
 package apply_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"sync"
@@ -14,6 +16,7 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/public"
 	"github.com/Angle-HR/server/internal/hiring/questions"
 	"github.com/Angle-HR/server/internal/hiring/screening"
+	"github.com/Angle-HR/server/internal/sensitive"
 )
 
 type fakeRegistry struct{}
@@ -36,6 +39,13 @@ type fakeStore struct {
 	loadErr error
 	// insertErr is returned by InsertApplication.
 	insertErr error
+	// blocked lists the email hashes ReapplyBlocked reports as blocked.
+	blocked    map[string]bool
+	blockedErr error
+}
+
+func (f *fakeStore) ReapplyBlocked(_ context.Context, _, hash string) (bool, error) {
+	return f.blocked[hash], f.blockedErr
 }
 
 func (f *fakeStore) LoadForApply(context.Context, string, string) (*apply.Target, error) {
@@ -391,28 +401,164 @@ func TestLimiterOutageDoesNotBlockApplications(t *testing.T) {
 	}
 }
 
-func TestSpecialCategoryAnswersAreNeverStoredYet(t *testing.T) {
+func specialTarget() *apply.Target {
 	tg := target()
+	tg.Region, tg.TenantID = "uk", "org-1"
+	tg.Declarations = []questions.Declaration{{Category: "health_disability", LegalCondition: "explicit_consent", Purpose: "Reasonable adjustments"}}
 	tg.Questions = append(tg.Questions, questions.FormQuestion{
 		ID: "health", Section: "screening", Type: "single_choice", Label: "Disability?", Config: options(),
 		SpecialCategory: "health_disability",
 	})
-	st := &fakeStore{target: tg}
+	return tg
+}
+
+func keyring(t *testing.T, regions ...string) *sensitive.Keyring {
+	t.Helper()
+	k := sensitive.NewKeyring()
+	for _, r := range regions {
+		if err := k.Add(r, "v1:"+base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return k
+}
+
+func TestSpecialCategoryAnswersAreRefusedWithoutKeys(t *testing.T) {
 	in := input()
 	in.Answers["health"] = json.RawMessage(`"yes"`)
-	if _, err := service(st, nil).Submit(context.Background(), in); !errors.Is(err, apply.ErrSensitiveUnavailable) {
-		t.Fatalf("got %v", err)
+
+	for name, sealer := range map[string]apply.Sealer{"no sealer": nil, "keys for another region": keyring(t, "eu")} {
+		st := &fakeStore{target: specialTarget()}
+		svc := service(st, nil)
+		svc.Sealer = sealer
+		if _, err := svc.Submit(context.Background(), in); !errors.Is(err, apply.ErrSensitiveUnavailable) {
+			t.Fatalf("%s: got %v", name, err)
+		}
+		if len(st.saved) != 0 {
+			t.Fatalf("%s: special category answers must never be stored without encryption", name)
+		}
 	}
-	if len(st.saved) != 0 {
-		t.Fatal("special category answers must never reach the standard database")
-	}
-	// An optional sensitive question left blank does not block the application.
+	// An optional sensitive question left blank does not block the application, keys or not.
 	delete(in.Answers, "health")
+	st := &fakeStore{target: specialTarget()}
 	if _, err := service(st, nil).Submit(context.Background(), in); err != nil {
 		t.Errorf("blank optional special category question: %v", err)
 	}
-	if _, has := st.saved[0].Answers["health"]; has {
-		t.Error("a special category answer slipped into the saved answers")
+	if len(st.saved[0].Sensitive) != 0 {
+		t.Error("nothing to seal")
+	}
+}
+
+func TestSpecialCategoryAnswersAreSealedAndKeptApart(t *testing.T) {
+	st := &fakeStore{target: specialTarget()}
+	keys := keyring(t, "uk")
+	svc := service(st, nil)
+	svc.Sealer = keys
+	in := input()
+	in.Answers["health"] = json.RawMessage(`"yes"`)
+	if _, err := svc.Submit(context.Background(), in); err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	a := st.saved[0]
+	if _, has := a.Answers["health"]; has {
+		t.Fatal("a special category answer slipped into the standard answers")
+	}
+	if len(a.Sensitive) != 1 {
+		t.Fatalf("sealed = %+v", a.Sensitive)
+	}
+	sa := a.Sensitive[0]
+	if sa.QuestionID != "health" || sa.Category != "health_disability" || sa.LegalCondition != "explicit_consent" || sa.Purpose != "Reasonable adjustments" {
+		t.Errorf("sealed answer = %+v", sa)
+	}
+	if bytes.Contains(sa.Sealed.Ciphertext, []byte("yes")) {
+		t.Error("the answer is not encrypted")
+	}
+	// The ciphertext opens only for this company, application and question.
+	if a.ID == "" {
+		t.Fatal("the application needs its id before it is saved")
+	}
+	got, err := keys.Open("uk", sa.Sealed, apply.SealAAD("org-1", a.ID, "health"))
+	if err != nil || string(got) != `"yes"` {
+		t.Errorf("open: %q %v", got, err)
+	}
+	if _, err = keys.Open("uk", sa.Sealed, apply.SealAAD("org-1", "another-application", "health")); err == nil {
+		t.Error("sealed answer opened under another application")
+	}
+	// The sensitive answer must not drive knockouts, flags or the confirmation email.
+	if len(a.Flags) != 0 {
+		t.Errorf("flags = %v", a.Flags)
+	}
+	for _, v := range a.Confirmation.Data {
+		if s, ok := v.(string); ok && s == "yes" {
+			t.Error("the confirmation email carries an answer")
+		}
+	}
+
+	// Invalid and missing required answers are field errors, not refusals.
+	in.Answers["health"] = json.RawMessage(`"maybe"`)
+	if f := fields(t, func() error { _, err := svc.Submit(context.Background(), in); return err }()); f["answers.health"] == "" {
+		t.Errorf("invalid sensitive answer: %v", f)
+	}
+	tg := specialTarget()
+	tg.Questions[len(tg.Questions)-1].Required = true
+	delete(in.Answers, "health")
+	svc2 := service(&fakeStore{target: tg}, nil)
+	svc2.Sealer = keys
+	if f := fields(t, func() error { _, err := svc2.Submit(context.Background(), in); return err }()); f["answers.health"] == "" {
+		t.Errorf("missing required sensitive answer: %v", f)
+	}
+}
+
+func TestConfirmationEmail(t *testing.T) {
+	tg := target()
+	tg.Title, tg.CompanyName = "Senior Engineer", "Acme Ltd"
+	st := &fakeStore{target: tg}
+	svc := service(st, nil)
+	svc.NoticeURL = func(id string) string { return "https://jobs.test/j/" + id + "/privacy" }
+	if _, err := svc.Submit(context.Background(), input()); err != nil {
+		t.Fatal(err)
+	}
+	e := st.saved[0].Confirmation
+	if e == nil || e.Kind != apply.EmailApplicationReceived || e.Recipient != "ada@example.com" || e.RecipientName != "Ada Lovelace" {
+		t.Fatalf("email = %+v", e)
+	}
+	if e.Data["job_title"] != "Senior Engineer" || e.Data["company"] != "Acme Ltd" || e.Data["job_code"] != "JB-1" ||
+		e.Data["notice_url"] != "https://jobs.test/j/jabcdefghijkl/privacy" {
+		t.Errorf("data = %v", e.Data)
+	}
+}
+
+func TestReapplyBlock(t *testing.T) {
+	hash := func(tenant, email string) string { return "h:" + tenant + ":" + email }
+	tg := target()
+	tg.TenantID = "org-1"
+	st := &fakeStore{target: tg, blocked: map[string]bool{"h:org-1:ada@example.com": true}}
+	svc := service(st, nil)
+	svc.EmailHash = hash
+	rec, err := svc.Submit(context.Background(), input())
+	if err != nil || !rec.Received {
+		t.Fatalf("a blocked candidate must get the same success: %+v %v", rec, err)
+	}
+	if len(st.saved) != 0 {
+		t.Error("a blocked candidate's application was saved")
+	}
+	// Somebody else is not blocked.
+	in := input()
+	in.Answers["mail"] = json.RawMessage(`"bob@example.com"`)
+	if _, err = svc.Submit(context.Background(), in); err != nil || len(st.saved) != 1 {
+		t.Fatalf("other candidate: %v saved=%d", err, len(st.saved))
+	}
+	// Without a hasher the check is off.
+	st2 := &fakeStore{target: tg, blocked: map[string]bool{"h:org-1:ada@example.com": true}}
+	if _, err = service(st2, nil).Submit(context.Background(), input()); err != nil || len(st2.saved) != 1 {
+		t.Errorf("check must be off without a hasher: %v", err)
+	}
+	// A failing lookup is an error (not a silent pass), so a block cannot be bypassed by an outage.
+	st3 := &fakeStore{target: tg, blockedErr: errors.New("db down")}
+	svc3 := service(st3, nil)
+	svc3.EmailHash = hash
+	if _, err = svc3.Submit(context.Background(), input()); err == nil || len(st3.saved) != 0 {
+		t.Errorf("lookup failure: %v", err)
 	}
 }
 

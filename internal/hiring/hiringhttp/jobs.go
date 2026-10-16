@@ -37,6 +37,7 @@ func (h *HiringHandler) RegisterProtectedRoutes(r chi.Router) {
 			r.Put("/application-form", h.putForm)
 			r.Get("/preview", h.preview)
 			r.Post("/duplicates/dismiss", h.dismissDuplicate)
+			h.registerApplicationRoutes(r)
 		})
 	})
 	r.Route("/hiring", func(r chi.Router) {
@@ -58,6 +59,7 @@ func (h *HiringHandler) RegisterProtectedRoutes(r chi.Router) {
 		r.Get("/templates/{id}/export", h.exportTemplate)
 		r.Get("/settings", h.settings)
 		r.Put("/settings", h.putSettings)
+		h.registerApplicantSettingsRoutes(r)
 	})
 }
 

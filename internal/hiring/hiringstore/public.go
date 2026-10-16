@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -106,7 +107,7 @@ SELECT DISTINCT market_code FROM hiring.job_markets WHERE job_id = $1::uuid ORDE
 
 const applyJobSQL = `
 SELECT id::text, job_number, status, COALESCE(to_char(closing_date, 'YYYY-MM-DD'), ''),
-       COALESCE(lawful_basis, ''), retention_months
+       COALESCE(lawful_basis, ''), retention_months, title
 FROM hiring.job_postings
 WHERE public_id = $1 AND tenant_id = $2::uuid AND deleted_at IS NULL`
 
@@ -118,7 +119,7 @@ func (s *Store) LoadForApply(ctx context.Context, tenantID, publicID string) (*a
 		got := &apply.Target{}
 		var number int
 		err := tx.QueryRow(ctx, applyJobSQL, publicID, tenantID).Scan(
-			&got.JobID, &number, &got.Status, &got.ClosingDate, &got.LawfulBasis, &got.RetentionMonths)
+			&got.JobID, &number, &got.Status, &got.ClosingDate, &got.LawfulBasis, &got.RetentionMonths, &got.Title)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -126,6 +127,13 @@ func (s *Store) LoadForApply(ctx context.Context, tenantID, publicID string) (*a
 			return fmt.Errorf("hiringstore: load job for apply: %w", err)
 		}
 		got.JobCode = fmt.Sprintf("JB-%d", number)
+		var privacyEmail, dpo string
+		if err = tx.QueryRow(ctx, publicCompanySQL, tenantID).Scan(&got.CompanyName, &privacyEmail, &dpo); err != nil {
+			return fmt.Errorf("hiringstore: load company for apply: %w", err)
+		}
+		if got.Declarations, err = loadDeclarations(ctx, tx, got.JobID); err != nil {
+			return err
+		}
 
 		rows, err := tx.Query(ctx, applyMarketsSQL, got.JobID)
 		if err != nil {
@@ -181,11 +189,11 @@ func (s *Store) LoadForApply(ctx context.Context, tenantID, publicID string) (*a
 // do nothing. ON CONFLICT DO NOTHING without a target covers both, and RETURNING gives no row for a repeat.
 const insertApplicationSQL = `
 INSERT INTO hiring.applications
-    (tenant_id, job_id, form_id, form_version, candidate_name, candidate_email, candidate_country, candidate_market,
+    (id, tenant_id, job_id, form_id, form_version, candidate_name, candidate_email, candidate_country, candidate_market,
      answers, status, flags, source, idempotency_key, notice_version, notice_acknowledged_at, consent_given_at,
      submitted_at, retention_until, lawful_basis, collection_purpose, allowed_downstream_purposes)
-VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9::jsonb, $10, $11::jsonb, $12, NULLIF($13, ''), $14, $15,
-        $16, $17, $18, $19, $20, $21::text[])
+VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10::jsonb, $11, $12::jsonb, $13, NULLIF($14, ''), $15, $16,
+        $17, $18, $19, $20, $21, $22::text[])
 ON CONFLICT DO NOTHING
 RETURNING id::text`
 
@@ -219,7 +227,7 @@ func (s *Store) InsertApplication(ctx context.Context, tenantID string, a *apply
 	err = s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		var id string
 		err := tx.QueryRow(ctx, insertApplicationSQL,
-			tenantID, a.JobID, a.FormID, a.FormVersion, a.Name, a.Email, a.Country, a.Market,
+			a.ID, tenantID, a.JobID, a.FormID, a.FormVersion, a.Name, a.Email, a.Country, a.Market,
 			answers, a.Status, flagsJSON, a.Source, a.IdempotencyKey, a.NoticeVersion, a.NoticeAcknowledgedAt,
 			a.ConsentAt, a.SubmittedAt, a.RetentionUntil, a.LawfulBasis, a.CollectionPurpose, purposes,
 		).Scan(&id)
@@ -236,6 +244,22 @@ func (s *Store) InsertApplication(ctx context.Context, tenantID string, a *apply
 			}
 			if tag.RowsAffected() != 1 {
 				return &apply.FileError{QuestionID: f.QuestionID}
+			}
+		}
+		for _, sa := range a.Sensitive {
+			if _, err = tx.Exec(ctx, insertSpecialAnswerSQL, tenantID, id, sa.QuestionID, sa.Category, sa.LegalCondition,
+				sa.Sealed.KeyID, sa.Sealed.Nonce, sa.Sealed.Ciphertext, a.RetentionUntil, a.LawfulBasis, sa.Purpose); err != nil {
+				return fmt.Errorf("hiringstore: save special category answer: %w", mapPgError(err))
+			}
+		}
+		if a.Status == apply.StatusFlagged {
+			if _, err = tx.Exec(ctx, insertReviewTaskSQL, tenantID, a.JobID, id, flagsJSON, a.RetentionUntil, a.LawfulBasis); err != nil {
+				return fmt.Errorf("hiringstore: create review task: %w", err)
+			}
+		}
+		if c := a.Confirmation; c != nil {
+			if err = insertOutbox(ctx, tx, tenantID, id, c, a.SubmittedAt, a.LawfulBasis); err != nil {
+				return err
 			}
 		}
 		if _, err = tx.Exec(ctx, bumpApplicantCountSQL, a.JobID, tenantID); err != nil {
@@ -255,4 +279,57 @@ func (s *Store) InsertApplication(ctx context.Context, tenantID string, a *apply
 		return false, err
 	}
 	return created, nil
+}
+
+// Special category answers sit in their own schema, encrypted. Only the ciphertext and the metadata that says what
+// it is and why it may be held are stored; the application's retention date applies to it too.
+const insertSpecialAnswerSQL = `
+INSERT INTO hiring_restricted.special_answers
+    (tenant_id, application_id, question_id, category, legal_condition, key_id, nonce, ciphertext, retention_until,
+     lawful_basis, collection_purpose)
+VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+
+// A flagged application gets a review task: a person must open it before the flag is decided.
+const insertReviewTaskSQL = `
+INSERT INTO hiring.review_tasks (tenant_id, job_id, application_id, reasons, retention_until, lawful_basis, collection_purpose)
+VALUES ($1::uuid, $2::uuid, $3::uuid, $4::jsonb, $5, $6, 'Reviewing an application that a screening rule or knockout flagged')`
+
+const insertOutboxSQL = `
+INSERT INTO hiring.email_outbox
+    (tenant_id, application_id, kind, recipient, recipient_name, data, retention_until, lawful_basis, collection_purpose)
+VALUES ($1::uuid, NULLIF($2, '')::uuid, $3, $4, $5, $6::jsonb, $7, $8, 'Sending a message about your application')`
+
+// OutboxRetention is how long an email waits in the outbox, sent or not, before the retention task deletes it.
+const OutboxRetention = 7 * 24 * time.Hour
+
+func insertOutbox(ctx context.Context, tx pgx.Tx, tenantID, applicationID string, e *apply.OutboxEmail, now time.Time, basis string) error {
+	data, err := json.Marshal(e.Data)
+	if err != nil {
+		return fmt.Errorf("hiringstore: encode email data: %w", err)
+	}
+	if string(data) == "null" {
+		data = []byte("{}")
+	}
+	if _, err = tx.Exec(ctx, insertOutboxSQL, tenantID, applicationID, e.Kind, e.Recipient, e.RecipientName, data,
+		now.Add(OutboxRetention), basis); err != nil {
+		return fmt.Errorf("hiringstore: queue email: %w", err)
+	}
+	return nil
+}
+
+const reapplyBlockedSQL = `
+SELECT EXISTS (SELECT 1 FROM hiring.reapply_blocks
+               WHERE tenant_id = $1::uuid AND email_hmac = $2 AND blocked_until > now())`
+
+// ReapplyBlocked reports whether a candidate (keyed hash of the email) may not apply to the company now. It
+// implements apply.Store.
+func (s *Store) ReapplyBlocked(ctx context.Context, tenantID, emailHMAC string) (bool, error) {
+	blocked := false
+	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, reapplyBlockedSQL, tenantID, emailHMAC).Scan(&blocked); err != nil {
+			return fmt.Errorf("hiringstore: check reapply block: %w", err)
+		}
+		return nil
+	})
+	return blocked, err
 }

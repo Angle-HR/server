@@ -6,6 +6,7 @@ package apply
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -22,6 +23,7 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/public"
 	"github.com/Angle-HR/server/internal/hiring/questions"
 	"github.com/Angle-HR/server/internal/hiring/screening"
+	"github.com/Angle-HR/server/internal/sensitive"
 )
 
 // Errors the HTTP layer maps to responses.
@@ -40,9 +42,9 @@ var (
 	// ErrFileRejected: the uploaded file cannot be used (unknown, expired, already used, wrong type, too big or
 	// infected). The candidate is told to upload it again, without the reason.
 	ErrFileRejected = errors.New("apply: file cannot be used")
-	// ErrSensitiveUnavailable: the application carries special category answers, and the restricted store
-	// that must hold them is not available yet. They are never written to the standard database.
-	ErrSensitiveUnavailable = errors.New("apply: special category answers cannot be stored yet")
+	// ErrSensitiveUnavailable: the application carries special category answers and the region has no
+	// encryption keys configured. They are never written without encryption.
+	ErrSensitiveUnavailable = errors.New("apply: special category answers cannot be stored here")
 )
 
 // FieldError points at the part of the request that is wrong, e.g. answers.<question id>.
@@ -68,8 +70,11 @@ type Flag = screening.Flag
 type Target struct {
 	JobID           string
 	JobCode         string
-	Region          string // set by Submit from the registry
-	TenantID        string // set by Submit from the registry
+	Title           string
+	CompanyName     string
+	Declarations    []questions.Declaration // the legal condition and purpose of each special category on the job
+	Region          string                  // set by Submit from the registry
+	TenantID        string                  // set by Submit from the registry
 	Status          string
 	ClosingDate     string // last day to apply, YYYY-MM-DD, or ""
 	LawfulBasis     string
@@ -83,6 +88,8 @@ type Target struct {
 
 // NewApplication is a validated application ready to store.
 type NewApplication struct {
+	// ID is made by the service, so special category answers can be sealed against it before the row exists.
+	ID          string
 	JobID       string
 	FormID      string
 	FormVersion int
@@ -95,10 +102,14 @@ type NewApplication struct {
 	Answers map[string]json.RawMessage
 	// Files are the uploads the answers point at, already scanned. The store attaches them in the same
 	// transaction as the application.
-	Files  []File
-	Flags  []Flag
-	Status string
-	Source string
+	Files []File
+	// Sensitive are the sealed special category answers. They never appear in Answers.
+	Sensitive []SensitiveAnswer
+	// Email is the confirmation email, saved to the region's outbox in the same transaction.
+	Confirmation *OutboxEmail
+	Flags        []Flag
+	Status       string
+	Source       string
 
 	IdempotencyKey string
 
@@ -114,6 +125,39 @@ type NewApplication struct {
 	DownstreamPurposes []string
 }
 
+// SensitiveAnswer is a special category answer as stored: encrypted, bound to its application and question.
+type SensitiveAnswer struct {
+	QuestionID     string
+	Category       string
+	LegalCondition string
+	Purpose        string
+	Sealed         sensitive.Sealed
+}
+
+// OutboxEmail is an email to be delivered by the sender command. It holds what the template needs and never an
+// answer.
+type OutboxEmail struct {
+	Kind          string
+	Recipient     string
+	RecipientName string
+	Data          map[string]any
+}
+
+// Email kinds written by the application step.
+const EmailApplicationReceived = "application_received"
+
+// SealAAD is the additional data a special category answer is sealed with: the company, the application and the
+// question. A sealed answer cannot be opened under any other.
+func SealAAD(tenantID, applicationID, questionID string) string {
+	return tenantID + "|" + applicationID + "|" + questionID
+}
+
+// Sealer encrypts special category answers with the keys of a region. *sensitive.Keyring implements it.
+type Sealer interface {
+	Has(region string) bool
+	Seal(region string, plaintext []byte, aad string) (sensitive.Sealed, error)
+}
+
 // Store is one region's database as the apply step uses it.
 type Store interface {
 	// LoadForApply reads a job by public id with its newest frozen form and screening rules. ErrNotFound when
@@ -123,6 +167,9 @@ type Store interface {
 	// returns false, with nothing written, when the same email already applied to the job or the idempotency
 	// key was already used.
 	InsertApplication(ctx context.Context, tenantID string, a *NewApplication) (created bool, err error)
+	// ReapplyBlocked reports whether the company has blocked this candidate (a keyed hash of the email) from
+	// applying for now.
+	ReapplyBlocked(ctx context.Context, tenantID, emailHMAC string) (bool, error)
 }
 
 // Directory finds a region's database.
@@ -184,6 +231,13 @@ type Service struct {
 	Directory Directory
 	Limiter   Limiter // nil disables rate limiting
 	Uploads   Uploads // nil: forms that ask for a file cannot be answered yet
+	// Sealer encrypts special category answers. Nil, or a region without keys: forms that ask for one cannot be
+	// answered.
+	Sealer Sealer
+	// EmailHash makes the keyed hash of a candidate's email that reapply blocks use. Nil turns the check off.
+	EmailHash func(tenantID, email string) string
+	// NoticeURL is the link to a job's applicant privacy notice, put in the confirmation email. Optional.
+	NoticeURL func(publicID string) string
 	Now       func() time.Time
 	Logger    *slog.Logger
 }
@@ -248,8 +302,23 @@ func (s *Service) Submit(ctx context.Context, in Input) (*Receipt, error) {
 	if err != nil {
 		return nil, err
 	}
+	app.Confirmation = s.confirmation(in.PublicID, t, app)
 	if !s.allow(ctx, "email:"+in.PublicID+":"+hash(app.Email), PerEmailPerJobPerHour) {
 		return nil, ErrRateLimited
+	}
+	if s.EmailHash != nil {
+		blocked, berr := st.ReapplyBlocked(ctx, entry.OrganizationID, s.EmailHash(entry.OrganizationID, app.Email))
+		if berr != nil {
+			return nil, fmt.Errorf("apply: check reapply block: %w", berr)
+		}
+		if blocked {
+			// The answer is the same as for a new application: telling a candidate (or someone who typed their
+			// address) that the employer turned them down before would leak that decision.
+			if s.Logger != nil {
+				s.Logger.Info("apply: application from a blocked candidate ignored", "job", t.JobID)
+			}
+			return &Receipt{Received: true}, nil
+		}
 	}
 	created, err := st.InsertApplication(ctx, entry.OrganizationID, app)
 	var fe *FileError
@@ -333,7 +402,12 @@ func (s *Service) build(ctx context.Context, in Input, t *Target) (*NewApplicati
 
 	answers := map[string]json.RawMessage{}
 	var files []File
+	var sealed []SensitiveAnswer
 	var name, email string
+	appID, err := newID()
+	if err != nil {
+		return nil, err
+	}
 	for i := range t.Questions {
 		q := &t.Questions[i]
 		path := "answers." + q.ID
@@ -341,11 +415,37 @@ func (s *Service) build(ctx context.Context, in Input, t *Target) (*NewApplicati
 		present = present && !isEmpty(raw)
 
 		if q.SpecialCategory != "" {
-			// Special category answers belong in the restricted store, which does not exist yet. Failing closed
-			// beats writing them to the standard database.
-			if present || q.Required {
+			// Special category answers are sealed and kept apart from the other answers. Without keys for the
+			// region they are refused: failing closed beats writing them unprotected.
+			if !present && !q.Required {
+				continue
+			}
+			if s.Sealer == nil || !s.Sealer.Has(t.Region) {
 				return nil, ErrSensitiveUnavailable
 			}
+			if !present {
+				add(path, "this question is required")
+				continue
+			}
+			if err := questions.ValidateAnswer(q.Type, q.Config, raw); err != nil {
+				add(path, err.Error())
+				continue
+			}
+			decl, ok := declaration(t.Declarations, q.SpecialCategory)
+			if !ok {
+				return nil, fmt.Errorf("apply: no declaration for special category %q on job %s", q.SpecialCategory, t.JobID)
+			}
+			box, err := s.Sealer.Seal(t.Region, raw, SealAAD(t.TenantID, appID, q.ID))
+			if err != nil {
+				if errors.Is(err, sensitive.ErrNoKey) {
+					return nil, ErrSensitiveUnavailable
+				}
+				return nil, fmt.Errorf("apply: seal answer: %w", err)
+			}
+			sealed = append(sealed, SensitiveAnswer{
+				QuestionID: q.ID, Category: q.SpecialCategory, LegalCondition: decl.LegalCondition,
+				Purpose: decl.Purpose, Sealed: box,
+			})
 			continue
 		}
 		if isUpload(q.Type) && (present || q.Required) {
@@ -414,9 +514,10 @@ func (s *Service) build(ctx context.Context, in Input, t *Target) (*NewApplicati
 
 	now := s.now().UTC()
 	app := &NewApplication{
+		ID:    appID,
 		JobID: t.JobID, FormID: t.FormID, FormVersion: t.FormVersion,
 		Name: name, Email: email, Country: country, Market: market,
-		Answers: answers, Files: files, Flags: flags, Status: status, Source: source(in.Source),
+		Answers: answers, Files: files, Sensitive: sealed, Flags: flags, Status: status, Source: source(in.Source),
 		IdempotencyKey: key,
 		NoticeVersion:  public.NoticeVersion, NoticeAcknowledgedAt: now,
 		LawfulBasis:        t.LawfulBasis,
@@ -460,6 +561,36 @@ func source(src string) string {
 		return src
 	}
 	return "direct"
+}
+
+func declaration(list []questions.Declaration, category string) (questions.Declaration, bool) {
+	for _, d := range list {
+		if d.Category == category {
+			return d, true
+		}
+	}
+	return questions.Declaration{}, false
+}
+
+// confirmation is the "we received your application" email.
+func (s *Service) confirmation(publicID string, t *Target, a *NewApplication) *OutboxEmail {
+	data := map[string]any{"job_title": t.Title, "job_code": t.JobCode, "company": t.CompanyName}
+	if s.NoticeURL != nil {
+		data["notice_url"] = s.NoticeURL(publicID)
+	}
+	return &OutboxEmail{Kind: EmailApplicationReceived, Recipient: a.Email, RecipientName: a.Name, Data: data}
+}
+
+// newID makes a random version 4 UUID.
+func newID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", fmt.Errorf("apply: random id: %w", err)
+	}
+	b[6] = b[6]&0x0f | 0x40
+	b[8] = b[8]&0x3f | 0x80
+	h := hex.EncodeToString(b[:])
+	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:], nil
 }
 
 // IsUpload reports whether a question type takes a file.

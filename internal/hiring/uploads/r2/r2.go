@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -32,6 +34,20 @@ func (s *Storage) PresignPut(ctx context.Context, key, contentType string, ttl t
 		return uploads.PutTarget{}, fmt.Errorf("r2: presign: %w", err)
 	}
 	return uploads.PutTarget{URL: u.String(), Headers: map[string]string{"Content-Type": contentType}}, nil
+}
+
+// PresignGet signs a GET that expires after ttl. The response is forced to download under filename.
+func (s *Storage) PresignGet(ctx context.Context, key string, ttl time.Duration, filename, contentType string) (string, error) {
+	q := url.Values{}
+	q.Set("response-content-disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+	if contentType != "" {
+		q.Set("response-content-type", contentType)
+	}
+	u, err := s.Client.PresignedGetObject(ctx, s.Bucket, key, ttl, q)
+	if err != nil {
+		return "", fmt.Errorf("r2: presign get: %w", err)
+	}
+	return u.String(), nil
 }
 
 func notFound(err error) bool {

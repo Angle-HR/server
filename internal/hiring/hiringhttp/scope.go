@@ -145,6 +145,8 @@ type HiringHandler struct {
 	Identify  HiringIdentify
 	// Public builds public job links for the share kit. Nil leaves the share kit unavailable.
 	Public *public.Service
+	// Applications returns a region's applications service. Nil leaves the applications routes answering 503.
+	Applications RegionalApplications
 }
 
 // NewHiringHandler returns a handler that resolves callers through dir.

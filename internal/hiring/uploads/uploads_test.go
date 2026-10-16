@@ -61,6 +61,9 @@ func (f *fakeStorage) Put(_ context.Context, key string, r io.Reader, _ int64, _
 	f.puts = append(f.puts, key)
 	return nil
 }
+func (f *fakeStorage) PresignGet(_ context.Context, key string, _ time.Duration, _, _ string) (string, error) {
+	return "https://r2.test/" + key, nil
+}
 func (f *fakeStorage) Remove(_ context.Context, key string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

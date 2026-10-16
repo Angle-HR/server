@@ -2384,6 +2384,86 @@ const docTemplate = `{
                 }
             }
         },
+        "/hiring/applicant-settings": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Whether rejected candidates are blocked from reapplying (0 or 6 months) and whether candidates are emailed when rejected or hired.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "Candidate settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicantSettingsEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Needs job.retention.set. Blocking reapplications (6 months) cannot be turned on while the server has no key for it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "Change candidate settings",
+                "parameters": [
+                    {
+                        "description": "Settings",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicantSettingsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicantSettingsEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/hiring/catalog": {
             "get": {
                 "security": [
@@ -3668,6 +3748,347 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/internal_hiring_hiringhttp.FormEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/applications": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Newest first, 25 per page by default (100 at most). Rows carry no answers. ` + "`" + `status` + "`" + ` can be repeated or comma separated; ` + "`" + `new=true` + "`" + ` lists applications nobody has opened. ` + "`" + `counts` + "`" + ` are for the whole job, whatever the filters. Seen by people who can see the job.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "List a job's applications",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "received, in_review, flagged, rejected, hired or withdrawn",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Where the candidate came from",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search name or email",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Only applications nobody has opened",
+                        "name": "new",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "next_cursor of the previous page",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationPageEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/applications/{app_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the answers (special category answers are never returned), the files, the flags and the review. Opening is recorded in the job's audit log; the first opening takes the application out of the job's new count. Whoever may decide a flagged application and opens it becomes its reviewer.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Open an application",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "app_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/applications/{app_id}/files/{file_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a link that works for 5 minutes and downloads the file under its original name. The request is recorded in the job's audit log. Ask again for a new link.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Get a download link for an application's file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "app_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "File id",
+                        "name": "file_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.FileLinkEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/applications/{app_id}/review": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "` + "`" + `proceed` + "`" + ` moves it to in_review; ` + "`" + `reject` + "`" + ` rejects it. The person deciding must be the last to have opened the application (GET it first), so every flagged candidate is looked at by a person before they are decided. There is no bulk version.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Decide a flagged application",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "app_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Decision",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationReviewRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationResultEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/applications/{app_id}/status": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "received to in_review or withdrawn; in_review to rejected, hired or withdrawn; flagged to withdrawn only. A flagged application is decided through its review. rejected, hired and withdrawn are final and start the retention clock. A rejection or hire emails the candidate unless the company turned that off. Needs to be the job's creator, a hiring manager or recruiter on it, or job.manage_any.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Change an application's status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "app_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "New status",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationResultEnvelope"
                         }
                     },
                     "400": {
@@ -6587,6 +7008,265 @@ const docTemplate = `{
                 "request_id": {
                     "type": "string",
                     "example": "abc123"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_applications.Answer": {
+            "type": "object",
+            "properties": {
+                "file_id": {
+                    "description": "FileID is set for upload questions; the file is fetched through the file endpoint.",
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "question_id": {
+                    "type": "string"
+                },
+                "section": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_applications.ApplicantSettings": {
+            "type": "object",
+            "properties": {
+                "reapply_block_available": {
+                    "description": "ReapplyBlockAvailable is false when the server has no key for it, so it cannot be turned on.",
+                    "type": "boolean"
+                },
+                "reapply_block_months": {
+                    "description": "ReapplyBlockMonths is 0 (off) or 6: a rejected candidate cannot apply to the company again for that long.",
+                    "type": "integer"
+                },
+                "send_status_emails": {
+                    "description": "SendStatusEmails sends the candidate an email when they are rejected or hired.",
+                    "type": "boolean"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_applications.Detail": {
+            "type": "object",
+            "properties": {
+                "answers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Answer"
+                    }
+                },
+                "can_decide": {
+                    "description": "CanDecide tells the client whether to offer status changes and review decisions.",
+                    "type": "boolean"
+                },
+                "consent_given_at": {
+                    "type": "string"
+                },
+                "country": {
+                    "type": "string"
+                },
+                "decided_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.File"
+                    }
+                },
+                "flag_count": {
+                    "type": "integer"
+                },
+                "flags": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "form_version": {
+                    "type": "integer"
+                },
+                "has_files": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "job_id": {
+                    "type": "string"
+                },
+                "market": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "opened": {
+                    "type": "boolean"
+                },
+                "privacy_notice_version": {
+                    "type": "string"
+                },
+                "retention_until": {
+                    "type": "string"
+                },
+                "review": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Review"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "status_note": {
+                    "type": "string"
+                },
+                "submitted_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_applications.File": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "question_id": {
+                    "type": "string"
+                },
+                "size_bytes": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_applications.FileLink": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_applications.Page": {
+            "type": "object",
+            "properties": {
+                "counts": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Summary"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_applications.Result": {
+            "type": "object",
+            "properties": {
+                "decided_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_applications.Review": {
+            "type": "object",
+            "properties": {
+                "decided_at": {
+                    "type": "string"
+                },
+                "decision": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "opened_by_me": {
+                    "description": "OpenedByMe is true when the caller opened the application since it was flagged, so they may decide it.",
+                    "type": "boolean"
+                },
+                "reasons": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "status": {
+                    "description": "open or done",
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_applications.Summary": {
+            "type": "object",
+            "properties": {
+                "country": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "flag_count": {
+                    "type": "integer"
+                },
+                "has_files": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "market": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "opened": {
+                    "type": "boolean"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "submitted_at": {
+                    "type": "string"
                 }
             }
         },
@@ -10731,6 +11411,41 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_hiring_hiringhttp.ApplicantSettingsEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.ApplicantSettings"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.ApplicantSettingsRequest": {
+            "type": "object",
+            "properties": {
+                "reapply_block_months": {
+                    "type": "integer"
+                },
+                "send_status_emails": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.ApplicationEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Detail"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.ApplicationPageEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Page"
+                }
+            }
+        },
         "internal_hiring_hiringhttp.ApplicationReceipt": {
             "type": "object",
             "properties": {
@@ -10776,6 +11491,36 @@ const docTemplate = `{
                 },
                 "source": {
                     "description": "Source is the share channel the candidate came from (the src of the link); anything else is \"direct\".",
+                    "type": "string"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.ApplicationResultEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Result"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.ApplicationReviewRequest": {
+            "type": "object",
+            "properties": {
+                "decision": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.ApplicationStatusRequest": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string"
+                },
+                "status": {
                     "type": "string"
                 }
             }
@@ -10860,6 +11605,14 @@ const docTemplate = `{
                 },
                 "meta": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.FileLinkEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.FileLink"
                 }
             }
         },

@@ -59,6 +59,8 @@ type Storage interface {
 	Open(ctx context.Context, key string) (io.ReadCloser, error)
 	// Put writes an object from r.
 	Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) error
+	// PresignGet returns a short-lived download link. The browser saves the object under filename.
+	PresignGet(ctx context.Context, key string, ttl time.Duration, filename, contentType string) (string, error)
 	// Remove deletes an object; removing a missing object is not an error.
 	Remove(ctx context.Context, key string) error
 }

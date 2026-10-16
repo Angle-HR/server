@@ -167,6 +167,7 @@ func Run() error {
 	hiringHandler := newHiringHandler(dbRouter, globalPool)
 	publicHandler := newPublicHandler(cfg, dbRouter, globalPool, redisClient, log)
 	hiringHandler.Public = publicHandler.Public
+	hiringHandler.Applications = newApplicationsService(cfg, dbRouter, log)
 	authHandler.MeAccess = hiringHandler.Access
 	adminHandler := handler.NewAdminHandler(
 		adminStore,

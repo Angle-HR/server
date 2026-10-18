@@ -53,10 +53,13 @@ infra/
 
 ## Rough staging cost (not from the AWS calculator; check it)
 
-NAT ~$35, ALB ~$18, RDS t4g.small ~$26 plus storage, ElastiCache t4g.micro ~$12, ClamAV Fargate (1 vCPU / 3 GB)
-~$45, API + worker + dashboard ~$27, WAF ~$10, Secrets Manager ~$8, CloudFront/Route 53/logs small.
-Roughly **$170-200/month** while running 24/7; stopping RDS and ECS by hand saves roughly $100/month if staging is off most of the time, well above the earlier $67/$100 estimate because that
-estimate had no ClamAV, WAF, Redis or per-region databases.
+About **$175/month** running 24/7 (London list prices, 18 Oct 2026): Fargate ~$58 (ClamAV 0.5 vCPU / 2 GB ~$25,
+API + worker + dashboard ~$31, jobs ~$6), RDS t4g.small + 20 GB ~$29, ALB ~$20, Redis t4g.micro ~$13, Secrets Manager ~$11,
+public IPv4 ~$7, WAF ~$9, fck-nat + bastion (t4g.nano each) ~$7, CloudWatch logs and the rest ~$10. `staging-power.sh stop`
+brings it to about $70/month. Earlier choices: a managed NAT gateway (+$33) and Container Insights (+$10-15) were dropped
+for staging.
+
+Database access: `scripts/db-tunnel.sh` (SSM port forward through the bastion; see the script header).
 
 ## Production (`envs/production`)
 

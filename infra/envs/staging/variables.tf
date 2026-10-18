@@ -74,3 +74,9 @@ variable "bastion_enabled" {
   type        = bool
   default     = true
 }
+
+variable "rds_keep_stopped" {
+  description = "Stop RDS again when AWS auto-starts it after 7 days stopped. Manual starts are not affected."
+  type        = bool
+  default     = true
+}

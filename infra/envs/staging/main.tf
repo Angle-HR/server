@@ -129,6 +129,16 @@ resource "aws_vpc_security_group_ingress_rule" "app_from_alb_fluvio" {
   to_port                      = 80
 }
 
+# API (and its /api/docs) from a laptop through the bastion: infra/scripts/api-tunnel.sh.
+resource "aws_vpc_security_group_ingress_rule" "app_from_bastion" {
+  count                        = var.bastion_enabled ? 1 : 0
+  security_group_id            = aws_security_group.app.id
+  referenced_security_group_id = module.bastion[0].security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = 8080
+  to_port                      = 8080
+}
+
 resource "aws_security_group" "clamav" {
   name        = "${local.name}-clamav"
   description = "clamd, reachable from application tasks only"
@@ -161,6 +171,15 @@ module "rds" {
   multi_az              = false
   backup_retention_days = 7
   deletion_protection   = false # staging only
+}
+
+# RDS auto-starts a stopped instance after 7 days; this stops it again so scripts/staging-power.sh stop sticks.
+module "rds_keep_stopped" {
+  count                  = var.rds_keep_stopped ? 1 : 0
+  source                 = "../../modules/rds_keep_stopped"
+  name                   = local.name
+  db_instance_identifier = module.rds.identifier
+  db_instance_arn        = module.rds.arn
 }
 
 # DB access from a laptop: infra/scripts/db-tunnel.sh. Off = no instance, no cost.

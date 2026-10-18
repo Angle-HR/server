@@ -1,0 +1,6 @@
+# cp backend.hcl.example backend.hcl, replace <PRODUCTION_ACCOUNT_ID> with the bootstrap output (production account).
+bucket       = "openhr-tfstate-<PRODUCTION_ACCOUNT_ID>"
+key          = "production/terraform.tfstate"
+region       = "eu-west-2"
+encrypt      = true
+use_lockfile = true

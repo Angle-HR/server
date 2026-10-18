@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Manually start/stop the staging stack to save cost. Usage: scripts/staging-power.sh start|stop|status
-# Needs AWS credentials for the STAGING account (AWS_PROFILE) and jq.
+# Uses AWS_PROFILE (default openhr-staging) and signs in if the session has expired. Needs jq.
 # NAT, ALB, ElastiCache and WAF cannot be stopped and keep billing either way.
 set -euo pipefail
 
@@ -11,6 +11,10 @@ DB="$NAME"
 declare -A COUNTS=( [clamav]=1 [api]=1 [email-worker]=1 [fluvio-ui]=1 )  # keep in sync with local.running_counts
 
 aws_() { aws --region "$REGION" "$@"; }
+
+# shellcheck source=_aws-session.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_aws-session.sh"
+case "${1:-}" in start|stop|status) ensure_aws_login ;; esac
 
 set_schedules() { # ENABLED|DISABLED for every job schedule
   local state="$1" n

@@ -2,8 +2,9 @@
 # Open a tunnel from this machine to the staging RDS instance through the SSM bastion (no public DB, no SSH).
 # Usage: scripts/db-tunnel.sh [local-port]      (default 15432; Ctrl-C closes the tunnel)
 #        scripts/db-tunnel.sh --password        (print the master password, for DBeaver/psql)
-# Needs: AWS credentials for the STAGING account (AWS_PROFILE=openhr-staging, after `aws sso login`),
-#        the Session Manager plugin (brew install --cask session-manager-plugin), bastion_enabled = true.
+# Uses AWS_PROFILE (default openhr-staging) and signs in if the session has expired. If the tunnel drops (idle
+# timeout, network change), run the script again.
+# Needs: the Session Manager plugin (brew install --cask session-manager-plugin), bastion_enabled = true.
 set -euo pipefail
 
 REGION="${AWS_REGION:-eu-west-2}"   # staging region; override with AWS_REGION
@@ -11,6 +12,10 @@ NAME="openhr-staging"
 DB="$NAME"
 
 aws_() { aws --region "$REGION" "$@"; }
+
+# shellcheck source=_aws-session.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_aws-session.sh"
+ensure_aws_login
 
 if [ "${1:-}" = "--password" ]; then
   # The DSNs are postgres://openhr:<password>@host:5432/db?sslmode=require

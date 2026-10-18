@@ -94,9 +94,11 @@ locals {
 
 # ---------------------------------------------------------------- network
 module "network" {
-  source   = "../../modules/network"
-  name     = local.name
-  nat_mode = "managed"
+  source = "../../modules/network"
+  name   = local.name
+  # fck-nat on a t4g.nano (~$4/mo) instead of a managed NAT gateway (~$37/mo). No HA: if the instance dies, private
+  # subnets lose internet egress (SMTP, ClamAV updates, Docker Hub) until it is replaced. Fine for staging.
+  nat_mode = "instance"
 }
 
 resource "aws_security_group" "app" {
@@ -154,11 +156,20 @@ module "rds" {
   name                  = local.name
   vpc_id                = module.network.vpc_id
   subnet_ids            = module.network.private_subnet_ids
-  allowed_sg_ids        = [aws_security_group.app.id]
+  allowed_sg_ids        = concat([aws_security_group.app.id], module.bastion[*].security_group_id)
   instance_class        = "db.t4g.small"
   multi_az              = false
   backup_retention_days = 7
   deletion_protection   = false # staging only
+}
+
+# DB access from a laptop: infra/scripts/db-tunnel.sh. Off = no instance, no cost.
+module "bastion" {
+  count     = var.bastion_enabled ? 1 : 0
+  source    = "../../modules/bastion"
+  name      = local.name
+  vpc_id    = module.network.vpc_id
+  subnet_id = module.network.private_subnet_ids[0]
 }
 
 module "redis" {
@@ -293,7 +304,7 @@ resource "aws_ecs_cluster" "this" {
   name = local.name
   setting {
     name  = "containerInsights"
-    value = "enabled"
+    value = "disabled" # staging: saves ~$10-15/mo; ECS service metrics in CloudWatch are still free
   }
 }
 
@@ -318,12 +329,15 @@ resource "aws_service_discovery_service" "clamav" {
 }
 
 module "clamav" {
-  source               = "../../modules/ecs_service"
-  name                 = "clamav"
-  cluster_arn          = aws_ecs_cluster.this.arn
-  image                = var.clamav_image
-  cpu                  = 1024
-  memory               = 3072
+  source      = "../../modules/ecs_service"
+  name        = "clamav"
+  cluster_arn = aws_ecs_cluster.this.arn
+  image       = var.clamav_image
+  cpu         = 512
+  memory      = 2048
+  # The signature database is ~1.2 GB in memory. A concurrent reload holds two copies, which does not fit in 2 GB, so
+  # clamd reloads in place instead: scans wait (uploads fail closed) for the ~30 s a reload takes, a few times a day.
+  environment          = { CLAMD_CONF_ConcurrentDatabaseReload = "no" }
   container_port       = 3310
   subnet_ids           = module.network.private_subnet_ids
   security_group_ids   = [aws_security_group.clamav.id]

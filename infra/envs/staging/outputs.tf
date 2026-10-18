@@ -21,3 +21,4 @@ output "migrate_run_task" {
     security_group  = aws_security_group.app.id
   }
 }
+output "bastion_instance_id" { value = one(module.bastion[*].instance_id) }

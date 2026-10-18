@@ -68,3 +68,9 @@ variable "fluvio_image" {
   type    = string
   default = "ghcr.io/software78/fluvio_ui:1.0.1"
 }
+
+variable "bastion_enabled" {
+  description = "SSM bastion for DB access from a laptop (infra/scripts/db-tunnel.sh). ~$3/month while on."
+  type        = bool
+  default     = true
+}

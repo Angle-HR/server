@@ -1,6 +1,7 @@
 # CloudFront + WAF + private S3 frontends.
-#   app.<zone>   : product SPA (S3) with API paths routed to the origin ALB, and /j/*/apply routed back to the SPA
-#   admin.<zone> : admin console SPA (S3)
+#   app_domain   : product SPA (S3) with api_path_patterns routed to the origin ALB, and /j/*/apply routed back to the SPA
+#   admin_domain : admin console SPA (S3)
+#   api_domain   : optional; every path goes to the origin ALB (the API, its docs at / and /api/docs)
 terraform {
   required_providers {
     aws = {
@@ -14,8 +15,13 @@ variable "name" { type = string }
 variable "zone_id" { type = string }
 variable "app_domain" { type = string }
 variable "admin_domain" { type = string }
+variable "api_domain" {
+  description = "Optional host that sends every path to the API. Null = the API is only reachable via api_path_patterns on app_domain."
+  type        = string
+  default     = null
+}
 variable "certificate_arn" {
-  description = "us-east-1 certificate covering app_domain and admin_domain"
+  description = "us-east-1 certificate covering app_domain, admin_domain and api_domain"
   type        = string
 }
 variable "origin_domain" {
@@ -43,7 +49,7 @@ variable "global_rate_limit" {
   default     = 2000
 }
 variable "submit_rate_limit" {
-  description = "POST requests per 5 minutes per IP to /public/*"
+  description = "POST requests per 5 minutes per IP to the candidate endpoints (/api/v1/public/*)"
   type        = number
   default     = 100
 }
@@ -64,6 +70,7 @@ locals {
   all_viewer_except_host  = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
   security_headers_policy = "67f7725c-6f97-4210-82d7-5512b31e9d03"
   frontends               = { app = var.app_domain, admin = var.admin_domain }
+  api_enabled             = var.api_domain != null
   alb_origin_id           = "alb"
   methods_all             = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
 }
@@ -216,7 +223,7 @@ resource "aws_wafv2_web_acl" "this" {
             }
             statement {
               byte_match_statement {
-                search_string         = "/public/"
+                search_string         = "/api/v1/public/"
                 positional_constraint = "STARTS_WITH"
                 field_to_match {
                   uri_path {}
@@ -342,6 +349,81 @@ resource "aws_cloudfront_distribution" "this" {
   }
 }
 
+# API host: no S3, every path to the ALB, nothing cached.
+resource "aws_cloudfront_distribution" "api" {
+  count           = local.api_enabled ? 1 : 0
+  enabled         = true
+  is_ipv6_enabled = true
+  http_version    = "http2and3"
+  price_class     = "PriceClass_100"
+  aliases         = [var.api_domain]
+  web_acl_id      = aws_wafv2_web_acl.this.arn
+  comment         = "${var.name} api"
+
+  origin {
+    origin_id   = local.alb_origin_id
+    domain_name = var.origin_domain
+    custom_origin_config {
+      http_port                = 80
+      https_port               = 443
+      origin_protocol_policy   = "https-only"
+      origin_ssl_protocols     = ["TLSv1.2"]
+      origin_read_timeout      = 30
+      origin_keepalive_timeout = 5
+    }
+    custom_header {
+      name  = "X-Origin-Verify"
+      value = var.origin_verify_value
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id         = local.alb_origin_id
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = local.methods_all
+    cached_methods           = ["GET", "HEAD"]
+    compress                 = true
+    cache_policy_id          = local.caching_disabled
+    origin_request_policy_id = local.all_viewer_except_host
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = var.certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+}
+
+resource "aws_route53_record" "api_a" {
+  count   = local.api_enabled ? 1 : 0
+  zone_id = var.zone_id
+  name    = var.api_domain
+  type    = "A"
+  alias {
+    name                   = aws_cloudfront_distribution.api[0].domain_name
+    zone_id                = aws_cloudfront_distribution.api[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "api_aaaa" {
+  count   = local.api_enabled ? 1 : 0
+  zone_id = var.zone_id
+  name    = var.api_domain
+  type    = "AAAA"
+  alias {
+    name                   = aws_cloudfront_distribution.api[0].domain_name
+    zone_id                = aws_cloudfront_distribution.api[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
 data "aws_iam_policy_document" "frontend" {
   for_each = aws_s3_bucket.frontend
   statement {
@@ -396,8 +478,11 @@ output "bucket_arns" {
   value = [for b in aws_s3_bucket.frontend : b.arn]
 }
 output "distribution_ids" {
-  value = { for k, d in aws_cloudfront_distribution.this : k => d.id }
+  value = merge(
+    { for k, d in aws_cloudfront_distribution.this : k => d.id },
+    { for d in aws_cloudfront_distribution.api : "api" => d.id },
+  )
 }
 output "distribution_arns" {
-  value = [for d in aws_cloudfront_distribution.this : d.arn]
+  value = concat([for d in aws_cloudfront_distribution.this : d.arn], aws_cloudfront_distribution.api[*].arn)
 }

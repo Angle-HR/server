@@ -6,8 +6,9 @@ locals {
   # S3 names are global; the account id keeps them unique.
   bucket_prefix = "openhr-staging-${data.aws_caller_identity.current.account_id}"
 
-  app_domain    = "app.${var.zone_name}"
+  app_domain    = var.zone_name # product web app at the zone apex: staging.tryopenhr.com
   admin_domain  = "admin.${var.zone_name}"
+  api_domain    = "api.${var.zone_name}"
   origin_domain = "origin.${var.zone_name}"
   fluvio_domain = "fluvio.${var.zone_name}"
 
@@ -48,7 +49,7 @@ locals {
       SERVER_PORT           = "8080"
       APP_ENV               = "staging"
       LOG_LEVEL             = "info"
-      PUBLIC_API_URL        = "https://${local.app_domain}"
+      PUBLIC_API_URL        = "https://${local.api_domain}"
       PUBLIC_SITE_URL       = "https://${local.app_domain}"
       APP_URL               = "https://${local.app_domain}"
       ADMIN_APP_URL         = "https://${local.admin_domain}"
@@ -256,7 +257,7 @@ module "cert_cloudfront" {
   source    = "../../modules/acm_cert"
   providers = { aws = aws.us_east_1 }
   domain    = local.app_domain
-  sans      = [local.admin_domain]
+  sans      = [local.admin_domain, local.api_domain]
   zone_id   = module.dns.zone_id
 }
 
@@ -306,11 +307,14 @@ module "edge" {
     aws           = aws
     aws.us_east_1 = aws.us_east_1
   }
-  name                = local.name
-  bucket_prefix       = local.bucket_prefix
-  zone_id             = module.dns.zone_id
-  app_domain          = local.app_domain
-  admin_domain        = local.admin_domain
+  name          = local.name
+  bucket_prefix = local.bucket_prefix
+  zone_id       = module.dns.zone_id
+  app_domain    = local.app_domain
+  admin_domain  = local.admin_domain
+  api_domain    = local.api_domain
+  # The API has its own host; the app host keeps only the server-rendered job pages (/j/<id>, /j/<id>/privacy).
+  api_path_patterns   = ["/j/*"]
   certificate_arn     = module.cert_cloudfront.arn
   origin_domain       = local.origin_domain
   origin_verify_value = random_password.origin_verify.result
@@ -408,7 +412,7 @@ module "fluvio_ui" {
   cluster_arn    = aws_ecs_cluster.this.arn
   image          = var.fluvio_image
   container_port = 80
-  environment    = { VITE_API_BASE_URL = "https://${local.app_domain}" }
+  environment    = { VITE_API_BASE_URL = "https://${local.api_domain}" }
   secrets = {
     VITE_API_BASIC_AUTH_USER     = module.secrets.arns["FLUVIO_BASIC_AUTH_USER"]
     VITE_API_BASIC_AUTH_PASSWORD = module.secrets.arns["FLUVIO_BASIC_AUTH_PASSWORD"]

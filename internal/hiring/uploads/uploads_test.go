@@ -634,3 +634,35 @@ func TestClamAVUnreachable(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+func TestClaimUsesTheRegionsScanner(t *testing.T) {
+	e := setup(target())
+	uk := &fakeScanner{verdict: uploads.Verdict{Clean: true}}
+	e.svc.Scanner = nil
+	e.svc.Scanners = map[string]uploads.Scanner{"uk": uk, "eu": &fakeScanner{}}
+	p := presignCV(t, e, 2000)
+	put(e, p, pdf(2000-9))
+
+	if _, err := e.svc.Claim(context.Background(), claimReq(e, p.Token)); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if len(uk.scanned) != 1 || len(e.sc.scanned) != 0 {
+		t.Errorf("the job's own region (uk) must scan the file: uk=%d fallback=%d", len(uk.scanned), len(e.sc.scanned))
+	}
+}
+
+func TestNoScannerForTheJobsRegion(t *testing.T) {
+	e := setup(target())
+	e.svc.Scanner = nil
+	e.svc.Scanners = map[string]uploads.Scanner{"eu": &fakeScanner{verdict: uploads.Verdict{Clean: true}}}
+
+	_, err := e.svc.Presign(context.Background(), uploads.PresignInput{
+		PublicID: "jabc", QuestionID: "cv", Filename: "cv.pdf", ContentType: "application/pdf", SizeBytes: 100, ClientIP: "1.2.3.4",
+	})
+	if !errors.Is(err, apply.ErrFilesUnavailable) {
+		t.Errorf("presign without a uk scanner = %v, want ErrFilesUnavailable", err)
+	}
+	if _, err := e.svc.Claim(context.Background(), claimReq(e, "00000000-0000-4000-8000-000000000000")); !errors.Is(err, apply.ErrFilesUnavailable) {
+		t.Errorf("claim without a uk scanner = %v, want ErrFilesUnavailable", err)
+	}
+}

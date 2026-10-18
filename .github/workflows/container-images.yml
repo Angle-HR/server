@@ -1,76 +1,85 @@
+# Builds the server, email-worker, jobs and migrate images and pushes them to the environment's ECR.
+#
+# GitHub Environment setup (Settings → Environments), one per AWS account:
+#
+#   staging     — used when pushing to the staging branch
+#   production  — used when pushing to the production branch
+#
+# Each environment needs two values (Variables or Secrets; Variables keep them readable in logs):
+#   AWS_DEPLOY_ROLE_ARN — `terraform output github_deploy_role_arn` in infra/envs/<env>
+#   AWS_REGION          — the stack's home region, e.g. eu-west-2
+#
+# Images are tagged with the full git sha only. ECR tags are immutable, so there is no `latest`; set
+# `image_tag` in infra/envs/<env>/terraform.tfvars to the sha and apply to roll out.
+
 name: Container Images
 
 on:
   push:
     branches:
-      - feat/kubernetes-config
-    tags:
-      - "v*"
+      - staging
+      - production
   workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
 
 permissions:
   contents: read
-  packages: write
+  id-token: write # OIDC login to AWS
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/angle-hr/server
-  PLATFORMS: linux/amd64,linux/arm64
+concurrency:
+  group: images-${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   build-and-push:
-    name: Build and push images
+    name: Build and push (${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }})
     runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}
+    env:
+      # Fargate task definitions use X86_64.
+      PLATFORMS: linux/amd64
+      TAG: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN || secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || secrets.AWS_REGION }}
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Docker metadata (server)
-        id: meta_server
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_PREFIX }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Docker metadata (email-worker)
-        id: meta_email_worker
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_PREFIX }}-email-worker
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Docker metadata (migrate)
-        id: meta_migrate
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_PREFIX }}-migrate
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
+      # A re-run for the same commit would fail on the immutable tag; skip images that already exist.
+      - name: Check existing images
+        id: exists
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          for image in server email-worker jobs migrate; do
+            key="$(echo "$image" | tr '-' '_')"
+            if docker buildx imagetools inspect "$REGISTRY/openhr/$image:$TAG" >/dev/null 2>&1; then
+              echo "$image:$TAG already in ECR; skipping"
+              echo "$key=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$key=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
 
       - name: Build and push server
+        if: steps.exists.outputs.server != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -78,12 +87,12 @@ jobs:
           target: server
           platforms: ${{ env.PLATFORMS }}
           push: true
-          tags: ${{ steps.meta_server.outputs.tags }}
-          labels: ${{ steps.meta_server.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ steps.ecr.outputs.registry }}/openhr/server:${{ env.TAG }}
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=max,scope=server
 
       - name: Build and push email-worker
+        if: steps.exists.outputs.email_worker != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -91,19 +100,39 @@ jobs:
           target: email-worker
           platforms: ${{ env.PLATFORMS }}
           push: true
-          tags: ${{ steps.meta_email_worker.outputs.tags }}
-          labels: ${{ steps.meta_email_worker.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ steps.ecr.outputs.registry }}/openhr/email-worker:${{ env.TAG }}
+          cache-from: type=gha,scope=email-worker
+          cache-to: type=gha,mode=max,scope=email-worker
+
+      - name: Build and push jobs
+        if: steps.exists.outputs.jobs != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: jobs
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/openhr/jobs:${{ env.TAG }}
+          cache-from: type=gha,scope=jobs
+          cache-to: type=gha,mode=max,scope=jobs
 
       - name: Build and push migrate
+        if: steps.exists.outputs.migrate != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.migrate
           platforms: ${{ env.PLATFORMS }}
           push: true
-          tags: ${{ steps.meta_migrate.outputs.tags }}
-          labels: ${{ steps.meta_migrate.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ steps.ecr.outputs.registry }}/openhr/migrate:${{ env.TAG }}
+          cache-from: type=gha,scope=migrate
+          cache-to: type=gha,mode=max,scope=migrate
+
+      - name: Summary
+        run: |
+          {
+            echo "### Images for \`${TAG}\`"
+            echo
+            echo "Set \`image_tag = \"${TAG}\"\` in infra/envs/${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}/terraform.tfvars and apply."
+          } >> "$GITHUB_STEP_SUMMARY"

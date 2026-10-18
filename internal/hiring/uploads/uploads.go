@@ -114,8 +114,10 @@ type Directory interface {
 type Service struct {
 	Registry  public.Registry
 	Directory Directory
-	Scanner   Scanner // required
-	Limiter   apply.Limiter
+	Scanner   Scanner // used for every region without its own entry in Scanners; one of the two is required
+	// Scanners holds a scanner per region (registry region name), so a file is scanned where it is stored.
+	Scanners map[string]Scanner
+	Limiter  apply.Limiter
 	// PlanMaxMB returns the company's plan limit in MB; nil or 0 means no plan limit beyond the question's.
 	// Plans: 5 MB free, 10 MB paid. There is no plan data source yet, so it is unset.
 	PlanMaxMB func(ctx context.Context, tenantID string) int
@@ -124,6 +126,14 @@ type Service struct {
 }
 
 var _ apply.Uploads = (*Service)(nil)
+
+// scanner is the scanner for files stored in reg, or nil when that region has none.
+func (s *Service) scanner(reg string) Scanner {
+	if sc := s.Scanners[reg]; sc != nil {
+		return sc
+	}
+	return s.Scanner
+}
 
 func (s *Service) now() time.Time {
 	if s.Now != nil {
@@ -193,7 +203,7 @@ func fieldErr(path, msg string) error {
 
 // Presign checks the request against the job's frozen form and returns a one-time upload URL.
 func (s *Service) Presign(ctx context.Context, in PresignInput) (*Presigned, error) {
-	if s.Scanner == nil {
+	if s.Scanner == nil && len(s.Scanners) == 0 {
 		return nil, apply.ErrFilesUnavailable
 	}
 	if s.Limiter != nil {
@@ -208,6 +218,9 @@ func (s *Service) Presign(ctx context.Context, in PresignInput) (*Presigned, err
 	entry, err := s.Registry.LookupJob(ctx, in.PublicID)
 	if err != nil {
 		return nil, err
+	}
+	if s.scanner(entry.Region) == nil {
+		return nil, apply.ErrFilesUnavailable
 	}
 	store, err := s.Directory.Store(entry.Region)
 	if err != nil {
@@ -310,7 +323,8 @@ func rejected(why string) error { return fmt.Errorf("%w: %s", apply.ErrFileRejec
 // marked clean and its scanned bytes are stored under the final key; calling Claim again for the same token
 // (a retried submit) does not scan again.
 func (s *Service) Claim(ctx context.Context, req apply.ClaimRequest) (apply.File, error) {
-	if s.Scanner == nil {
+	scanner := s.scanner(req.Region)
+	if scanner == nil {
 		return apply.File{}, apply.ErrFilesUnavailable
 	}
 	if !uuidRE.MatchString(req.Token) {
@@ -391,7 +405,7 @@ func (s *Service) Claim(ctx context.Context, req apply.ClaimRequest) (apply.File
 		return reject("size differs from the declared size")
 	}
 
-	verdict, err := s.Scanner.Scan(ctx, bytes.NewReader(data))
+	verdict, err := scanner.Scan(ctx, bytes.NewReader(data))
 	if err != nil {
 		if s.Logger != nil {
 			s.Logger.Error("uploads: scan failed", "error", err)

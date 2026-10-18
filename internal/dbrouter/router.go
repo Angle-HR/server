@@ -107,11 +107,8 @@ func validateRegionConfig(cfg RegionConfig) error {
 	if cfg.R2Endpoint == "" {
 		return fmt.Errorf("dbrouter: r2 endpoint is required for region %q", cfg.Region)
 	}
-	if cfg.R2AccessKey == "" {
-		return fmt.Errorf("dbrouter: r2 access key is required for region %q", cfg.Region)
-	}
-	if cfg.R2SecretKey == "" {
-		return fmt.Errorf("dbrouter: r2 secret key is required for region %q", cfg.Region)
+	if (cfg.R2AccessKey == "") != (cfg.R2SecretKey == "") {
+		return fmt.Errorf("dbrouter: r2 access key and secret key must both be set or both empty for region %q", cfg.Region)
 	}
 	if cfg.R2Bucket == "" {
 		return fmt.Errorf("dbrouter: r2 bucket is required for region %q", cfg.Region)
@@ -148,10 +145,22 @@ func newPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 }
 
 func newR2Client(cfg RegionConfig) (*minio.Client, error) {
+	creds := credentials.NewStaticV4(cfg.R2AccessKey, cfg.R2SecretKey, "")
+	if cfg.R2AccessKey == "" {
+		// AWS_ACCESS_KEY_ID etc. first (local runs), then the ECS task role / instance profile.
+		creds = credentials.NewChainCredentials([]credentials.Provider{
+			&credentials.EnvAWS{},
+			&credentials.IAM{},
+		})
+	}
+	signingRegion := cfg.R2Region
+	if signingRegion == "" {
+		signingRegion = "auto"
+	}
 	client, err := minio.New(cfg.R2Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(cfg.R2AccessKey, cfg.R2SecretKey, ""),
+		Creds:  creds,
 		Secure: cfg.R2UseSSL,
-		Region: "auto",
+		Region: signingRegion,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create r2 client: %w", err)

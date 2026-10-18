@@ -30,8 +30,10 @@ import (
 // PUBLIC_SITE_URL is the origin that serves /j/{public_id}; it falls back to PUBLIC_API_URL. Canonical links,
 // share links and the sitemap are built from it.
 //
-// File uploads (CVs) are on only when CLAMAV_ADDR (host:port of a clamd) is set. Without a scanner the upload
-// endpoint answers 503 and forms that ask for a file cannot be answered: an unscanned file is never accepted.
+// File uploads (CVs) are on only when a clamd (host:port) is configured: ANGLEHR_<REGION>_CLAMAV_ADDR per region,
+// falling back to CLAMAV_ADDR, so a file is scanned in the region that stores it. Without a scanner for a job's
+// region the upload endpoint answers 503 and forms that ask for a file cannot be answered: an unscanned file is
+// never accepted.
 func newPublicHandler(
 	cfg config.Config, router *dbrouter.DBRouter, global *pgxpool.Pool, rdb *goredis.Client, log *slog.Logger,
 ) *hiringhttp.PublicHandler {
@@ -64,7 +66,7 @@ func newPublicHandler(
 	}
 	h := hiringhttp.NewPublicHandler(pub, app)
 
-	if addr := strings.TrimSpace(os.Getenv("CLAMAV_ADDR")); addr != "" {
+	if scanners := regionScanners(); len(scanners) > 0 {
 		limiter := redislimit.New(rdb)
 		up := &uploads.Service{
 			Registry: g,
@@ -74,16 +76,32 @@ func newPublicHandler(
 					return regionStorage(router, region.Region(reg))
 				},
 			},
-			Scanner: &uploads.ClamAV{Addr: addr},
-			Limiter: limiter,
-			Logger:  log,
+			Scanners: scanners,
+			Limiter:  limiter,
+			Logger:   log,
 		}
 		app.Uploads = up
 		h.Uploads = up
 	} else {
-		log.Warn("file uploads are off: CLAMAV_ADDR is not set")
+		log.Warn("file uploads are off: neither CLAMAV_ADDR nor any ANGLEHR_<REGION>_CLAMAV_ADDR is set")
 	}
 	return h
+}
+
+// regionScanners is one clamd per region that has an address: ANGLEHR_<REGION>_CLAMAV_ADDR, else CLAMAV_ADDR.
+func regionScanners() map[string]uploads.Scanner {
+	fallback := strings.TrimSpace(os.Getenv("CLAMAV_ADDR"))
+	scanners := map[string]uploads.Scanner{}
+	for _, reg := range dbrouter.Regions() {
+		addr := strings.TrimSpace(os.Getenv("ANGLEHR_" + strings.ToUpper(string(reg)) + "_CLAMAV_ADDR"))
+		if addr == "" {
+			addr = fallback
+		}
+		if addr != "" {
+			scanners[string(reg)] = &uploads.ClamAV{Addr: addr}
+		}
+	}
+	return scanners
 }
 
 // regionStorage is a region's bucket for uploads.

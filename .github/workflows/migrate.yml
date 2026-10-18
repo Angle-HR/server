@@ -1,19 +1,22 @@
-# Runs database migrations on push to staging and production,
-# or manually from the Actions tab (Run workflow).
+# Runs database migrations as a one-off ECS task inside the environment's VPC (RDS is private), started
+# manually from the Actions tab (Run workflow).
 #
-# GitHub Environment setup (Settings → Environments):
+# The task runs the migrate image Terraform deployed (`image_tag` in infra/envs/<env>/terraform.tfvars), so the
+# order for a release with new migrations is: push (Container Images builds the sha) → set image_tag and
+# `terraform apply` → run this workflow. The run fails if the deployed image is not the one you expect.
 #
-#   staging     — used when pushing to the staging branch
-#   production  — used when pushing to the production branch
+# GitHub Environment setup (Settings → Environments → Variables or Secrets), from `terraform output migrate_run_task` and
+# `terraform output github_deploy_role_arn` in infra/envs/<env>:
 #
-# Each environment needs one secret (same name, different host/creds per env):
-#   POSTGRES_DSN — base Postgres URL without a database name, e.g.
-#     postgres://postgres:SECRET@db.example.com:5432?sslmode=require
-# The workflow builds one DSN per db by appending /openhr_<region> for each
-# entry in REGIONS (uk|us|africa|eu|asia|global).
+#   AWS_DEPLOY_ROLE_ARN      — github_deploy_role_arn
+#   AWS_REGION               — e.g. eu-west-2
+#   ECS_CLUSTER              — migrate_run_task.cluster
+#   MIGRATE_TASK_DEFINITION  — migrate_run_task.task_definition (the family; the latest revision runs)
+#   MIGRATE_SUBNETS          — migrate_run_task.subnets, comma-separated
+#   MIGRATE_SECURITY_GROUP   — migrate_run_task.security_group
 #
-# Optional: enable Required reviewers on production; restrict each environment
-# to its deployment branch (staging → staging, production → production).
+# Optional: enable Required reviewers on production; restrict each environment to its deployment branch
+# (staging → staging, production → production).
 
 name: Database Migrations
 
@@ -27,74 +30,98 @@ on:
         options:
           - staging
           - production
-  push:
-    branches:
-      - production
-      - staging
-    paths:
-      - "db/migrations/**/*.sql"
+      expected_sha:
+        description: Fail unless the deployed migrate image is tagged with this commit sha (blank = no check)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write # OIDC login to AWS
 
 concurrency:
-  group: migrate-${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}
+  group: migrate-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
   migrate:
-    name: Migrate (${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }})
+    name: Migrate (${{ inputs.environment }})
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_name == 'production' && 'production' || 'staging') }}
+    environment: ${{ inputs.environment }}
     env:
-      # Database name suffixes on the shared Postgres host (openhr_<region>).
-      REGIONS: uk us africa eu asia global
-      TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_name == 'production' && 'production' || 'staging') }}
+      CLUSTER: ${{ vars.ECS_CLUSTER || secrets.ECS_CLUSTER }}
+      FAMILY: ${{ vars.MIGRATE_TASK_DEFINITION || secrets.MIGRATE_TASK_DEFINITION }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          # Manual runs use the selected environment's branch so migrations match that deploy.
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN || secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || secrets.AWS_REGION }}
 
-      - name: Install migration tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
-          curl -fsSL -o /tmp/goose \
-            https://github.com/pressly/goose/releases/download/v3.24.1/goose_linux_x86_64
-          sudo install -m 0755 /tmp/goose /usr/local/bin/goose
-          goose --version
-          psql --version
-
-      - name: Run all migrations
+      - name: Check the deployed migrate image
         env:
-          POSTGRES_DSN: ${{ secrets.POSTGRES_DSN }}
-          # This workflow only runs on db/migrations/**/*.sql changes (push) or manual dispatch.
-          FORCE_MIGRATE: "1"
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
         run: |
           set -euo pipefail
-
-          if [[ -z "${POSTGRES_DSN:-}" ]]; then
-            echo "POSTGRES_DSN secret is required" >&2
+          image="$(aws ecs describe-task-definition --task-definition "$FAMILY" \
+            --query 'taskDefinition.containerDefinitions[0].image' --output text)"
+          echo "Migrate image: $image"
+          if [[ -n "${EXPECTED_SHA}" && "${image##*:}" != "${EXPECTED_SHA}" ]]; then
+            echo "Deployed migrate image is ${image##*:}, expected ${EXPECTED_SHA}. Set image_tag and terraform apply first." >&2
             exit 1
           fi
 
-          # Insert /dbname before any query string on the base URL.
-          dsn_for() {
-            local db="openhr_$1"
-            if [[ "$POSTGRES_DSN" == *"?"* ]]; then
-              local base="${POSTGRES_DSN%%\?*}"
-              local query="${POSTGRES_DSN#*\?}"
-              echo "${base%/}/${db}?${query}"
-            else
-              echo "${POSTGRES_DSN%/}/${db}"
-            fi
-          }
+      - name: Run migrate task
+        id: run
+        env:
+          SUBNETS: ${{ vars.MIGRATE_SUBNETS || secrets.MIGRATE_SUBNETS }}
+          SECURITY_GROUP: ${{ vars.MIGRATE_SECURITY_GROUP || secrets.MIGRATE_SECURITY_GROUP }}
+        run: |
+          set -euo pipefail
+          task_arn="$(aws ecs run-task \
+            --cluster "$CLUSTER" \
+            --task-definition "$FAMILY" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${SUBNETS}],securityGroups=[${SECURITY_GROUP}],assignPublicIp=DISABLED}" \
+            --started-by "github-${GITHUB_RUN_ID}" \
+            --query 'tasks[0].taskArn' --output text)"
+          if [[ -z "$task_arn" || "$task_arn" == "None" ]]; then
+            echo "run-task did not start a task" >&2
+            exit 1
+          fi
+          echo "Started $task_arn"
+          echo "task_arn=$task_arn" >> "$GITHUB_OUTPUT"
 
-          for region in ${REGIONS}; do
-            if [[ "$region" == "global" ]]; then
-              export DB_URL_GLOBAL="$(dsn_for global)"
-              continue
+      - name: Wait for the task to stop
+        env:
+          TASK_ARN: ${{ steps.run.outputs.task_arn }}
+        run: |
+          set -euo pipefail
+          # The default waiter gives up after 10 minutes; migrations across six databases can take longer.
+          for _ in 1 2 3; do
+            if aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK_ARN"; then
+              exit 0
             fi
-            suffix="$(printf '%s' "$region" | tr '[:lower:]' '[:upper:]')"
-            export "ANGLEHR_${suffix}_POSTGRES_DSN=$(dsn_for "$region")"
           done
+          echo "Task still running after 30 minutes" >&2
+          exit 1
 
-          bash db/migrations/migrate-all.sh up
+      - name: Print logs and check the exit code
+        if: always() && steps.run.outputs.task_arn != ''
+        env:
+          TASK_ARN: ${{ steps.run.outputs.task_arn }}
+        run: |
+          set -euo pipefail
+          task_id="${TASK_ARN##*/}"
+          # awslogs-stream-prefix "job" / container name (= family) / task id; see infra/modules/ecs_job.
+          aws logs get-log-events \
+            --log-group-name "/ecs/${FAMILY}" \
+            --log-stream-name "job/${FAMILY}/${task_id}" \
+            --start-from-head --query 'events[].message' --output text | tr '\t' '\n' || echo "(no logs found)"
+
+          read -r exit_code reason < <(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK_ARN" \
+            --query 'tasks[0].[containers[0].exitCode, stoppedReason]' --output text)
+          echo "Exit code: ${exit_code}; stopped reason: ${reason}"
+          if [[ "$exit_code" != "0" ]]; then
+            exit 1
+          fi

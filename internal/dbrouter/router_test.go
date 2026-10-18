@@ -218,3 +218,95 @@ func setFullEnv(t *testing.T) {
 		t.Setenv(prefix+"_R2_BUCKET", r.bucket)
 	}
 }
+
+func TestLoadConfigsFromEnv_noKeysUsesCredentialChain(t *testing.T) {
+	setFullEnv(t)
+	t.Setenv("R2_ACCESS_KEY", "")
+	t.Setenv("R2_SECRET_KEY", "")
+	t.Setenv("R2_ENDPOINT", "https://s3.eu-west-2.amazonaws.com")
+
+	configs, err := LoadConfigsFromEnv()
+	if err != nil {
+		t.Fatalf("LoadConfigsFromEnv: %v", err)
+	}
+	for _, cfg := range configs {
+		if cfg.R2AccessKey != "" || cfg.R2SecretKey != "" {
+			t.Fatalf("region %s: expected empty keys", cfg.Region)
+		}
+		if cfg.R2Region != "eu-west-2" {
+			t.Fatalf("region %s signing region: got %q", cfg.Region, cfg.R2Region)
+		}
+		if !cfg.R2UseSSL {
+			t.Fatalf("region %s: expected SSL for S3", cfg.Region)
+		}
+		if err := validateRegionConfig(cfg); err != nil {
+			t.Fatalf("validateRegionConfig: %v", err)
+		}
+		if _, err := newR2Client(cfg); err != nil {
+			t.Fatalf("newR2Client: %v", err)
+		}
+	}
+}
+
+func TestLoadConfigsFromEnv_onlyOneKey(t *testing.T) {
+	setFullEnv(t)
+	t.Setenv("R2_SECRET_KEY", "")
+
+	if _, err := LoadConfigsFromEnv(); err == nil {
+		t.Fatal("expected error when only R2_ACCESS_KEY is set")
+	}
+}
+
+func TestLoadConfigsFromEnv_perRegionEndpoint(t *testing.T) {
+	setFullEnv(t)
+	t.Setenv("R2_ENDPOINT", "https://s3.eu-west-2.amazonaws.com")
+	t.Setenv("ANGLEHR_ASIA_R2_ENDPOINT", "https://s3.ap-southeast-1.amazonaws.com")
+	t.Setenv("ANGLEHR_US_R2_REGION", "us-east-1")
+
+	configs, err := LoadConfigsFromEnv()
+	if err != nil {
+		t.Fatalf("LoadConfigsFromEnv: %v", err)
+	}
+	want := map[region.Region][2]string{
+		region.RegionUK:   {"s3.eu-west-2.amazonaws.com", "eu-west-2"},
+		region.RegionAsia: {"s3.ap-southeast-1.amazonaws.com", "ap-southeast-1"},
+		region.RegionUS:   {"s3.eu-west-2.amazonaws.com", "us-east-1"},
+	}
+	for _, cfg := range configs {
+		w, ok := want[cfg.Region]
+		if !ok {
+			continue
+		}
+		if cfg.R2Endpoint != w[0] || cfg.R2Region != w[1] {
+			t.Fatalf("region %s: got %q / %q, want %q / %q", cfg.Region, cfg.R2Endpoint, cfg.R2Region, w[0], w[1])
+		}
+	}
+}
+
+func TestLoadConfigsFromEnv_r2SigningRegionAuto(t *testing.T) {
+	setFullEnv(t)
+
+	configs, err := LoadConfigsFromEnv()
+	if err != nil {
+		t.Fatalf("LoadConfigsFromEnv: %v", err)
+	}
+	for _, cfg := range configs {
+		if cfg.R2Region != "auto" {
+			t.Fatalf("region %s: got %q, want auto", cfg.Region, cfg.R2Region)
+		}
+	}
+}
+
+func TestAWSRegionFromEndpoint(t *testing.T) {
+	for in, want := range map[string]string{
+		"s3.eu-west-2.amazonaws.com":            "eu-west-2",
+		"s3.dualstack.af-south-1.amazonaws.com": "af-south-1",
+		"s3.us-east-1.amazonaws.com:443":        "us-east-1",
+		"abc123.r2.cloudflarestorage.com":       "",
+		"localhost:9000":                        "",
+	} {
+		if got := awsRegionFromEndpoint(in); got != want {
+			t.Errorf("awsRegionFromEndpoint(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

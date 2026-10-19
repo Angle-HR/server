@@ -14,8 +14,8 @@
 | Migrations | ECS one-off task from the migrate image, triggered by GitHub Actions over OIDC. RDS stays private. |
 | Registry | ECR per account, replicated to satellite regions. |
 | Scheduled jobs | One `jobs` image, EventBridge Scheduler runs ECS tasks with a command override. Outbox 2 min, expire 1 h, kyb-sweep 1 h, uploads-sweep 15 min, retention nightly 02:00 UTC. |
-| Edge | CloudFront + AWS WAF (managed rules + rate limits, 100 POSTs / 5 min / IP on /public/*) in front of ALB and S3. ALB only reachable from CloudFront (prefix list + secret header). |
-| Frontends | Product app and admin console on S3 + CloudFront; fluvio-ui as a Fargate service on its own host, IP allow-listed plus basic auth. |
+| Edge | CloudFront + AWS WAF (managed rules + rate limits, 100 POSTs / 5 min / IP on /public/*) in front of the ALB, which routes each site by headers CloudFront adds. ALB only reachable from CloudFront (prefix list + secret header). Staging runs without CloudFront (`cloudfront_enabled = false`, `modules/direct_edge`) until AWS verifies the account. |
+| Frontends | Product app (Next.js) and admin console (TanStack Start) are SSR, so they run as Fargate services behind the ALB, each deployed by its own repo's CI; only hashed build assets are cached at CloudFront. fluvio-ui as a Fargate service on its own host, IP allow-listed plus basic auth. |
 | DNS | Route 53 zone managed by Terraform (staging is a delegated sub-zone). |
 | Redis | ElastiCache single node, TLS (rediss://), home region. Rate limits fail open on node loss. |
 | Backups | 7-day PITR; privacy notice must state deleted data can persist in backups up to 7 days (needs counsel). No cross-region backup copies (would break residency). |

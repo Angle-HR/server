@@ -11,6 +11,13 @@ locals {
   origin_domain = "origin.${var.zone_name}"
   fluvio_domain = "fluvio.${var.zone_name}"
 
+  # SSR frontends, each built and pushed as :production by its own repo's CI (modules/github_image_deploy), which then
+  # forces a new deployment. NEXT_PUBLIC_* / VITE_* values are baked in at build time there, not set here.
+  frontends = {
+    client = { repo = "Angle-HR/client", env = { HOSTNAME = "0.0.0.0" } }
+    admin  = { repo = "Angle-HR/admin", env = { HOST = "0.0.0.0" } }
+  }
+
   # CIDRs must not overlap: every satellite VPC is peered to the home VPC.
   # They are constants (not module outputs) because they key for_each blocks that must be known at plan time.
   home_cidr = "10.10.0.0/16"
@@ -160,6 +167,14 @@ resource "aws_vpc_security_group_ingress_rule" "app_from_alb_fluvio" {
   to_port                      = 80
 }
 
+resource "aws_vpc_security_group_ingress_rule" "app_from_alb_frontends" {
+  security_group_id            = aws_security_group.app.id
+  referenced_security_group_id = module.alb.security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = 3000
+  to_port                      = 3000
+}
+
 # UK scanner: runs here in the home region. The other four regions run theirs inside their own VPC.
 resource "aws_security_group" "clamav" {
   name        = "${local.name}-clamav"
@@ -234,7 +249,9 @@ module "secrets" {
 module "ecr" {
   source       = "../../modules/ecr"
   name_prefix  = "openhr"
-  repositories = ["server", "email-worker", "jobs", "migrate", "clamav"]
+  repositories = ["server", "email-worker", "jobs", "migrate", "clamav", "client", "admin"]
+  # Frontend CI re-pushes :production and redeploys; the backend images stay pinned by git sha (var.image_tag).
+  mutable_repositories = keys(local.frontends)
 }
 
 # Satellite regions run only ClamAV. Mirror the public image into openhr/clamav once and it replicates to them,
@@ -342,15 +359,19 @@ module "edge" {
     aws.us_east_1 = aws.us_east_1
   }
   name                = local.name
-  bucket_prefix       = local.bucket_prefix
   zone_id             = module.dns.zone_id
   app_domain          = local.app_domain
   admin_domain        = local.admin_domain
   certificate_arn     = module.cert_cloudfront.arn
   origin_domain       = local.origin_domain
   origin_verify_value = random_password.origin_verify.result
-  force_destroy       = false
-  depends_on          = [aws_route53_record.origin]
+  https_listener_arn  = module.alb.https_listener_arn
+  target_group_arns = {
+    app   = aws_lb_target_group.frontend["client"].arn
+    admin = aws_lb_target_group.frontend["admin"].arn
+    api   = module.alb.api_target_group_arn
+  }
+  depends_on = [aws_route53_record.origin]
 }
 
 # ---------------------------------------------------------------- compute
@@ -454,6 +475,50 @@ module "fluvio_ui" {
   depends_on         = [module.alb]
 }
 
+resource "aws_lb_target_group" "frontend" {
+  for_each    = local.frontends
+  name        = "${local.name}-${each.key}"
+  port        = 3000
+  protocol    = "HTTP"
+  target_type = "ip"
+  vpc_id      = module.network.vpc_id
+  health_check {
+    path                = "/"
+    matcher             = "200-399"
+    interval            = 15
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+  deregistration_delay = 30
+}
+
+# The frontends call nothing in AWS, so their task role has no permissions.
+resource "aws_iam_role" "frontend_task" {
+  name = "${local.name}-frontend-task"
+  assume_role_policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [{ Effect = "Allow", Action = "sts:AssumeRole", Principal = { Service = "ecs-tasks.amazonaws.com" } }]
+  })
+}
+
+module "frontend" {
+  for_each           = local.frontends
+  source             = "../../modules/ecs_service"
+  name               = each.key
+  cluster_arn        = aws_ecs_cluster.this.arn
+  image              = "${module.ecr.urls[each.key]}:production"
+  container_port     = 3000
+  environment        = merge({ NODE_ENV = "production", PORT = "3000" }, each.value.env)
+  subnet_ids         = module.network.private_subnet_ids
+  security_group_ids = [aws_security_group.app.id]
+  # Zero until the repo's first CI run has pushed :production (var.frontends_enabled).
+  desired_count      = var.services_enabled && var.frontends_enabled ? 1 : 0
+  target_group_arn   = aws_lb_target_group.frontend[each.key].arn
+  execution_role_arn = module.iam.execution_role_arn
+  task_role_arn      = aws_iam_role.frontend_task.arn
+  depends_on         = [module.edge] # ECS rejects a target group that no listener rule uses yet
+}
+
 # Scheduled one-shot binaries; all ship in one "jobs" image (see CODE_CHANGES.md).
 module "job" {
   for_each            = local.jobs
@@ -491,11 +556,19 @@ module "github_deploy" {
   source                = "../../modules/github_deploy"
   name                  = local.name
   allowed_subjects      = ["repo:${var.github_repo}:environment:production"]
-  ecr_repository_arns   = values(module.ecr.arns)
+  ecr_repository_arns   = [for k, a in module.ecr.arns : a if !contains(keys(local.frontends), k)] # frontends deploy with their own roles
   cluster_arn           = aws_ecs_cluster.this.arn
   migrate_task_family   = module.migrate.task_definition_family
   pass_role_arns        = [module.iam.execution_role_arn, module.iam.task_role_arn]
   log_group_arn_pattern = "arn:aws:logs:${var.region}:${local.account_id}:log-group:/ecs/${local.name}-migrate:*"
-  frontend_bucket_arns  = module.edge.bucket_arns
-  distribution_arns     = module.edge.distribution_arns
+}
+
+module "frontend_deploy" {
+  for_each           = local.frontends
+  source             = "../../modules/github_image_deploy"
+  name               = "${local.name}-${each.key}"
+  allowed_subjects   = ["repo:${each.value.repo}:environment:production"]
+  ecr_repository_arn = module.ecr.arns[each.key]
+  cluster_name       = aws_ecs_cluster.this.name
+  service_name       = module.frontend[each.key].service_name
 }

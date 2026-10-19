@@ -7,8 +7,9 @@ only HCL syntax and a module-argument cross-check were run). Expect a round of `
 ```
 infra/
   bootstrap/            once per AWS account: state bucket + GitHub OIDC provider
-  modules/              network, rds, redis, ecs_service, ecs_job, alb, edge (CloudFront+WAF+S3), uploads,
-                        secrets, iam, ecr, dns, acm_cert, github_deploy, satellite_region
+  modules/              network, rds, redis, ecs_service, ecs_job, alb, edge (CloudFront+WAF), direct_edge (no-CloudFront
+                        stand-in), waf, uploads, secrets, iam, ecr, dns, acm_cert, github_deploy, github_image_deploy,
+                        satellite_region
   envs/staging/         full staging stack (single region, collapsed topology)
   envs/production/      home region + four peered satellite regions (eu, us, asia, africa)
   ARCHITECTURE.md       Mermaid diagrams of both stacks
@@ -38,7 +39,9 @@ infra/
    sealed special-category answers unreadable.
 6. Make the CI changes in `CODE_CHANGES.md`, push images tagged with the git sha to ECR, set `image_tag`.
 7. **Run migrations** (creates the five regional DBs + global): `aws ecs run-task` using `terraform output migrate_run_task`.
-8. Set `services_enabled = true`, `terraform apply`. Then deploy the frontends to the two `frontend_buckets` and invalidate CloudFront.
+8. Set `services_enabled = true`, `terraform apply`. Then deploy the frontends: each repo (`Angle-HR/client`, `Angle-HR/admin`)
+   pushes its image with `.github/workflows/deploy-staging.yml` using the role from `terraform output frontend_deploy_role_arns`;
+   once both images exist, set `frontends_enabled = true` and apply.
 
 ## Things that will surprise you
 

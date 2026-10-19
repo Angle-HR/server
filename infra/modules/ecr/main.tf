@@ -1,5 +1,10 @@
 variable "name_prefix" { type = string }
 variable "repositories" { type = set(string) }
+variable "mutable_repositories" {
+  description = "Repositories whose tags can be overwritten, e.g. a frontend redeployed by re-pushing :staging"
+  type        = set(string)
+  default     = []
+}
 variable "keep_images" {
   type    = number
   default = 30
@@ -8,7 +13,7 @@ variable "keep_images" {
 resource "aws_ecr_repository" "this" {
   for_each             = var.repositories
   name                 = "${var.name_prefix}/${each.key}"
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = contains(var.mutable_repositories, each.key) ? "MUTABLE" : "IMMUTABLE"
   image_scanning_configuration {
     scan_on_push = true
   }

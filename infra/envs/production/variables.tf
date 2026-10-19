@@ -39,6 +39,12 @@ variable "services_enabled" {
   default     = false
 }
 
+variable "frontends_enabled" {
+  description = "Run the client and admin services. Leave false until each repo's CI has pushed its :production image."
+  type        = bool
+  default     = false
+}
+
 variable "jobs_enabled" {
   type    = bool
   default = true

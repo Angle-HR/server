@@ -90,6 +90,18 @@ locals {
     email-worker = 1
     fluvio-ui    = 1
     clamav       = 1
+    client       = 1
+    admin        = 1
+  }
+
+  # The API has its own host; the app host keeps only the server-rendered job pages (/j/<id>, /j/<id>/privacy).
+  app_server_paths = ["/j/*"]
+
+  # SSR frontends, each built and pushed as :staging by its own repo's CI (modules/github_image_deploy), which then
+  # forces a new deployment. NEXT_PUBLIC_* / VITE_* values are baked in at build time there, not set here.
+  frontends = {
+    client = { repo = "Angle-HR/client", host = local.app_domain, env = { HOSTNAME = "0.0.0.0" } }
+    admin  = { repo = "Angle-HR/admin", host = local.admin_domain, env = { HOST = "0.0.0.0" } }
   }
 }
 
@@ -128,6 +140,14 @@ resource "aws_vpc_security_group_ingress_rule" "app_from_alb_fluvio" {
   ip_protocol                  = "tcp"
   from_port                    = 80
   to_port                      = 80
+}
+
+resource "aws_vpc_security_group_ingress_rule" "app_from_alb_frontends" {
+  security_group_id            = aws_security_group.app.id
+  referenced_security_group_id = module.alb.security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = 3000
+  to_port                      = 3000
 }
 
 # API (and its /api/docs) from a laptop through the bastion: infra/scripts/api-tunnel.sh.
@@ -230,7 +250,9 @@ module "secrets" {
 module "ecr" {
   source       = "../../modules/ecr"
   name_prefix  = "openhr"
-  repositories = ["server", "email-worker", "jobs", "migrate"]
+  repositories = ["server", "email-worker", "jobs", "migrate", "client", "admin"]
+  # Frontend CI re-pushes :staging and redeploys; the backend images stay pinned by git sha (var.image_tag).
+  mutable_repositories = keys(local.frontends)
 }
 
 module "iam" {
@@ -259,6 +281,18 @@ module "cert_cloudfront" {
   domain    = local.app_domain
   sans      = [local.admin_domain, local.api_domain]
   zone_id   = module.dns.zone_id
+}
+
+# Same names as cert_cloudfront, in the ALB's region, for direct mode. Its DNS validation records are the ones
+# cert_cloudfront already manages (identical across regions).
+module "cert_direct" {
+  count                     = var.cloudfront_enabled ? 0 : 1
+  source                    = "../../modules/acm_cert"
+  domain                    = local.app_domain
+  sans                      = [local.admin_domain, local.api_domain]
+  zone_id                   = module.dns.zone_id
+  create_validation_records = false
+  depends_on                = [module.cert_cloudfront]
 }
 
 # ---------------------------------------------------------------- edge
@@ -307,19 +341,43 @@ module "edge" {
     aws           = aws
     aws.us_east_1 = aws.us_east_1
   }
-  name          = local.name
-  bucket_prefix = local.bucket_prefix
-  zone_id       = module.dns.zone_id
-  app_domain    = local.app_domain
-  admin_domain  = local.admin_domain
-  api_domain    = local.api_domain
-  # The API has its own host; the app host keeps only the server-rendered job pages (/j/<id>, /j/<id>/privacy).
-  api_path_patterns   = ["/j/*"]
-  certificate_arn     = module.cert_cloudfront.arn
-  origin_domain       = local.origin_domain
-  origin_verify_value = random_password.origin_verify.result
-  force_destroy       = true # staging only
-  depends_on          = [aws_route53_record.origin]
+  name                 = local.name
+  zone_id              = module.dns.zone_id
+  app_domain           = local.app_domain
+  admin_domain         = local.admin_domain
+  api_domain           = local.api_domain
+  server_path_patterns = local.app_server_paths
+  certificate_arn      = module.cert_cloudfront.arn
+  origin_domain        = local.origin_domain
+  origin_verify_value  = random_password.origin_verify.result
+  https_listener_arn   = module.alb.https_listener_arn
+  target_group_arns = {
+    app   = aws_lb_target_group.frontend["client"].arn
+    admin = aws_lb_target_group.frontend["admin"].arn
+    api   = module.alb.api_target_group_arn
+  }
+  cloudfront_enabled = var.cloudfront_enabled
+  alb_dns_name       = module.alb.dns_name
+  alb_zone_id        = module.alb.zone_id
+  depends_on         = [aws_route53_record.origin]
+}
+
+# While the account can't create CloudFront distributions: public ALB and a regional WAF in front of the same services.
+module "direct_edge" {
+  count                  = var.cloudfront_enabled ? 0 : 1
+  source                 = "../../modules/direct_edge"
+  name                   = local.name
+  alb_arn                = module.alb.arn
+  alb_security_group_id  = module.alb.security_group_id
+  https_listener_arn     = module.alb.https_listener_arn
+  certificate_arn        = module.cert_direct[0].arn
+  api_target_group_arn   = module.alb.api_target_group_arn
+  app_domain             = local.app_domain
+  admin_domain           = local.admin_domain
+  api_domain             = local.api_domain
+  server_path_patterns   = local.app_server_paths
+  app_target_group_arn   = aws_lb_target_group.frontend["client"].arn
+  admin_target_group_arn = aws_lb_target_group.frontend["admin"].arn
 }
 
 # ---------------------------------------------------------------- compute
@@ -426,6 +484,50 @@ module "fluvio_ui" {
   depends_on         = [module.alb]
 }
 
+resource "aws_lb_target_group" "frontend" {
+  for_each    = local.frontends
+  name        = "${local.name}-${each.key}"
+  port        = 3000
+  protocol    = "HTTP"
+  target_type = "ip"
+  vpc_id      = module.network.vpc_id
+  health_check {
+    path                = "/"
+    matcher             = "200-399"
+    interval            = 15
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+  deregistration_delay = 30
+}
+
+# The frontends call nothing in AWS, so their task role has no permissions.
+resource "aws_iam_role" "frontend_task" {
+  name = "${local.name}-frontend-task"
+  assume_role_policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [{ Effect = "Allow", Action = "sts:AssumeRole", Principal = { Service = "ecs-tasks.amazonaws.com" } }]
+  })
+}
+
+module "frontend" {
+  for_each           = local.frontends
+  source             = "../../modules/ecs_service"
+  name               = each.key
+  cluster_arn        = aws_ecs_cluster.this.arn
+  image              = "${local.image_prefix[each.key]}:staging"
+  container_port     = 3000
+  environment        = merge({ NODE_ENV = "production", PORT = "3000" }, each.value.env)
+  subnet_ids         = module.network.private_subnet_ids
+  security_group_ids = [aws_security_group.app.id]
+  # Zero until the repo's first CI run has pushed :staging (var.frontends_enabled).
+  desired_count      = var.services_enabled && var.frontends_enabled ? local.running_counts[each.key] : 0
+  target_group_arn   = aws_lb_target_group.frontend[each.key].arn
+  execution_role_arn = module.iam.execution_role_arn
+  task_role_arn      = aws_iam_role.frontend_task.arn
+  depends_on         = [module.direct_edge, module.edge] # ECS rejects a target group that no listener rule uses yet
+}
+
 # Scheduled one-shot binaries; all ship in one "jobs" image (see CODE_CHANGES.md).
 module "job" {
   for_each            = local.jobs
@@ -463,11 +565,19 @@ module "github_deploy" {
   source                = "../../modules/github_deploy"
   name                  = local.name
   allowed_subjects      = ["repo:${var.github_repo}:environment:staging"]
-  ecr_repository_arns   = values(module.ecr.arns)
+  ecr_repository_arns   = [for k, a in module.ecr.arns : a if !contains(keys(local.frontends), k)] # frontends deploy with their own roles
   cluster_arn           = aws_ecs_cluster.this.arn
   migrate_task_family   = module.migrate.task_definition_family
   pass_role_arns        = [module.iam.execution_role_arn, module.iam.task_role_arn]
   log_group_arn_pattern = "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${local.name}-migrate:*"
-  frontend_bucket_arns  = module.edge.bucket_arns
-  distribution_arns     = module.edge.distribution_arns
+}
+
+module "frontend_deploy" {
+  for_each           = local.frontends
+  source             = "../../modules/github_image_deploy"
+  name               = "${local.name}-${each.key}"
+  allowed_subjects   = ["repo:${each.value.repo}:environment:staging"]
+  ecr_repository_arn = module.ecr.arns[each.key]
+  cluster_name       = aws_ecs_cluster.this.name
+  service_name       = module.frontend[each.key].service_name
 }

@@ -8,7 +8,7 @@ REGION="${AWS_REGION:-eu-west-2}"   # staging region; override with AWS_REGION
 NAME="openhr-staging"
 CLUSTER="$NAME"
 DB="$NAME"
-declare -A COUNTS=( [clamav]=1 [api]=1 [email-worker]=1 [fluvio-ui]=1 )  # keep in sync with local.running_counts
+declare -A COUNTS=( [clamav]=1 [api]=1 [email-worker]=1 [fluvio-ui]=1 [client]=1 [admin]=1 )  # keep in sync with local.running_counts
 
 aws_() { aws --region "$REGION" "$@"; }
 
@@ -28,10 +28,13 @@ set_schedules() { # ENABLED|DISABLED for every job schedule
 }
 
 set_services() { # desired count mode: up|down
-  local svc c
+  local svc c out
   for svc in "${!COUNTS[@]}"; do
     c=0; [ "$1" = up ] && c="${COUNTS[$svc]}"
-    aws_ ecs update-service --cluster "$CLUSTER" --service "$svc" --desired-count "$c" >/dev/null
+    if ! out="$(aws_ ecs update-service --cluster "$CLUSTER" --service "$svc" --desired-count "$c" 2>&1 >/dev/null)"; then
+      if [[ "$out" == *ServiceNotFoundException* ]]; then echo "  service $svc not deployed, skipped"; continue; fi
+      echo "$out" >&2; exit 1
+    fi
     echo "  service $svc -> $c"
   done
 }

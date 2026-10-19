@@ -13,6 +13,11 @@ variable "sans" {
   default = []
 }
 variable "zone_id" { type = string }
+variable "create_validation_records" {
+  description = "false when another certificate in the account already manages the records (same domains = same CNAMEs in every region)"
+  type        = bool
+  default     = true
+}
 
 resource "aws_acm_certificate" "this" {
   domain_name               = var.domain
@@ -24,7 +29,7 @@ resource "aws_acm_certificate" "this" {
 }
 
 resource "aws_route53_record" "validation" {
-  for_each = {
+  for_each = !var.create_validation_records ? {} : {
     for o in aws_acm_certificate.this.domain_validation_options : o.domain_name => {
       name   = o.resource_record_name
       type   = o.resource_record_type
@@ -41,7 +46,7 @@ resource "aws_route53_record" "validation" {
 
 resource "aws_acm_certificate_validation" "this" {
   certificate_arn         = aws_acm_certificate.this.arn
-  validation_record_fqdns = [for r in aws_route53_record.validation : r.fqdn]
+  validation_record_fqdns = var.create_validation_records ? [for r in aws_route53_record.validation : r.fqdn] : null
 }
 
 output "arn" { value = aws_acm_certificate_validation.this.certificate_arn }

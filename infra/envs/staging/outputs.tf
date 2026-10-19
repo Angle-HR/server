@@ -8,10 +8,13 @@ output "secret_names" {
   value       = [for k in sort(tolist(local.secret_names)) : "openhr/${local.env}/${k}"] # DSN secrets are written by Terraform and not listed
 }
 output "rds_address" { value = module.rds.address }
-output "frontend_buckets" { value = module.edge.bucket_names }
 output "cloudfront_distribution_ids" { value = module.edge.distribution_ids }
 output "uploads_buckets" { value = module.uploads.bucket_names }
 output "github_deploy_role_arn" { value = module.github_deploy.role_arn }
+output "frontend_deploy_role_arns" {
+  description = "AWS_DEPLOY_ROLE_ARN for the staging environment of each frontend repo"
+  value       = { for k, m in module.frontend_deploy : k => m.role_arn }
+}
 output "migrate_run_task" {
   description = "Values the CI migrate step needs for aws ecs run-task."
   value = {

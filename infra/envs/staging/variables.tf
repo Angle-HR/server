@@ -69,6 +69,18 @@ variable "fluvio_image" {
   default = "ghcr.io/software78/fluvio_ui:1.0.1"
 }
 
+variable "cloudfront_enabled" {
+  description = "false = no CloudFront: the ALB serves staging., admin.staging. and api.staging. directly (modules/direct_edge)."
+  type        = bool
+  default     = true
+}
+
+variable "frontends_enabled" {
+  description = "Run the client and admin services. Leave false until each repo's CI has pushed its :staging image."
+  type        = bool
+  default     = false
+}
+
 variable "bastion_enabled" {
   description = "SSM bastion for DB access from a laptop (infra/scripts/db-tunnel.sh). ~$3/month while on."
   type        = bool

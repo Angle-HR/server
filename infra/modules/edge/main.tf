@@ -1,7 +1,11 @@
-# CloudFront + WAF + private S3 frontends.
-#   app_domain   : product SPA (S3) with api_path_patterns routed to the origin ALB, and /j/*/apply routed back to the SPA
-#   admin_domain : admin console SPA (S3)
-#   api_domain   : optional; every path goes to the origin ALB (the API, its docs at / and /api/docs)
+# CloudFront + WAF in front of the origin ALB. Every site is served by the ALB, which routes on headers CloudFront adds:
+#   X-Origin-Verify (shared secret: the request came through CloudFront) and X-Edge-Site (which site: app, admin, api).
+#   app_domain   : client SSR app; server_path_patterns go to the API instead, except frontend_override_patterns
+#   admin_domain : admin SSR app
+#   api_domain   : optional; every path to the API (its docs at / and /api/docs)
+# Only cached_path_patterns (hashed build assets) are cached; everything else passes through uncached.
+# cloudfront_enabled = false skips the distributions and ALB rules and points the names at the ALB directly
+# (modules/direct_edge does the rest).
 terraform {
   required_providers {
     aws = {
@@ -16,7 +20,7 @@ variable "zone_id" { type = string }
 variable "app_domain" { type = string }
 variable "admin_domain" { type = string }
 variable "api_domain" {
-  description = "Optional host that sends every path to the API. Null = the API is only reachable via api_path_patterns on app_domain."
+  description = "Optional host that sends every path to the API. Null = the API is only reachable via server_path_patterns on app_domain."
   type        = string
   default     = null
 }
@@ -32,16 +36,30 @@ variable "origin_verify_value" {
   type      = string
   sensitive = true
 }
+variable "https_listener_arn" { type = string }
+variable "target_group_arns" {
+  description = "app, admin and api => ALB target group ARN"
+  type        = map(string)
+}
 # Server routes (internal/app/app.go): the JSON API, admin and public endpoints included, is all under /api/v1;
 # /j/{id} and /j/{id}/privacy are server-rendered pages; /fluvio/* is the Fluvio API.
-variable "api_path_patterns" {
-  type    = list(string)
-  default = ["/api/*", "/j/*", "/fluvio/*"]
+variable "server_path_patterns" {
+  description = "Paths on app_domain served by the API"
+  type        = list(string)
+  default     = ["/api/*", "/j/*", "/fluvio/*"]
 }
 # More specific than "/j/*": the Apply page is a frontend route, not a server route.
 variable "frontend_override_patterns" {
   type    = list(string)
   default = ["/j/*/apply*"]
+}
+variable "cached_path_patterns" {
+  description = "Per site, paths whose responses never change (content-hashed build output)"
+  type        = map(list(string))
+  default = {
+    app   = ["/_next/static/*"] # Next.js
+    admin = ["/assets/*"]       # Vite
+  }
 }
 variable "global_rate_limit" {
   description = "Requests per 5 minutes per IP, all paths"
@@ -53,315 +71,58 @@ variable "submit_rate_limit" {
   type        = number
   default     = 100
 }
-variable "bucket_prefix" {
-  description = "Prefix for S3 bucket names (must be globally unique). Defaults to name."
+variable "cloudfront_enabled" {
+  description = "false = no distributions; the DNS names alias the ALB instead (see modules/direct_edge)."
+  type        = bool
+  default     = true
+}
+variable "alb_dns_name" {
+  description = "Required when cloudfront_enabled = false"
   type        = string
   default     = null
 }
-variable "force_destroy" {
-  type    = bool
-  default = false
+variable "alb_zone_id" {
+  type    = string
+  default = null
 }
 
 locals {
   # AWS managed policy ids
-  caching_optimized       = "658327ea-f89d-4fab-a63d-7e88639e58f6"
-  caching_disabled        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
-  all_viewer_except_host  = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
-  security_headers_policy = "67f7725c-6f97-4210-82d7-5512b31e9d03"
-  frontends               = { app = var.app_domain, admin = var.admin_domain }
-  api_enabled             = var.api_domain != null
-  alb_origin_id           = "alb"
-  methods_all             = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+  caching_optimized      = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+  caching_disabled       = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+  all_viewer_except_host = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+  methods_all            = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+  hosts                  = merge({ app = var.app_domain, admin = var.admin_domain }, var.api_domain != null ? { api = var.api_domain } : {})
+  distributions          = aws_cloudfront_distribution.this
+  alb_rules              = var.cloudfront_enabled ? 1 : 0
 }
 
-resource "aws_s3_bucket" "frontend" {
-  for_each      = local.frontends
-  bucket        = "${coalesce(var.bucket_prefix, var.name)}-${each.key}-web"
-  force_destroy = var.force_destroy
+module "waf" {
+  source            = "../waf"
+  providers         = { aws = aws.us_east_1 }
+  name              = var.name
+  scope             = "CLOUDFRONT"
+  global_rate_limit = var.global_rate_limit
+  submit_rate_limit = var.submit_rate_limit
 }
 
-resource "aws_s3_bucket_public_access_block" "frontend" {
-  for_each                = aws_s3_bucket.frontend
-  bucket                  = each.value.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
-  for_each = aws_s3_bucket.frontend
-  bucket   = each.value.id
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-resource "aws_cloudfront_origin_access_control" "s3" {
-  name                              = "${var.name}-s3"
-  origin_access_control_origin_type = "s3"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
-}
-
-# SPA fallback done in a viewer-request function, NOT as a distribution-wide custom error response,
-# so 404s from the API are never rewritten into index.html.
-resource "aws_cloudfront_function" "spa" {
-  name    = "${var.name}-spa-rewrite"
-  runtime = "cloudfront-js-2.0"
-  publish = true
-  code    = <<-JS
-    function handler(event) {
-      var req = event.request;
-      var last = req.uri.split('/').pop();
-      if (last.indexOf('.') === -1) { req.uri = '/index.html'; }
-      return req;
-    }
-  JS
-}
-
-resource "aws_wafv2_web_acl" "this" {
-  provider = aws.us_east_1
-  name     = var.name
-  scope    = "CLOUDFRONT"
-
-  default_action {
-    allow {}
-  }
-
-  rule {
-    name     = "common"
-    priority = 10
-    override_action {
-      none {}
-    }
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesCommonRuleSet"
-        vendor_name = "AWS"
-        # Applications can legitimately post bodies larger than 8 KB.
-        rule_action_override {
-          name = "SizeRestrictions_BODY"
-          action_to_use {
-            count {}
-          }
-        }
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "${var.name}-common"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  rule {
-    name     = "bad-inputs"
-    priority = 20
-    override_action {
-      none {}
-    }
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesKnownBadInputsRuleSet"
-        vendor_name = "AWS"
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "${var.name}-bad-inputs"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  rule {
-    name     = "rate-all"
-    priority = 30
-    action {
-      block {}
-    }
-    statement {
-      rate_based_statement {
-        limit              = var.global_rate_limit
-        aggregate_key_type = "IP"
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "${var.name}-rate-all"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  rule {
-    name     = "rate-public-submit"
-    priority = 40
-    action {
-      block {}
-    }
-    statement {
-      rate_based_statement {
-        limit              = var.submit_rate_limit
-        aggregate_key_type = "IP"
-        scope_down_statement {
-          and_statement {
-            statement {
-              byte_match_statement {
-                search_string         = "POST"
-                positional_constraint = "EXACTLY"
-                field_to_match {
-                  method {}
-                }
-                text_transformation {
-                  priority = 0
-                  type     = "NONE"
-                }
-              }
-            }
-            statement {
-              byte_match_statement {
-                search_string         = "/api/v1/public/"
-                positional_constraint = "STARTS_WITH"
-                field_to_match {
-                  uri_path {}
-                }
-                text_transformation {
-                  priority = 0
-                  type     = "NONE"
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "${var.name}-rate-submit"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = var.name
-    sampled_requests_enabled   = true
-  }
+moved {
+  from = aws_wafv2_web_acl.this
+  to   = module.waf.aws_wafv2_web_acl.this
 }
 
 resource "aws_cloudfront_distribution" "this" {
-  for_each            = local.frontends
-  enabled             = true
-  is_ipv6_enabled     = true
-  http_version        = "http2and3"
-  price_class         = "PriceClass_100"
-  aliases             = [each.value]
-  default_root_object = "index.html"
-  web_acl_id          = aws_wafv2_web_acl.this.arn
-  comment             = "${var.name} ${each.key}"
-
-  origin {
-    origin_id                = "s3"
-    domain_name              = aws_s3_bucket.frontend[each.key].bucket_regional_domain_name
-    origin_access_control_id = aws_cloudfront_origin_access_control.s3.id
-  }
-
-  dynamic "origin" {
-    for_each = each.key == "app" ? [1] : []
-    content {
-      origin_id   = local.alb_origin_id
-      domain_name = var.origin_domain
-      custom_origin_config {
-        http_port                = 80
-        https_port               = 443
-        origin_protocol_policy   = "https-only"
-        origin_ssl_protocols     = ["TLSv1.2"]
-        origin_read_timeout      = 30
-        origin_keepalive_timeout = 5
-      }
-      custom_header {
-        name  = "X-Origin-Verify"
-        value = var.origin_verify_value
-      }
-    }
-  }
-
-  default_cache_behavior {
-    target_origin_id           = "s3"
-    viewer_protocol_policy     = "redirect-to-https"
-    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
-    cached_methods             = ["GET", "HEAD"]
-    compress                   = true
-    cache_policy_id            = local.caching_optimized
-    response_headers_policy_id = local.security_headers_policy
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.spa.arn
-    }
-  }
-
-  # Frontend routes that sit under an API prefix (e.g. /j/<id>/apply). Listed first = higher precedence.
-  dynamic "ordered_cache_behavior" {
-    for_each = each.key == "app" ? var.frontend_override_patterns : []
-    content {
-      path_pattern               = ordered_cache_behavior.value
-      target_origin_id           = "s3"
-      viewer_protocol_policy     = "redirect-to-https"
-      allowed_methods            = ["GET", "HEAD", "OPTIONS"]
-      cached_methods             = ["GET", "HEAD"]
-      compress                   = true
-      cache_policy_id            = local.caching_optimized
-      response_headers_policy_id = local.security_headers_policy
-      function_association {
-        event_type   = "viewer-request"
-        function_arn = aws_cloudfront_function.spa.arn
-      }
-    }
-  }
-
-  dynamic "ordered_cache_behavior" {
-    for_each = each.key == "app" ? var.api_path_patterns : []
-    content {
-      path_pattern             = ordered_cache_behavior.value
-      target_origin_id         = local.alb_origin_id
-      viewer_protocol_policy   = "redirect-to-https"
-      allowed_methods          = local.methods_all
-      cached_methods           = ["GET", "HEAD"]
-      compress                 = true
-      cache_policy_id          = local.caching_disabled
-      origin_request_policy_id = local.all_viewer_except_host
-    }
-  }
-
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
-    }
-  }
-
-  viewer_certificate {
-    acm_certificate_arn      = var.certificate_arn
-    ssl_support_method       = "sni-only"
-    minimum_protocol_version = "TLSv1.2_2021"
-  }
-}
-
-# API host: no S3, every path to the ALB, nothing cached.
-resource "aws_cloudfront_distribution" "api" {
-  count           = local.api_enabled ? 1 : 0
+  for_each        = var.cloudfront_enabled ? local.hosts : {}
   enabled         = true
   is_ipv6_enabled = true
   http_version    = "http2and3"
   price_class     = "PriceClass_100"
-  aliases         = [var.api_domain]
-  web_acl_id      = aws_wafv2_web_acl.this.arn
-  comment         = "${var.name} api"
+  aliases         = [each.value]
+  web_acl_id      = module.waf.arn
+  comment         = "${var.name} ${each.key}"
 
   origin {
-    origin_id   = local.alb_origin_id
+    origin_id   = "alb"
     domain_name = var.origin_domain
     custom_origin_config {
       http_port                = 80
@@ -375,16 +136,33 @@ resource "aws_cloudfront_distribution" "api" {
       name  = "X-Origin-Verify"
       value = var.origin_verify_value
     }
+    custom_header {
+      name  = "X-Edge-Site"
+      value = each.key
+    }
   }
 
   default_cache_behavior {
-    target_origin_id         = local.alb_origin_id
+    target_origin_id         = "alb"
     viewer_protocol_policy   = "redirect-to-https"
     allowed_methods          = local.methods_all
     cached_methods           = ["GET", "HEAD"]
     compress                 = true
     cache_policy_id          = local.caching_disabled
     origin_request_policy_id = local.all_viewer_except_host
+  }
+
+  dynamic "ordered_cache_behavior" {
+    for_each = lookup(var.cached_path_patterns, each.key, [])
+    content {
+      path_pattern           = ordered_cache_behavior.value
+      target_origin_id       = "alb"
+      viewer_protocol_policy = "redirect-to-https"
+      allowed_methods        = ["GET", "HEAD"]
+      cached_methods         = ["GET", "HEAD"]
+      compress               = true
+      cache_policy_id        = local.caching_optimized
+    }
   }
 
   restrictions {
@@ -400,89 +178,113 @@ resource "aws_cloudfront_distribution" "api" {
   }
 }
 
-resource "aws_route53_record" "api_a" {
-  count   = local.api_enabled ? 1 : 0
-  zone_id = var.zone_id
-  name    = var.api_domain
-  type    = "A"
-  alias {
-    name                   = aws_cloudfront_distribution.api[0].domain_name
-    zone_id                = aws_cloudfront_distribution.api[0].hosted_zone_id
-    evaluate_target_health = false
+# ALB routing for requests from CloudFront. Requests with only X-Origin-Verify (the api site) fall through to the alb
+# module's API rule (priority 20).
+resource "aws_lb_listener_rule" "app_frontend_overrides" {
+  count        = length(var.frontend_override_patterns) > 0 ? local.alb_rules : 0
+  listener_arn = var.https_listener_arn
+  priority     = 11
+  action {
+    type             = "forward"
+    target_group_arn = var.target_group_arns["app"]
   }
-}
-
-resource "aws_route53_record" "api_aaaa" {
-  count   = local.api_enabled ? 1 : 0
-  zone_id = var.zone_id
-  name    = var.api_domain
-  type    = "AAAA"
-  alias {
-    name                   = aws_cloudfront_distribution.api[0].domain_name
-    zone_id                = aws_cloudfront_distribution.api[0].hosted_zone_id
-    evaluate_target_health = false
-  }
-}
-
-data "aws_iam_policy_document" "frontend" {
-  for_each = aws_s3_bucket.frontend
-  statement {
-    actions   = ["s3:GetObject"]
-    resources = ["${each.value.arn}/*"]
-    principals {
-      type        = "Service"
-      identifiers = ["cloudfront.amazonaws.com"]
+  condition {
+    http_header {
+      http_header_name = "X-Origin-Verify"
+      values           = [var.origin_verify_value]
     }
-    condition {
-      test     = "StringEquals"
-      variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.this[each.key].arn]
+  }
+  condition {
+    http_header {
+      http_header_name = "X-Edge-Site"
+      values           = ["app"]
+    }
+  }
+  condition {
+    path_pattern {
+      values = var.frontend_override_patterns
     }
   }
 }
 
-resource "aws_s3_bucket_policy" "frontend" {
-  for_each = aws_s3_bucket.frontend
-  bucket   = each.value.id
-  policy   = data.aws_iam_policy_document.frontend[each.key].json
+resource "aws_lb_listener_rule" "app_server_paths" {
+  count        = length(var.server_path_patterns) > 0 ? local.alb_rules : 0
+  listener_arn = var.https_listener_arn
+  priority     = 12
+  action {
+    type             = "forward"
+    target_group_arn = var.target_group_arns["api"]
+  }
+  condition {
+    http_header {
+      http_header_name = "X-Origin-Verify"
+      values           = [var.origin_verify_value]
+    }
+  }
+  condition {
+    http_header {
+      http_header_name = "X-Edge-Site"
+      values           = ["app"]
+    }
+  }
+  condition {
+    path_pattern {
+      values = var.server_path_patterns
+    }
+  }
 }
 
+resource "aws_lb_listener_rule" "site" {
+  for_each     = var.cloudfront_enabled ? { app = 13, admin = 14 } : {}
+  listener_arn = var.https_listener_arn
+  priority     = each.value
+  action {
+    type             = "forward"
+    target_group_arn = var.target_group_arns[each.key]
+  }
+  condition {
+    http_header {
+      http_header_name = "X-Origin-Verify"
+      values           = [var.origin_verify_value]
+    }
+  }
+  condition {
+    http_header {
+      http_header_name = "X-Edge-Site"
+      values           = [each.key]
+    }
+  }
+}
+
+# With CloudFront off the names alias the ALB, so switching modes updates these records in place.
 resource "aws_route53_record" "a" {
-  for_each = local.frontends
+  for_each = local.hosts
   zone_id  = var.zone_id
   name     = each.value
   type     = "A"
   alias {
-    name                   = aws_cloudfront_distribution.this[each.key].domain_name
-    zone_id                = aws_cloudfront_distribution.this[each.key].hosted_zone_id
-    evaluate_target_health = false
+    name                   = var.cloudfront_enabled ? local.distributions[each.key].domain_name : var.alb_dns_name
+    zone_id                = var.cloudfront_enabled ? local.distributions[each.key].hosted_zone_id : var.alb_zone_id
+    evaluate_target_health = !var.cloudfront_enabled
   }
 }
 
+# The ALB is IPv4 only.
 resource "aws_route53_record" "aaaa" {
-  for_each = local.frontends
+  for_each = var.cloudfront_enabled ? local.hosts : {}
   zone_id  = var.zone_id
   name     = each.value
   type     = "AAAA"
   alias {
-    name                   = aws_cloudfront_distribution.this[each.key].domain_name
-    zone_id                = aws_cloudfront_distribution.this[each.key].hosted_zone_id
+    name                   = local.distributions[each.key].domain_name
+    zone_id                = local.distributions[each.key].hosted_zone_id
     evaluate_target_health = false
   }
 }
 
-output "bucket_names" {
-  value = { for k, b in aws_s3_bucket.frontend : k => b.bucket }
-}
-output "bucket_arns" {
-  value = [for b in aws_s3_bucket.frontend : b.arn]
-}
 output "distribution_ids" {
-  value = merge(
-    { for k, d in aws_cloudfront_distribution.this : k => d.id },
-    { for d in aws_cloudfront_distribution.api : "api" => d.id },
-  )
+  value = { for k, d in local.distributions : k => d.id }
 }
 output "distribution_arns" {
-  value = concat([for d in aws_cloudfront_distribution.this : d.arn], aws_cloudfront_distribution.api[*].arn)
+  value = [for d in values(local.distributions) : d.arn]
 }

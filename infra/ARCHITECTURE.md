@@ -12,10 +12,7 @@ flowchart LR
 
   subgraph edge["Edge (global)"]
     direction TB
-    cfa["CloudFront app.*<br/>+ AWS WAF"]
-    cfm["CloudFront admin.*"]
-    s3a[("S3 app-web")]
-    s3m[("S3 admin-web")]
+    cfa["CloudFront staging.*, admin.*, api.*<br/>+ AWS WAF<br/>(not yet: ALB is public until then)"]
   end
 
   subgraph vpc["VPC 10.20.0.0/16 - eu-west-2"]
@@ -28,6 +25,8 @@ flowchart LR
         api["api"]
         worker["email-worker"]
         fluvio["fluvio-ui"]
+        client["client (Next.js)"]
+        admin["admin (TanStack Start)"]
         jobs["5 scheduled jobs<br/>+ migrate task"]
       end
       clam["ClamAV :3310"]
@@ -44,11 +43,10 @@ flowchart LR
 
   user -.->|"DNS"| r53
   user -->|"HTTPS"| cfa
-  user --> cfm
-  cfa -->|"default and /j/*/apply"| s3a
-  cfm --> s3m
-  cfa -->|"/api /public /j /admin /fluvio"| alb
-  alb -->|":8080"| api
+  cfa --> alb
+  alb -->|"api.*, staging.*/j :8080"| api
+  alb -->|"staging.* :3000"| client
+  alb -->|"admin.* :3000"| admin
   alb -->|"host fluvio.* :80"| fluvio
   api -->|"SQL"| rds
   worker -->|"SQL"| rds
@@ -79,7 +77,6 @@ flowchart LR
     direction TB
     r53["Route 53 tryopenhr.com"]
     cf["CloudFront app.* and admin.*<br/>+ AWS WAF"]
-    fe[("S3 frontends")]
   end
 
   subgraph home["Home region: eu-west-2 - VPC 10.10.0.0/16"]
@@ -89,6 +86,7 @@ flowchart LR
       api["api"]
       worker["email-worker"]
       fluvio["fluvio-ui"]
+      fe["client + admin (SSR)"]
       jobs["scheduled jobs + migrate"]
       clamuk["ClamAV (UK)"]
     end
@@ -124,9 +122,9 @@ flowchart LR
 
   user -.-> r53
   user --> cf
-  cf --> fe
-  cf -->|"/api /public /j /admin"| alb
-  alb --> api
+  cf --> alb
+  alb -->|"/api /j /fluvio"| api
+  alb --> fe
   alb --> fluvio
   api --> rdshome
   api --> redis

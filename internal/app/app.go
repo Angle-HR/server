@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"syscall"
 	"time"
 
@@ -16,7 +17,6 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/software78/fluvio/fluviui"
 
 	"github.com/Angle-HR/server/internal/admin"
 	"github.com/Angle-HR/server/internal/auth"
@@ -80,8 +80,13 @@ func useCommonMiddleware(router chi.Router, cfg config.Config, log *slog.Logger)
 	router.Use(logger.RequestLogger(log))
 	router.Use(chimiddleware.Recoverer)
 	if len(cfg.CORSAllowedOrigins) > 0 {
+		allowedOrigins := cfg.CORSAllowedOrigins
+		if cfg.FluvioUIOrigin != "" {
+			// This middleware answers every preflight, so the dashboard's authenticated calls to /fluvio/* need it too.
+			allowedOrigins = append(slices.Clone(allowedOrigins), cfg.FluvioUIOrigin)
+		}
 		router.Use(cors.Handler(cors.Options{
-			AllowedOrigins:   cfg.CORSAllowedOrigins,
+			AllowedOrigins:   allowedOrigins,
 			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "If-Match"},
 			AllowCredentials: false,
@@ -187,11 +192,7 @@ func Run() error {
 	if docs.IsEnabled(cfg.AppEnv) {
 		docs.RegisterRoutes(router, docs.Config{PublicAPIURL: cfg.PublicAPIURL})
 
-		fluvioUIOrigin := cfg.FluvioUIOrigin
-		if fluvioUIOrigin == "" {
-			fluvioUIOrigin = "http://localhost:5173"
-		}
-		router.Handle("/fluvio/*", fluviui.Handler(fluvioClient, fluviui.WithAllowedOrigin(fluvioUIOrigin)))
+		mountFluvioUI(router, cfg, fluvioClient, log)
 	}
 
 	publicHandler.RegisterPages(router)

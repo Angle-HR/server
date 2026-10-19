@@ -1,12 +1,12 @@
 # Runs database migrations as a one-off ECS task inside the environment's VPC (RDS is private), started
 # manually from the Actions tab (Run workflow).
 #
-# The task runs the migrate image Terraform deployed (`image_tag` in infra/envs/<env>/terraform.tfvars), so the
+# The task runs the migrate image Terraform deployed (`image_tag` in envs/<env>/terraform.tfvars in Angle-HR/infra), so the
 # order for a release with new migrations is: push (Container Images builds the sha) → set image_tag and
 # `terraform apply` → run this workflow. The run fails if the deployed image is not the one you expect.
 #
 # GitHub Environment setup (Settings → Environments → Variables or Secrets), from `terraform output migrate_run_task` and
-# `terraform output github_deploy_role_arn` in infra/envs/<env>:
+# `terraform output github_deploy_role_arn` in Angle-HR/infra envs/<env>:
 #
 #   AWS_DEPLOY_ROLE_ARN      — github_deploy_role_arn
 #   AWS_REGION               — e.g. eu-west-2
@@ -113,7 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           task_id="${TASK_ARN##*/}"
-          # awslogs-stream-prefix "job" / container name (= family) / task id; see infra/modules/ecs_job.
+          # awslogs-stream-prefix "job" / container name (= family) / task id; see modules/ecs_job in Angle-HR/infra.
           aws logs get-log-events \
             --log-group-name "/ecs/${FAMILY}" \
             --log-stream-name "job/${FAMILY}/${task_id}" \

@@ -1,6 +1,0 @@
-# cp backend.hcl.example backend.hcl, replace <STAGING_ACCOUNT_ID> with the bootstrap output.
-bucket       = "openhr-tfstate-<STAGING_ACCOUNT_ID>"
-key          = "staging/terraform.tfstate"
-region       = "eu-west-2"
-encrypt      = true
-use_lockfile = true

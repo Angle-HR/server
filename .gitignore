@@ -34,4 +34,3 @@ go.work.sum
 # Local PR drafts (see `make pr-description`)
 pr_template/
 Claude Outputs/
-infra/STAGING_NEXT_STEPS.md

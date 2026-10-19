@@ -6,11 +6,11 @@
 #   production  — used when pushing to the production branch
 #
 # Each environment needs two values (Variables or Secrets; Variables keep them readable in logs):
-#   AWS_DEPLOY_ROLE_ARN — `terraform output github_deploy_role_arn` in infra/envs/<env>
+#   AWS_DEPLOY_ROLE_ARN — `terraform output github_deploy_role_arn` in Angle-HR/infra envs/<env>
 #   AWS_REGION          — the stack's home region, e.g. eu-west-2
 #
 # Images are tagged with the full git sha only. ECR tags are immutable, so there is no `latest`; set
-# `image_tag` in infra/envs/<env>/terraform.tfvars to the sha and apply to roll out.
+# `image_tag` in envs/<env>/terraform.tfvars in Angle-HR/infra to the sha and apply to roll out.
 
 name: Container Images
 
@@ -134,5 +134,5 @@ jobs:
           {
             echo "### Images for \`${TAG}\`"
             echo
-            echo "Set \`image_tag = \"${TAG}\"\` in infra/envs/${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}/terraform.tfvars and apply."
+            echo "Set \`image_tag = \"${TAG}\"\` in Angle-HR/infra envs/${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}/terraform.tfvars and apply."
           } >> "$GITHUB_STEP_SUMMARY"

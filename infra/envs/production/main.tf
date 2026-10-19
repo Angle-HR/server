@@ -12,10 +12,11 @@ locals {
   fluvio_domain = "fluvio.${var.zone_name}"
 
   # SSR frontends, each built and pushed as :production by its own repo's CI (modules/github_image_deploy), which then
-  # forces a new deployment. NEXT_PUBLIC_* / VITE_* values are baked in at build time there, not set here.
+  # forces a new deployment. oidc_repo is the repo part of the OIDC sub claim: repos on GitHub's immutable subject
+  # format use owner@id/name@id (gh api repos/<owner>/<repo>/actions/oidc/customization/sub shows which). NEXT_PUBLIC_* / VITE_* values are baked in at build time there, not set here.
   frontends = {
-    client = { repo = "Angle-HR/client", env = { HOSTNAME = "0.0.0.0" } }
-    admin  = { repo = "Angle-HR/admin", env = { HOST = "0.0.0.0" } }
+    client = { oidc_repo = "Angle-HR/client", env = { HOSTNAME = "0.0.0.0" } }
+    admin  = { oidc_repo = "Angle-HR@270470111/admin@1320280283", env = { HOST = "0.0.0.0" } }
   }
 
   # CIDRs must not overlap: every satellite VPC is peered to the home VPC.
@@ -567,7 +568,7 @@ module "frontend_deploy" {
   for_each           = local.frontends
   source             = "../../modules/github_image_deploy"
   name               = "${local.name}-${each.key}"
-  allowed_subjects   = ["repo:${each.value.repo}:environment:production"]
+  allowed_subjects   = ["repo:${each.value.oidc_repo}:environment:production"]
   ecr_repository_arn = module.ecr.arns[each.key]
   cluster_name       = aws_ecs_cluster.this.name
   service_name       = module.frontend[each.key].service_name

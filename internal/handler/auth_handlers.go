@@ -405,7 +405,6 @@ func (h *AuthHandler) verifyEmail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-
 // markEmailVerified marks the user verified, seeds onboarding progress in the
 // user's database and records the user in the global registry, committing both
 // transactions. Any failure is reported as an internal error.

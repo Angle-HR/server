@@ -610,7 +610,13 @@ func (h *ProductOnboardingHandler) searchAddress(w http.ResponseWriter, r *http.
 		return
 	}
 
-	results, err := h.AddressSearcher.Search(ctx, req.CountryID, strings.TrimSpace(req.Query))
+	countrySlug, err := h.countrySlugByID(ctx, countryID)
+	if err != nil {
+		response.Error(w, r, err)
+		return
+	}
+
+	results, err := h.AddressSearcher.Search(ctx, countrySlug, strings.TrimSpace(req.Query))
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
@@ -681,8 +687,15 @@ func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.
 		return
 	}
 
+	countrySlug, err := h.countrySlugByID(ctx, countryID)
+	if err != nil {
+		response.Error(w, r, err)
+		return
+	}
+
 	result, err := h.AddressProvider.Verify(ctx, onboarding.ProductAddress{
 		CountryID:        req.CountryID,
+		CountrySlug:      countrySlug,
 		EntryMode:        req.EntryMode,
 		Line1:            req.Line1,
 		Line2:            req.Line2,

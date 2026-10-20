@@ -157,12 +157,7 @@ func Run() error {
 	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, fluvioClient, cfg.AuthDefaultRegion)
 	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, totpCrypto)
 	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient, tokenService)
-	if cfg.AddressVerifyMode == "passthrough" {
-		productOnboardingHandler.AddressProvider = onboarding.PassthroughAddressVerifier{}
-	}
-	if cfg.AddressSearchMode == "passthrough" {
-		productOnboardingHandler.AddressSearcher = onboarding.PassthroughAddressSearcher{}
-	}
+	wireAddressProviders(productOnboardingHandler, cfg)
 	individualOnboardingHandler := handler.NewIndividualOnboardingHandler(dbRouter, globalPool, tokenService)
 	businessOnboardingHandler := handler.NewBusinessOnboardingHandler(dbRouter, globalPool, tokenService)
 	kybHandler := handler.NewKYBHandler(dbRouter, globalPool, newKYBRegistry(cfg))
@@ -311,5 +306,22 @@ func newKYBNotifierFactory(
 			return nil
 		}
 		return &kybnotify.Notifier{Regional: pool, Global: global, Enqueuer: enqueuer}
+	}
+}
+
+// wireAddressProviders picks the address search and verification providers from config.
+func wireAddressProviders(h *handler.ProductOnboardingHandler, cfg config.Config) {
+	google := onboarding.NewGoogleAddressProvider(cfg.GoogleMapsAPIKey)
+	switch cfg.AddressVerifyMode {
+	case "passthrough":
+		h.AddressProvider = onboarding.PassthroughAddressVerifier{}
+	case "google":
+		h.AddressProvider = google
+	}
+	switch cfg.AddressSearchMode {
+	case "passthrough":
+		h.AddressSearcher = onboarding.PassthroughAddressSearcher{}
+	case "google":
+		h.AddressSearcher = google
 	}
 }

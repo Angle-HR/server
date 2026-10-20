@@ -18,6 +18,7 @@ const (
 // ProductAddress is the subset of address fields used for verification.
 type ProductAddress struct {
 	CountryID          string
+	CountrySlug        string
 	EntryMode          string
 	Line1              string
 	Line2              *string

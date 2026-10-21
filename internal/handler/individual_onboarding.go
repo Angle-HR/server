@@ -97,7 +97,7 @@ func (h *IndividualOnboardingHandler) submitIndividualOnboarding(w http.Response
 
 	var req individualOnboardingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 

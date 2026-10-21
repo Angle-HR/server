@@ -8645,6 +8645,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     }
                 ],
@@ -8739,6 +8740,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     },
                     {
@@ -8852,6 +8854,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     },
                     {
@@ -9266,6 +9269,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     }
                 ],
@@ -9330,6 +9334,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     }
                 ],
@@ -9444,6 +9449,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     },
                     {
@@ -9514,6 +9520,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     },
                     {
@@ -9627,6 +9634,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     },
                     {
@@ -9786,6 +9794,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     },
                     {
@@ -9899,6 +9908,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     },
                     {
@@ -9966,6 +9976,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     }
                 ],
@@ -10070,6 +10081,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     }
                 ],
@@ -10174,6 +10186,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     }
                 ],
@@ -10238,6 +10251,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     }
                 ],
@@ -10348,6 +10362,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     }
                 ],
@@ -10412,6 +10427,7 @@
                         "description": "Revision the client loaded",
                         "in": "header",
                         "name": "If-Match",
+                        "required": true,
                         "type": "string"
                     }
                 ],

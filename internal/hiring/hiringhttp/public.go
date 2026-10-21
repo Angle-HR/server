@@ -3,8 +3,10 @@ package hiringhttp
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -212,7 +214,7 @@ func (h *PublicHandler) submit(w http.ResponseWriter, r *http.Request) {
 	}
 	var req ApplicationRequest
 	if err := json.Unmarshal(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	rec, err := h.Apply.Submit(r.Context(), apply.Input{
@@ -226,7 +228,7 @@ func (h *PublicHandler) submit(w http.ResponseWriter, r *http.Request) {
 		ClientIP:           clientIP(r),
 	})
 	if err != nil {
-		response.Error(w, r, applyError(err))
+		writeApplyError(w, r, err)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -288,7 +290,7 @@ func (h *PublicHandler) presign(w http.ResponseWriter, r *http.Request) {
 	}
 	var req UploadRequest
 	if err := json.Unmarshal(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	p, err := h.Uploads.Presign(r.Context(), uploads.PresignInput{
@@ -296,7 +298,7 @@ func (h *PublicHandler) presign(w http.ResponseWriter, r *http.Request) {
 		ContentType: req.ContentType, SizeBytes: req.SizeBytes, ClientIP: clientIP(r),
 	})
 	if err != nil {
-		response.Error(w, r, applyError(err))
+		writeApplyError(w, r, err)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -407,6 +409,19 @@ func publicError(err error) error {
 	return err
 }
 
+// writeApplyError writes applyError's result. A rate limit tells the caller how long to wait, in whole seconds.
+func writeApplyError(w http.ResponseWriter, r *http.Request, err error) {
+	var rl *apply.RateLimitedError
+	if errors.As(err, &rl) {
+		secs := int(math.Ceil(rl.RetryAfter.Seconds()))
+		if secs < 1 {
+			secs = 1
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(secs))
+	}
+	response.Error(w, r, applyError(err))
+}
+
 // applyError maps an application error to an API error.
 func applyError(err error) error {
 	var ve *apply.ValidationError
@@ -420,8 +435,11 @@ func applyError(err error) error {
 		return apperror.New(apperror.CodeGone, "this job is no longer available")
 	case errors.Is(err, apply.ErrNotAccepting):
 		return apperror.New(apperror.CodeConflict, "this job is not accepting applications")
+	case errors.Is(err, apply.ErrIdempotencyKeyReused):
+		return apperror.New(apperror.CodeIdempotencyKeyReused,
+			"this Idempotency-Key was already used for a different application; send a new key")
 	case errors.Is(err, apply.ErrRateLimited):
-		return apperror.New(apperror.CodeTooManyAttempts, "too many applications, try again later")
+		return apperror.New(apperror.CodeTooManyRequests, "too many applications, try again later")
 	case errors.Is(err, apply.ErrFilesUnavailable):
 		return apperror.New(apperror.CodeServiceUnavailable, "file uploads are not available right now, try again later")
 	case errors.Is(err, apply.ErrSensitiveUnavailable):

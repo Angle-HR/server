@@ -5527,6 +5527,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
             produces:
                 - application/json
@@ -5587,6 +5588,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
                 - description: Fields to change
                   in: body
@@ -5659,6 +5661,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
                 - description: Form
                   in: body
@@ -5927,6 +5930,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
             produces:
                 - application/json
@@ -5968,6 +5972,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
             produces:
                 - application/json
@@ -6041,6 +6046,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
                 - description: Confirmation
                   in: body
@@ -6086,6 +6092,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
                 - description: Fields to change
                   in: body
@@ -6158,6 +6165,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
                 - description: Rules
                   in: body
@@ -6259,6 +6267,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
                 - description: Markets
                   in: body
@@ -6331,6 +6340,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
                 - description: The whole team
                   in: body
@@ -6374,6 +6384,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
             produces:
                 - application/json
@@ -6440,6 +6451,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
             produces:
                 - application/json
@@ -6506,6 +6518,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
             produces:
                 - application/json
@@ -6547,6 +6560,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
             produces:
                 - application/json
@@ -6617,6 +6631,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
             produces:
                 - application/json
@@ -6658,6 +6673,7 @@ paths:
                 - description: Revision the client loaded
                   in: header
                   name: If-Match
+                  required: true
                   type: string
             produces:
                 - application/json

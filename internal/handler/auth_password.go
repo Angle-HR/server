@@ -36,7 +36,7 @@ var _ = apidoc.ErrorEnvelope{}
 func (h *AuthHandler) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	var req authForgotPasswordBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -94,7 +94,7 @@ func (h *AuthHandler) forgotPassword(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) resetPassword(w http.ResponseWriter, r *http.Request) {
 	var req authResetPasswordBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {

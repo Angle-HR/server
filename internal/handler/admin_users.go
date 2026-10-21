@@ -169,7 +169,7 @@ func (h *AdminHandler) patchUser(w http.ResponseWriter, r *http.Request) {
 
 	var body patchUserBody
 	if decodeJSONErr := decodeJSON(r, &body); decodeJSONErr != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(decodeJSONErr))
 		return
 	}
 	if body.Deleted == nil {

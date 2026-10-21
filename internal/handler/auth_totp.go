@@ -106,7 +106,7 @@ func (h *AuthHandler) totpEnroll(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) totpConfirm(w http.ResponseWriter, r *http.Request) {
 	var req authTOTPConfirmBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -184,7 +184,7 @@ func (h *AuthHandler) totpConfirm(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) totpDisable(w http.ResponseWriter, r *http.Request) {
 	var req authTOTPDisableBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -261,7 +261,7 @@ func (h *AuthHandler) totpDisable(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) loginTOTP(w http.ResponseWriter, r *http.Request) {
 	var req authLoginTOTPBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {

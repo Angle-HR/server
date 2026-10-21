@@ -244,7 +244,7 @@ func (h *HiringHandler) addDepartment(w http.ResponseWriter, r *http.Request) {
 	}
 	var req DepartmentRequest
 	if err := decodeStrict(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	d, err := svc.AddDepartment(r.Context(), c, req.Name)
@@ -303,7 +303,7 @@ func (h *HiringHandler) saveTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 	var in draft.TemplateInput
 	if err := decodeStrict(raw, &in); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	t, err := svc.SaveTemplate(r.Context(), c, in)
@@ -380,7 +380,7 @@ func (h *HiringHandler) patchTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 	var req TemplatePatchRequest
 	if err := decodeStrict(raw, &req); err != nil || (req.Name == nil && req.Pinned == nil) {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	id := h.jobID(r)
@@ -429,7 +429,7 @@ func (h *HiringHandler) duplicateTemplate(w http.ResponseWriter, r *http.Request
 		}
 		if len(strings.TrimSpace(string(raw))) > 0 {
 			if err := decodeStrict(raw, &req); err != nil {
-				response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+				response.Error(w, r, apperror.InvalidBody(err))
 				return
 			}
 		}
@@ -514,7 +514,7 @@ func (h *HiringHandler) putSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	var req SettingsRequest
 	if err := decodeStrict(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	st, err := svc.SetAutomatedScreening(r.Context(), c, req.AutomatedScreeningEnabled)

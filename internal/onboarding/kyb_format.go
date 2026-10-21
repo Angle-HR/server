@@ -18,12 +18,25 @@ var registrationSlugByCountry = map[string]string{
 	"KE": "kenya",
 }
 
+// registrationPatternByCountry holds the number shape for countries that have a Tier 1 verifier but no
+// identification-requirements entry. The input is normalised the same way the verifier does.
+var registrationPatternByCountry = map[string]struct {
+	normalize func(string) string
+	pattern   *regexp.Regexp
+}{
+	"CZ": {kyb.NormalizeCzechNumber, regexp.MustCompile(`^\d{8}$`)},
+	"FI": {kyb.NormalizeFinnishNumber, regexp.MustCompile(`^\d{7}-\d$`)},
+}
+
 // RegistrationNumberFormatOK reports whether a registration number has the right
 // shape for the country. It is the kyb.FormatChecker: a number that is clearly
 // from another country fails verification as wrong_country. Countries without a
 // single-number rule always pass.
 func RegistrationNumberFormatOK(countryCode, registrationNumber string) bool {
 	code := strings.ToUpper(strings.TrimSpace(countryCode))
+	if p, ok := registrationPatternByCountry[code]; ok {
+		return p.pattern.MatchString(p.normalize(registrationNumber))
+	}
 	slug, ok := registrationSlugByCountry[code]
 	if !ok {
 		return true

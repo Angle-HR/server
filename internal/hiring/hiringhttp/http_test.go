@@ -71,8 +71,48 @@ type reply struct {
 	Meta map[string]any
 }
 
+// jobPathID is the job id in /jobs/{id}/..., or "" for any other path.
+func jobPathID(path string) string {
+	rest, ok := strings.CutPrefix(path, "/jobs/")
+	if !ok {
+		return ""
+	}
+	id, _, _ := strings.Cut(rest, "/")
+	if id == "bulk" {
+		return ""
+	}
+	return id
+}
+
+// withRevision adds If-Match with the job's current revision to a write that did not choose one itself, the way
+// the web app does after loading a job. Tests that care about the header set it, or leave it out on purpose with
+// noRevision.
+func (e *env) withRevision(t *testing.T, method, path string, hdr []string) []string {
+	t.Helper()
+	if method == "GET" || method == "HEAD" {
+		return hdr
+	}
+	for i := 0; i+1 < len(hdr); i += 2 {
+		if hdr[i] == "If-Match" || hdr[i] == noRevision {
+			return hdr
+		}
+	}
+	id := jobPathID(path)
+	if id == "" {
+		return hdr
+	}
+	if et := e.do(t, "GET", "/jobs/"+id, "").Header.Get("ETag"); et != "" {
+		return append(hdr[:len(hdr):len(hdr)], "If-Match", et)
+	}
+	return hdr
+}
+
+// noRevision is a test header name that stops do from adding If-Match.
+const noRevision = "X-Test-No-Revision"
+
 func (e *env) do(t *testing.T, method, path, body string, hdr ...string) reply {
 	t.Helper()
+	hdr = e.withRevision(t, method, path, hdr)
 	req := httptest.NewRequest(method, "/api/v1"+path, strings.NewReader(body))
 	for i := 0; i+1 < len(hdr); i += 2 {
 		req.Header.Set(hdr[i], hdr[i+1])
@@ -148,6 +188,44 @@ func TestCreateGetPatchFlow(t *testing.T) {
 	stale := e.do(t, "PATCH", "/jobs/"+id, `{"title":"Baker"}`, "If-Match", `"1"`)
 	if stale.Status != 409 || stale.Err.Details["current_revision"] != float64(2) {
 		t.Fatalf("stale: %d %+v", stale.Status, stale.Err)
+	}
+}
+
+func TestJobWritesNeedIfMatch(t *testing.T) {
+	e := newEnv(rbac.RoleFounder)
+	id := e.create(t, `{"title":"Cook"}`)
+	for name, tc := range map[string]struct{ method, path, body string }{
+		"patch":   {"PATCH", "/jobs/" + id, `{"title":"Chef"}`},
+		"details": {"PUT", "/jobs/" + id + "/details", fullBody},
+		"markets": {"PUT", "/jobs/" + id + "/markets", `{"markets":[{"market_code":"UK"}]}`},
+		"publish": {"POST", "/jobs/" + id + "/publish", ""},
+		"pause":   {"POST", "/jobs/" + id + "/pause", ""},
+		"rules":   {"PUT", "/jobs/" + id + "/disqualification-rules", `{"rules":[]}`},
+		"members": {"PUT", "/jobs/" + id + "/members", `{"members":[]}`},
+		"confirm": {"PUT", "/jobs/" + id + "/compliance/uk-lawful", `{"confirmed":true}`},
+	} {
+		r := e.do(t, tc.method, tc.path, tc.body, noRevision, "1")
+		if r.Status != 428 || r.Err.Code != "PRECONDITION_REQUIRED" {
+			t.Errorf("%s without If-Match: %d %+v", name, r.Status, r.Err)
+			continue
+		}
+		fields, _ := r.Err.Details["fields"].([]any)
+		if len(fields) != 1 || fields[0].(map[string]any)["path"] != "If-Match" {
+			t.Errorf("%s: the error should name the header: %+v", name, r.Err.Details)
+		}
+	}
+	if g := e.do(t, "GET", "/jobs/"+id, ""); g.field(t, "title") != "Cook" {
+		t.Errorf("a refused write changed the job: %s", g.Data)
+	}
+}
+
+func TestBadBodyNamesTheField(t *testing.T) {
+	e := newEnv(rbac.RoleFounder)
+	id := e.create(t, `{}`)
+	r := e.do(t, "PATCH", "/jobs/"+id, `{"colour":"red"}`)
+	fields, _ := r.Err.Details["fields"].([]any)
+	if r.Status != 400 || len(fields) != 1 || fields[0].(map[string]any)["path"] != "colour" {
+		t.Errorf("unknown field: %d %+v", r.Status, r.Err)
 	}
 }
 

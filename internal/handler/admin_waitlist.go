@@ -185,7 +185,7 @@ func (h *AdminHandler) patchWaitlist(w http.ResponseWriter, r *http.Request) {
 
 	var body patchWaitlistBody
 	if decodeJSONErr := decodeJSON(r, &body); decodeJSONErr != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(decodeJSONErr))
 		return
 	}
 

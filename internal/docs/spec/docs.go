@@ -3562,7 +3562,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -3618,7 +3619,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     },
                     {
                         "description": "Fields to change",
@@ -3731,7 +3733,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     },
                     {
                         "description": "Form",
@@ -4145,7 +4148,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -4209,7 +4213,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -4323,7 +4328,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     },
                     {
                         "description": "Confirmation",
@@ -4393,7 +4399,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     },
                     {
                         "description": "Fields to change",
@@ -4506,7 +4513,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     },
                     {
                         "description": "Rules",
@@ -4665,7 +4673,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     },
                     {
                         "description": "Markets",
@@ -4778,7 +4787,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     },
                     {
                         "description": "The whole team",
@@ -4845,7 +4855,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -4949,7 +4960,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -5053,7 +5065,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -5117,7 +5130,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -5227,7 +5241,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -5291,7 +5306,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Revision the client loaded",
                         "name": "If-Match",
-                        "in": "header"
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {

@@ -230,6 +230,7 @@ func (s *Store) Open(ctx context.Context, tenantID string, in applications.OpenI
 			return fmt.Errorf("hiringstore: application files: %w", err)
 		}
 		frows.Close()
+		d.HasFiles = len(d.Files) > 0
 
 		// Answers follow the form's order. Special category questions are skipped even if a value were present:
 		// their answers live sealed in another schema and are never read here. An upload answer is a claim token,

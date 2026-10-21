@@ -35,7 +35,7 @@ type fakeStore struct {
 	target  *apply.Target
 	saved   []*apply.NewApplication
 	emails  map[string]bool
-	keys    map[string]bool
+	keys    map[string]string // idempotency key -> request fingerprint
 	loadErr error
 	// insertErr is returned by InsertApplication.
 	insertErr error
@@ -46,6 +46,13 @@ type fakeStore struct {
 
 func (f *fakeStore) ReapplyBlocked(_ context.Context, _, hash string) (bool, error) {
 	return f.blocked[hash], f.blockedErr
+}
+
+func (f *fakeStore) IdempotentApplication(_ context.Context, _, _, key string) (string, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	fp, ok := f.keys[key]
+	return fp, ok, nil
 }
 
 func (f *fakeStore) LoadForApply(context.Context, string, string) (*apply.Target, error) {
@@ -62,14 +69,14 @@ func (f *fakeStore) InsertApplication(_ context.Context, _ string, a *apply.NewA
 		return false, f.insertErr
 	}
 	if f.emails == nil {
-		f.emails, f.keys = map[string]bool{}, map[string]bool{}
+		f.emails, f.keys = map[string]bool{}, map[string]string{}
 	}
-	if f.emails[a.Email] || (a.IdempotencyKey != "" && f.keys[a.IdempotencyKey]) {
+	if _, used := f.keys[a.IdempotencyKey]; f.emails[a.Email] || (a.IdempotencyKey != "" && used) {
 		return false, nil
 	}
 	f.emails[a.Email] = true
 	if a.IdempotencyKey != "" {
-		f.keys[a.IdempotencyKey] = true
+		f.keys[a.IdempotencyKey] = a.IdempotencyFingerprint
 	}
 	f.saved = append(f.saved, a)
 	return true, nil
@@ -382,15 +389,104 @@ func TestRateLimits(t *testing.T) {
 	if !errors.Is(err, apply.ErrRateLimited) {
 		t.Errorf("per-email limit: %v", err)
 	}
-	// The per-address limit stops floods before any database work.
+	// The flood limit stops a burst from one address before any database work.
 	lim2 := &countLimiter{}
 	svc2 := service(&fakeStore{target: target(), loadErr: errors.New("must not be reached")}, lim2)
 	var err2 error
-	for i := 0; i < apply.PerIPPerHour+1; i++ {
+	for i := 0; i < apply.FloodPerIP+1; i++ {
 		_, err2 = svc2.Submit(context.Background(), input())
 	}
-	if !errors.Is(err2, apply.ErrRateLimited) {
-		t.Errorf("per-IP limit: %v", err2)
+	var rl *apply.RateLimitedError
+	if !errors.Is(err2, apply.ErrRateLimited) || !errors.As(err2, &rl) {
+		t.Fatalf("flood limit: %v", err2)
+	}
+	if rl.RetryAfter != apply.FloodWindow {
+		t.Errorf("a limiter that cannot report the time left answers with the whole window, got %v", rl.RetryAfter)
+	}
+}
+
+// A burst of invalid requests must not use up the hour's quota of real applications.
+func TestInvalidRequestsDoNotSpendTheApplicationQuota(t *testing.T) {
+	lim := &countLimiter{}
+	svc := service(&fakeStore{target: target()}, lim)
+	bad := input()
+	bad.NoticeAcknowledged = false
+	for i := 0; i < 60; i++ {
+		if _, err := svc.Submit(context.Background(), bad); err == nil {
+			t.Fatal("an unacknowledged notice must be refused")
+		}
+	}
+	if n := lim.counts["apply:ip:203.0.113.5"]; n != 0 {
+		t.Errorf("invalid requests counted %d times against the application quota", n)
+	}
+	if _, err := svc.Submit(context.Background(), input()); err != nil {
+		t.Fatalf("a real application after the burst: %v", err)
+	}
+}
+
+type ttlLimiter struct {
+	countLimiter
+	left time.Duration
+}
+
+func (l *ttlLimiter) TTL(context.Context, string) (time.Duration, error) { return l.left, nil }
+
+func TestRateLimitSaysHowLongToWait(t *testing.T) {
+	lim := &ttlLimiter{left: 7 * time.Minute}
+	svc := service(&fakeStore{target: target()}, lim)
+	var err error
+	for i := 0; i < apply.PerEmailPerJobPerHour+1; i++ {
+		_, err = svc.Submit(context.Background(), input())
+	}
+	var rl *apply.RateLimitedError
+	if !errors.As(err, &rl) || rl.RetryAfter != 7*time.Minute {
+		t.Errorf("want a wait of 7m, got %v (%v)", rl, err)
+	}
+}
+
+func TestUKMarketCodeIsAcceptedAsCountry(t *testing.T) {
+	st := &fakeStore{target: target()}
+	in := input()
+	in.CandidateCountry = "UK"
+	if _, err := service(st, nil).Submit(context.Background(), in); err != nil {
+		t.Fatal(err)
+	}
+	if st.saved[0].Country != "GB" || st.saved[0].Market != "UK" {
+		t.Errorf("country %q market %q", st.saved[0].Country, st.saved[0].Market)
+	}
+	in2 := input()
+	in2.CandidateCountry = "ZZ"
+	in2.Answers = map[string]json.RawMessage{"name": json.RawMessage(`"B"`), "mail": json.RawMessage(`"b@example.com"`), "rtw": json.RawMessage(`"yes"`)}
+	if f := fields(t, func() error { _, err := service(st, nil).Submit(context.Background(), in2); return err }()); f["candidate_country"] == "" {
+		t.Errorf("an unassigned country code must be refused: %v", f)
+	}
+}
+
+func TestIdempotentRetryIsAnsweredBeforeValidation(t *testing.T) {
+	st := &fakeStore{target: target()}
+	svc := service(st, nil)
+	in := input()
+	in.IdempotencyKey = "key-12345678"
+	if _, err := svc.Submit(context.Background(), in); err != nil {
+		t.Fatal(err)
+	}
+	// The identical retry succeeds again and stores nothing more, even though the claim would now fail.
+	svc.Uploads = fakeUploads{err: apply.ErrFileRejected}
+	if _, err := svc.Submit(context.Background(), in); err != nil {
+		t.Fatalf("identical retry: %v", err)
+	}
+	if len(st.saved) != 1 {
+		t.Errorf("a retry saved %d applications", len(st.saved))
+	}
+	// The same key with a different body is refused.
+	other := input()
+	other.IdempotencyKey = in.IdempotencyKey
+	other.Answers = map[string]json.RawMessage{"name": json.RawMessage(`"Grace Hopper"`), "mail": json.RawMessage(`"g@example.com"`), "rtw": json.RawMessage(`"yes"`)}
+	if _, err := svc.Submit(context.Background(), other); !errors.Is(err, apply.ErrIdempotencyKeyReused) {
+		t.Errorf("reused key: %v", err)
+	}
+	if len(st.saved) != 1 {
+		t.Errorf("a reused key saved %d applications", len(st.saved))
 	}
 }
 

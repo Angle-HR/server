@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/Angle-HR/server/internal/countrycode"
 )
 
 // Errors returned by Service for conditions the caller should map to an API response.
@@ -104,15 +106,42 @@ type SubmitInput struct {
 	ActorID            string
 }
 
+const countryMessage = "must be an ISO 3166-1 alpha-2 country code such as GB or NG"
+
+// FieldError names a request field that was refused and why. Path is the JSON name of the field.
+type FieldError struct{ Path, Message string }
+
+// InvalidInputError is ErrInvalidInput that says which fields are wrong.
+type InvalidInputError struct{ Fields []FieldError }
+
+func (e *InvalidInputError) Error() string { return ErrInvalidInput.Error() }
+
+// Is makes errors.Is(err, ErrInvalidInput) true.
+func (e *InvalidInputError) Is(target error) bool { return target == ErrInvalidInput }
+
 // Submit runs the first verification, or a full resubmission after a failure.
 func (s *Service) Submit(ctx context.Context, in *SubmitInput) (*Record, error) {
-	in.CountryCode = strings.ToUpper(strings.TrimSpace(in.CountryCode))
+	code, validCountry := countrycode.Normalize(in.CountryCode)
+	in.CountryCode = code
 	in.RegistrationNumber = strings.TrimSpace(in.RegistrationNumber)
 	in.LegalName = strings.TrimSpace(in.LegalName)
-	if in.OrganizationID == "" || len(in.CountryCode) != 2 || in.RegistrationNumber == "" || in.LegalName == "" {
-		return nil, ErrInvalidInput
+	var bad []FieldError
+	if !validCountry {
+		bad = append(bad, FieldError{Path: "country_code", Message: countryMessage})
+	}
+	if in.RegistrationNumber == "" {
+		bad = append(bad, FieldError{Path: "registration_number", Message: "registration number is required"})
+	}
+	if in.LegalName == "" {
+		bad = append(bad, FieldError{Path: "legal_name", Message: "legal name is required"})
 	}
 	if in.AddressType != "" && !in.AddressType.Valid() {
+		bad = append(bad, FieldError{Path: "address_type", Message: "must be registered or trading"})
+	}
+	if len(bad) > 0 {
+		return nil, &InvalidInputError{Fields: bad}
+	}
+	if in.OrganizationID == "" {
 		return nil, ErrInvalidInput
 	}
 
@@ -208,9 +237,9 @@ func (s *Service) ConfirmAddress(
 // and country-specific identifiers are cleared, and name and address are kept.
 // The status returns to not_started so the full country-specific form shows.
 func (s *Service) ChangeCountry(ctx context.Context, organizationID, countryCode, actorID string) (*Record, error) {
-	countryCode = strings.ToUpper(strings.TrimSpace(countryCode))
-	if len(countryCode) != 2 {
-		return nil, ErrInvalidInput
+	countryCode, validCountry := countrycode.Normalize(countryCode)
+	if !validCountry {
+		return nil, &InvalidInputError{Fields: []FieldError{{Path: "country_code", Message: countryMessage}}}
 	}
 	rec, err := s.Store.Load(ctx, organizationID)
 	if err != nil {

@@ -76,7 +76,7 @@ func (h *AuthHandler) getInvite(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	var req authAcceptInviteBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -293,7 +293,7 @@ func (h *AuthHandler) commitInvitedUser(
 func (h *AuthHandler) createOrgInvite(w http.ResponseWriter, r *http.Request) {
 	var req authCreateOrgInviteBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {

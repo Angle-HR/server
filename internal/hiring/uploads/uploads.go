@@ -41,8 +41,9 @@ const (
 	PresignTTL = 15 * time.Minute
 	// PendingTTL is how long an upload waits to be used by an application before the sweeper deletes it.
 	PendingTTL = 24 * time.Hour
-	// PerIPPerHour caps presigned URLs per address.
-	PerIPPerHour = 60
+	// PerIPPerWindow caps presigned URLs per address inside apply.FloodWindow. The window is short so a burst of
+	// bad requests blocks a caller for minutes, not an hour.
+	PerIPPerWindow = 40
 
 	statusPending  = "pending"
 	statusClean    = "clean"
@@ -206,14 +207,12 @@ func (s *Service) Presign(ctx context.Context, in PresignInput) (*Presigned, err
 	if s.Scanner == nil && len(s.Scanners) == 0 {
 		return nil, apply.ErrFilesUnavailable
 	}
-	if s.Limiter != nil {
-		ok, err := s.Limiter.Allow(ctx, "upload:ip:"+in.ClientIP, PerIPPerHour, time.Hour)
-		if err == nil && !ok {
-			return nil, apply.ErrRateLimited
-		}
-		if err != nil && s.Logger != nil {
+	if err := apply.CheckLimit(ctx, s.Limiter, "upload:ip:"+in.ClientIP, PerIPPerWindow, apply.FloodWindow, func(err error) {
+		if s.Logger != nil {
 			s.Logger.Warn("uploads: rate limiter unavailable", "error", err)
 		}
+	}); err != nil {
+		return nil, err
 	}
 	entry, err := s.Registry.LookupJob(ctx, in.PublicID)
 	if err != nil {

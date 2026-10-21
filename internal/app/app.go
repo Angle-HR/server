@@ -286,12 +286,16 @@ func newHiringHandler(router *dbrouter.DBRouter, global *pgxpool.Pool) *hiringht
 
 // newKYBRegistry installs the automated company verifiers that are configured.
 // A country without one is verified by a person (Tier 2), so the UK stays a
-// manual review until COMPANIES_HOUSE_API_KEY is set.
+// manual review until COMPANIES_HOUSE_API_KEY is set. Czechia (ARES) and Finland
+// (PRH) need no key and are always installed.
 func newKYBRegistry(cfg config.Config) *kyb.Registry {
 	reg := kyb.NewRegistry()
 	if cfg.CompaniesHouseAPIKey != "" {
 		reg.Register("GB", &kyb.CompaniesHouse{APIKey: cfg.CompaniesHouseAPIKey})
 	}
+	// Keyless open registries: always on.
+	reg.Register("CZ", &kyb.ARES{})
+	reg.Register("FI", &kyb.PRH{})
 	return reg
 }
 

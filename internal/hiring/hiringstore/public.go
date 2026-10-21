@@ -191,9 +191,10 @@ const insertApplicationSQL = `
 INSERT INTO hiring.applications
     (id, tenant_id, job_id, form_id, form_version, candidate_name, candidate_email, candidate_country, candidate_market,
      answers, status, flags, source, idempotency_key, notice_version, notice_acknowledged_at, consent_given_at,
-     submitted_at, retention_until, lawful_basis, collection_purpose, allowed_downstream_purposes)
+     submitted_at, retention_until, lawful_basis, collection_purpose, allowed_downstream_purposes,
+     idempotency_fingerprint)
 VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10::jsonb, $11, $12::jsonb, $13, NULLIF($14, ''), $15, $16,
-        $17, $18, $19, $20, $21, $22::text[])
+        $17, $18, $19, $20, $21, $22::text[], NULLIF($23, ''))
 ON CONFLICT DO NOTHING
 RETURNING id::text`
 
@@ -203,6 +204,27 @@ VALUES ($1::uuid, $2::uuid, 1, 1)
 ON CONFLICT (job_id) DO UPDATE SET
     applicant_count = hiring.job_applicant_counts.applicant_count + 1,
     new_applicant_count = hiring.job_applicant_counts.new_applicant_count + 1`
+
+const idempotentApplicationSQL = `
+SELECT COALESCE(idempotency_fingerprint, '') FROM hiring.applications WHERE job_id = $1::uuid AND idempotency_key = $2`
+
+// IdempotentApplication finds the application saved under a job's idempotency key. It implements apply.Store.
+func (s *Store) IdempotentApplication(ctx context.Context, tenantID, jobID, key string) (string, bool, error) {
+	var fp string
+	found := false
+	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, idempotentApplicationSQL, jobID, key).Scan(&fp)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("hiringstore: look up idempotency key: %w", err)
+		}
+		found = true
+		return nil
+	})
+	return fp, found, err
+}
 
 // InsertApplication saves an application and raises the job's counters in one transaction. It implements
 // apply.Store. The audit row names the application and its status, never the candidate.
@@ -230,6 +252,7 @@ func (s *Store) InsertApplication(ctx context.Context, tenantID string, a *apply
 			a.ID, tenantID, a.JobID, a.FormID, a.FormVersion, a.Name, a.Email, a.Country, a.Market,
 			answers, a.Status, flagsJSON, a.Source, a.IdempotencyKey, a.NoticeVersion, a.NoticeAcknowledgedAt,
 			a.ConsentAt, a.SubmittedAt, a.RetentionUntil, a.LawfulBasis, a.CollectionPurpose, purposes,
+			a.IdempotencyFingerprint,
 		).Scan(&id)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil // a repeat: nothing written, nothing counted

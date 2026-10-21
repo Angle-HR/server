@@ -228,7 +228,7 @@ func (h *HiringHandler) setApplicationStatus(w http.ResponseWriter, r *http.Requ
 	}
 	var req ApplicationStatusRequest
 	if err := decodeStrict(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	res, err := svc.SetStatus(r.Context(), c, h.jobID(r), h.appID(r), applications.StatusInput{Status: req.Status, Note: req.Note})
@@ -273,7 +273,7 @@ func (h *HiringHandler) reviewApplication(w http.ResponseWriter, r *http.Request
 	}
 	var req ApplicationReviewRequest
 	if err := decodeStrict(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	res, err := svc.Review(r.Context(), c, h.jobID(r), h.appID(r), applications.ReviewInput{Decision: req.Decision, Note: req.Note})
@@ -364,7 +364,7 @@ func (h *HiringHandler) putApplicantSettings(w http.ResponseWriter, r *http.Requ
 	}
 	var req ApplicantSettingsRequest
 	if err := decodeStrict(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	st, err := svc.SaveSettings(r.Context(), c, applications.SettingsInput{

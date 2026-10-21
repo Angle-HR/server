@@ -287,6 +287,7 @@ func TestSubmitValidation(t *testing.T) {
 	for _, mod := range []func(*SubmitInput){
 		func(i *SubmitInput) { i.OrganizationID = "" },
 		func(i *SubmitInput) { i.CountryCode = "GBR" },
+		func(i *SubmitInput) { i.CountryCode = "ZZ" }, // two letters, but not a country
 		func(i *SubmitInput) { i.RegistrationNumber = "  " },
 		func(i *SubmitInput) { i.LegalName = "" },
 		func(i *SubmitInput) { i.AddressType = "mailing" },
@@ -296,6 +297,33 @@ func TestSubmitValidation(t *testing.T) {
 		if _, err := f.svc.Submit(context.Background(), in); !errors.Is(err, ErrInvalidInput) {
 			t.Errorf("expected ErrInvalidInput, got %v", err)
 		}
+	}
+}
+
+func TestSubmitNamesTheBadCountry(t *testing.T) {
+	f := newFixture()
+	in := ukInput()
+	in.CountryCode = "ZZ"
+	_, err := f.svc.Submit(context.Background(), in)
+	var invalid *InvalidInputError
+	if !errors.As(err, &invalid) || len(invalid.Fields) != 1 || invalid.Fields[0].Path != "country_code" {
+		t.Fatalf("want the country_code field named, got %v", err)
+	}
+}
+
+// The hiring market code UK is accepted for the United Kingdom and stored as GB, so a client that only knows
+// market codes is not silently treated as an unknown country.
+func TestSubmitAcceptsUKAsGB(t *testing.T) {
+	f := newFixture()
+	in := ukInput()
+	in.CountryCode = "UK"
+	f.stub.res = Result{Outcome: OutcomeVerified}
+	rec, err := f.svc.Submit(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if rec.CountryCode != "GB" || f.stub.last.CountryCode != "GB" {
+		t.Errorf("country stored as %q, verified as %q", rec.CountryCode, f.stub.last.CountryCode)
 	}
 }
 

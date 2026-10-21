@@ -254,7 +254,7 @@ func (h *AdminHandler) reviewVerification(w http.ResponseWriter, r *http.Request
 	var req AdminVerificationReviewRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, kybMaxBodyBytes)).Decode(&req); err != nil ||
 		(req.Decision != reviewDecisionApprove && req.Decision != reviewDecisionReject) {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	reviewerID, _, _, ok := auth.AdminFromContext(r.Context())

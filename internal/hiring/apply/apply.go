@@ -5,6 +5,7 @@
 package apply
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -18,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Angle-HR/server/internal/countrycode"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/public"
@@ -36,6 +38,8 @@ var (
 	ErrGone = errors.New("apply: job is archived")
 	// ErrRateLimited: too many applications from one address or for one email.
 	ErrRateLimited = errors.New("apply: too many applications, try again later")
+	// ErrIdempotencyKeyReused: the Idempotency-Key was already used for a different application on this job.
+	ErrIdempotencyKeyReused = errors.New("apply: idempotency key was used with a different request")
 	// ErrFilesUnavailable: the form needs a file, and file uploads are not available (not configured, or the
 	// malware scanner cannot be reached). Uploads fail closed: a file nobody scanned is never accepted.
 	ErrFilesUnavailable = errors.New("apply: file uploads are not available")
@@ -112,6 +116,8 @@ type NewApplication struct {
 	Source       string
 
 	IdempotencyKey string
+	// IdempotencyFingerprint is Fingerprint of the request, stored with the key to tell a retry from a reuse.
+	IdempotencyFingerprint string
 
 	NoticeVersion        string
 	NoticeAcknowledgedAt time.Time
@@ -167,6 +173,10 @@ type Store interface {
 	// returns false, with nothing written, when the same email already applied to the job or the idempotency
 	// key was already used.
 	InsertApplication(ctx context.Context, tenantID string, a *NewApplication) (created bool, err error)
+	// IdempotentApplication looks up an application already stored under the job's idempotency key. found is
+	// false when the key is new. fingerprint is the request fingerprint saved with it ("" for a row saved
+	// before fingerprints existed, which counts as a match).
+	IdempotentApplication(ctx context.Context, tenantID, jobID, key string) (fingerprint string, found bool, err error)
 	// ReapplyBlocked reports whether the company has blocked this candidate (a keyed hash of the email) from
 	// applying for now.
 	ReapplyBlocked(ctx context.Context, tenantID, emailHMAC string) (bool, error)
@@ -180,6 +190,48 @@ type Directory interface {
 // Limiter counts events in a time window. Allow reports whether the event is within the limit.
 type Limiter interface {
 	Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error)
+}
+
+// TTLLimiter is a Limiter that can also say how long until a key's window ends. The service uses it to tell a
+// throttled caller how long to wait; a Limiter without it gets the whole window as the answer.
+type TTLLimiter interface {
+	Limiter
+	TTL(ctx context.Context, key string) (time.Duration, error)
+}
+
+// RateLimitedError is ErrRateLimited with the time the caller should wait before trying again.
+type RateLimitedError struct{ RetryAfter time.Duration }
+
+func (e *RateLimitedError) Error() string { return ErrRateLimited.Error() }
+
+// Is makes errors.Is(err, ErrRateLimited) true.
+func (e *RateLimitedError) Is(target error) bool { return target == ErrRateLimited }
+
+// CheckLimit counts one event for key. It returns nil when the event is within limit, and also when the
+// limiter is broken: losing applications because Redis is down is worse than a short stretch without
+// throttling. Otherwise it returns a *RateLimitedError that carries the time until the window ends. A limiter
+// failure is reported through onErr, which may be nil.
+func CheckLimit(ctx context.Context, l Limiter, key string, limit int, window time.Duration, onErr func(error)) error {
+	if l == nil {
+		return nil
+	}
+	ok, err := l.Allow(ctx, key, limit, window)
+	if err != nil {
+		if onErr != nil {
+			onErr(err)
+		}
+		return nil
+	}
+	if ok {
+		return nil
+	}
+	wait := window
+	if t, isTTL := l.(TTLLimiter); isTTL {
+		if d, terr := t.TTL(ctx, key); terr == nil && d > 0 && d < window {
+			wait = d
+		}
+	}
+	return &RateLimitedError{RetryAfter: wait}
 }
 
 // File is an upload that passed every check and is ready to be attached to an application.
@@ -218,8 +270,14 @@ func (e *FileError) Error() string {
 
 // Limits of the public endpoint.
 const (
-	// PerIPPerHour caps applications from one address, which protects the database from floods.
+	// PerIPPerHour caps applications that passed validation from one address.
 	PerIPPerHour = 30
+	// FloodPerIP caps every request from one address, valid or not, inside FloodWindow. It protects the
+	// database from floods. It is deliberately separate from PerIPPerHour and short, so a burst of malformed
+	// requests costs a few minutes and can never use up the hour's quota for real applications.
+	FloodPerIP = 120
+	// FloodWindow is the window of FloodPerIP.
+	FloodWindow = 15 * time.Minute
 	// PerEmailPerJobPerHour caps retries for one email on one job.
 	PerEmailPerJobPerHour = 5
 	maxAnswersBytes       = 200_000
@@ -266,14 +324,13 @@ type Input struct {
 type Receipt struct{ Received bool }
 
 var (
-	countryRE     = regexp.MustCompile(`^[A-Z]{2}$`)
 	idempotencyRE = regexp.MustCompile(`^[A-Za-z0-9_.:-]{8,64}$`)
 )
 
 // Submit validates and stores an application.
 func (s *Service) Submit(ctx context.Context, in Input) (*Receipt, error) {
-	if !s.allow(ctx, "ip:"+in.ClientIP, PerIPPerHour) {
-		return nil, ErrRateLimited
+	if err := s.limit(ctx, "flood:ip:"+in.ClientIP, FloodPerIP, FloodWindow); err != nil {
+		return nil, err
 	}
 	entry, err := s.Registry.LookupJob(ctx, in.PublicID)
 	if err != nil {
@@ -288,6 +345,23 @@ func (s *Service) Submit(ctx context.Context, in Input) (*Receipt, error) {
 		return nil, err
 	}
 	t.Region, t.TenantID = entry.Region, entry.OrganizationID
+
+	// A retry with a key we have seen is answered before anything is validated, so it gets the same answer the
+	// first request got (even when its upload token is spent or the job has closed since).
+	fp := Fingerprint(in)
+	if key := strings.TrimSpace(in.IdempotencyKey); key != "" && idempotencyRE.MatchString(key) {
+		stored, found, ierr := st.IdempotentApplication(ctx, entry.OrganizationID, t.JobID, key)
+		if ierr != nil {
+			return nil, fmt.Errorf("apply: look up idempotency key: %w", ierr)
+		}
+		if found {
+			if stored != "" && stored != fp {
+				return nil, ErrIdempotencyKeyReused
+			}
+			return &Receipt{Received: true}, nil
+		}
+	}
+
 	state, ok := public.StateOf(t.Status, t.ClosingDate, s.now())
 	switch {
 	case t.Status == jobs.StatusArchived:
@@ -303,8 +377,12 @@ func (s *Service) Submit(ctx context.Context, in Input) (*Receipt, error) {
 		return nil, err
 	}
 	app.Confirmation = s.confirmation(in.PublicID, t, app)
-	if !s.allow(ctx, "email:"+in.PublicID+":"+hash(app.Email), PerEmailPerJobPerHour) {
-		return nil, ErrRateLimited
+	app.IdempotencyFingerprint = fp
+	if err := s.limit(ctx, "ip:"+in.ClientIP, PerIPPerHour, time.Hour); err != nil {
+		return nil, err
+	}
+	if err := s.limit(ctx, "email:"+in.PublicID+":"+hash(app.Email), PerEmailPerJobPerHour, time.Hour); err != nil {
+		return nil, err
 	}
 	if s.EmailHash != nil {
 		blocked, berr := st.ReapplyBlocked(ctx, entry.OrganizationID, s.EmailHash(entry.OrganizationID, app.Email))
@@ -335,20 +413,39 @@ func (s *Service) Submit(ctx context.Context, in Input) (*Receipt, error) {
 	return &Receipt{Received: true}, nil
 }
 
-// allow counts one event against a limit. A limiter outage lets the request through: losing applications
+// limit counts one event against a limit. A limiter outage lets the request through: losing applications
 // because Redis is down is worse than a short stretch without throttling.
-func (s *Service) allow(ctx context.Context, key string, limit int) bool {
-	if s.Limiter == nil {
-		return true
-	}
-	ok, err := s.Limiter.Allow(ctx, "apply:"+key, limit, time.Hour)
-	if err != nil {
+func (s *Service) limit(ctx context.Context, key string, limit int, window time.Duration) error {
+	return CheckLimit(ctx, s.Limiter, "apply:"+key, limit, window, func(err error) {
 		if s.Logger != nil {
 			s.Logger.Warn("apply: rate limiter unavailable", "error", err)
 		}
-		return true
+	})
+}
+
+// Fingerprint identifies what an application asks for, so a retry with the same Idempotency-Key can be told
+// apart from a different request that reuses the key. It covers what the candidate chose (country, answers,
+// acknowledgements, source) and nothing that changes between retries.
+func Fingerprint(in Input) string {
+	country, _ := countrycode.Normalize(in.CandidateCountry)
+	answers := make(map[string]json.RawMessage, len(in.Answers))
+	for id, raw := range in.Answers {
+		var buf bytes.Buffer
+		if json.Compact(&buf, raw) == nil {
+			answers[id] = json.RawMessage(buf.Bytes())
+		} else {
+			answers[id] = raw
+		}
 	}
-	return ok
+	b, _ := json.Marshal(struct {
+		Country string                     `json:"c"`
+		Answers map[string]json.RawMessage `json:"a"`
+		Notice  bool                       `json:"n"`
+		Consent bool                       `json:"k"`
+		Source  string                     `json:"s"`
+	}{country, answers, in.NoticeAcknowledged, in.Consent, source(in.Source)})
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
 }
 
 // build validates the candidate's input against the frozen form and returns the row to store.
@@ -364,10 +461,11 @@ func (s *Service) build(ctx context.Context, in Input, t *Target) (*NewApplicati
 		return nil, &ValidationError{Fields: []FieldError{{Path: "answers", Message: "the answers are too long"}}}
 	}
 
-	country := strings.ToUpper(strings.TrimSpace(in.CandidateCountry))
+	// The market code UK is accepted too; the country is stored as ISO.
+	country, validCountry := countrycode.Normalize(in.CandidateCountry)
 	market := ""
 	switch {
-	case !countryRE.MatchString(country):
+	case !validCountry:
 		add("candidate_country", "choose your country")
 	default:
 		m, known := MarketFor(country)

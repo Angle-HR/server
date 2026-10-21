@@ -48,7 +48,7 @@ type acceptInviteBody struct {
 func (h *AdminHandler) login(w http.ResponseWriter, r *http.Request) {
 	var req adminLoginBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
@@ -105,7 +105,7 @@ func (h *AdminHandler) login(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) refresh(w http.ResponseWriter, r *http.Request) {
 	var req adminRefreshBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -225,7 +225,7 @@ func (h *AdminHandler) getInvite(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	var body acceptInviteBody
 	if err := decodeJSON(r, &body); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	body.Token = strings.TrimSpace(body.Token)

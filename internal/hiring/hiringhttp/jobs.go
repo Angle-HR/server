@@ -229,7 +229,7 @@ func (h *HiringHandler) createJob(w http.ResponseWriter, r *http.Request) {
 	var req draft.CreateRequest
 	if len(strings.TrimSpace(string(raw))) > 0 {
 		if err := decodeStrict(raw, &req); err != nil {
-			response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+			response.Error(w, r, apperror.InvalidBody(err))
 			return
 		}
 	}
@@ -283,7 +283,7 @@ func (h *HiringHandler) save(w http.ResponseWriter, r *http.Request, strict bool
 	}
 	p, err := jobs.DecodePatch(raw)
 	if err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	v, err := svc.Save(r.Context(), c, h.jobID(r), rev, p, strict)
@@ -304,7 +304,7 @@ func (h *HiringHandler) save(w http.ResponseWriter, r *http.Request, strict bool
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			id			path		string		true	"Job id"
-//	@Param			If-Match	header		string		false	"Revision the client loaded"
+//	@Param			If-Match	header		string		true	"Revision the client loaded"
 //	@Param			body		body		jobs.Patch	true	"Fields to change"
 //	@Success		200			{object}	hiringhttp.JobEnvelope
 //	@Failure		400			{object}	apidoc.ErrorEnvelope
@@ -323,7 +323,7 @@ func (h *HiringHandler) patchJob(w http.ResponseWriter, r *http.Request) { h.sav
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			id			path		string		true	"Job id"
-//	@Param			If-Match	header		string		false	"Revision the client loaded"
+//	@Param			If-Match	header		string		true	"Revision the client loaded"
 //	@Param			body		body		jobs.Patch	true	"Fields to change"
 //	@Success		200			{object}	hiringhttp.JobEnvelope
 //	@Failure		400			{object}	apidoc.ErrorEnvelope
@@ -348,7 +348,7 @@ type MarketsRequest struct {
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			id			path		string					true	"Job id"
-//	@Param			If-Match	header		string					false	"Revision the client loaded"
+//	@Param			If-Match	header		string					true	"Revision the client loaded"
 //	@Param			body		body		hiringhttp.MarketsRequest	true	"Markets"
 //	@Success		200			{object}	hiringhttp.JobEnvelope
 //	@Failure		400			{object}	apidoc.ErrorEnvelope
@@ -370,7 +370,7 @@ func (h *HiringHandler) putMarkets(w http.ResponseWriter, r *http.Request) {
 	}
 	var req MarketsRequest
 	if err := decodeStrict(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	markets := req.Markets
@@ -398,7 +398,7 @@ func (h *HiringHandler) putMarkets(w http.ResponseWriter, r *http.Request) {
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			id			path		string	true	"Job id"
-//	@Param			If-Match	header		string	false	"Revision the client loaded"
+//	@Param			If-Match	header		string	true	"Revision the client loaded"
 //	@Success		200			{object}	map[string]bool
 //	@Failure		404			{object}	apidoc.ErrorEnvelope
 //	@Failure		409			{object}	apidoc.ErrorEnvelope
@@ -452,7 +452,7 @@ func (h *HiringHandler) getForm(w http.ResponseWriter, r *http.Request) {
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			id			path		string				true	"Job id"
-//	@Param			If-Match	header		string				false	"Revision the client loaded"
+//	@Param			If-Match	header		string				true	"Revision the client loaded"
 //	@Param			body		body		draft.FormInput		true	"Form"
 //	@Success		200			{object}	hiringhttp.FormEnvelope
 //	@Failure		400			{object}	apidoc.ErrorEnvelope
@@ -475,7 +475,7 @@ func (h *HiringHandler) putForm(w http.ResponseWriter, r *http.Request) {
 	}
 	var in draft.FormInput
 	if err := decodeStrict(raw, &in); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	v, err := svc.SaveForm(r.Context(), c, h.jobID(r), rev, in)

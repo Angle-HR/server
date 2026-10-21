@@ -14,6 +14,7 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/draft"
 	"github.com/Angle-HR/server/internal/hiring/hiringstore"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
+	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/public"
 	"github.com/Angle-HR/server/internal/rbac"
 	"github.com/Angle-HR/server/internal/region"
@@ -174,16 +175,22 @@ func (h *HiringHandler) scope(w http.ResponseWriter, r *http.Request) (*draft.Se
 	return svc, c, true
 }
 
-// ifMatch reads the optional If-Match header, which carries the revision the client loaded.
+// ifMatch reads the If-Match header, which carries the revision the client loaded. Every job write needs it:
+// without it a stale form could overwrite someone else's change, or publish a draft that changed since it was
+// reviewed, so a missing header is refused (428) rather than treated as "any revision".
 func ifMatch(w http.ResponseWriter, r *http.Request) (int, bool) {
 	raw := strings.Trim(strings.TrimSpace(r.Header.Get("If-Match")), `"`)
 	raw = strings.TrimPrefix(raw, "W/\"")
 	if raw == "" {
-		return 0, true
+		response.Error(w, r, apperror.NewWithDetails(apperror.CodePreconditionRequired,
+			"send the job revision you loaded in the If-Match header",
+			map[string]any{"fields": []jobs.FieldError{{Path: "If-Match", Message: "the job revision is required"}}}))
+		return 0, false
 	}
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 1 {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, "If-Match must be the job revision"))
+		response.Error(w, r, apperror.NewWithDetails(apperror.CodeValidationError, "If-Match must be the job revision",
+			map[string]any{"fields": []jobs.FieldError{{Path: "If-Match", Message: "must be the job revision"}}}))
 		return 0, false
 	}
 	return n, true
@@ -202,7 +209,7 @@ func readBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 		if errors.As(err, &tooBig) {
 			response.Error(w, r, apperror.New(apperror.CodePayloadTooLarge, apperror.MsgRequestBodyTooLarge))
 		} else {
-			response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+			response.Error(w, r, apperror.InvalidBody(err))
 		}
 		return nil, false
 	}

@@ -173,7 +173,7 @@ func (h *ProductOnboardingHandler) putProfile(w http.ResponseWriter, r *http.Req
 	}
 	var req productProfileBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -377,7 +377,7 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 	}
 	var req productAddressBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -595,7 +595,7 @@ func (h *ProductOnboardingHandler) searchAddress(w http.ResponseWriter, r *http.
 
 	var req addressSearchBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -668,7 +668,7 @@ func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.
 
 	var req productVerifyAddressBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -826,7 +826,7 @@ func (h *ProductOnboardingHandler) putCompliance(w http.ResponseWriter, r *http.
 
 	var req productBusinessBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {

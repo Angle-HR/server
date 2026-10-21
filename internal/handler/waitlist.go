@@ -99,7 +99,7 @@ type signupRequest struct {
 func (h *WaitlistHandler) handle(w http.ResponseWriter, r *http.Request) {
 	var req signupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 
@@ -257,7 +257,7 @@ func maskEmail(email string) string {
 }
 
 type fieldError struct {
-	Field   string `json:"field"`
+	Path    string `json:"path"`
 	Message string `json:"message"`
 }
 
@@ -270,7 +270,7 @@ func validationError(err error) error {
 	fields := make([]fieldError, 0, len(verrs))
 	for _, ve := range verrs {
 		fields = append(fields, fieldError{
-			Field:   jsonFieldName(ve.Field()),
+			Path:    jsonFieldName(ve.Field()),
 			Message: validationMessage(ve),
 		})
 	}

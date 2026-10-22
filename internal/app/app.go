@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"syscall"
 	"time"
 
@@ -16,7 +17,6 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/software78/fluvio/fluviui"
 
 	"github.com/Angle-HR/server/internal/admin"
 	"github.com/Angle-HR/server/internal/auth"
@@ -80,8 +80,13 @@ func useCommonMiddleware(router chi.Router, cfg config.Config, log *slog.Logger)
 	router.Use(logger.RequestLogger(log))
 	router.Use(chimiddleware.Recoverer)
 	if len(cfg.CORSAllowedOrigins) > 0 {
+		allowedOrigins := cfg.CORSAllowedOrigins
+		if cfg.FluvioUIOrigin != "" {
+			// This middleware answers every preflight, so the dashboard's authenticated calls to /fluvio/* need it too.
+			allowedOrigins = append(slices.Clone(allowedOrigins), cfg.FluvioUIOrigin)
+		}
 		router.Use(cors.Handler(cors.Options{
-			AllowedOrigins:   cfg.CORSAllowedOrigins,
+			AllowedOrigins:   allowedOrigins,
 			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "If-Match"},
 			AllowCredentials: false,
@@ -152,12 +157,7 @@ func Run() error {
 	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, fluvioClient, cfg.AuthDefaultRegion)
 	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, totpCrypto)
 	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient, tokenService)
-	if cfg.AddressVerifyMode == "passthrough" {
-		productOnboardingHandler.AddressProvider = onboarding.PassthroughAddressVerifier{}
-	}
-	if cfg.AddressSearchMode == "passthrough" {
-		productOnboardingHandler.AddressSearcher = onboarding.PassthroughAddressSearcher{}
-	}
+	wireAddressProviders(productOnboardingHandler, cfg)
 	individualOnboardingHandler := handler.NewIndividualOnboardingHandler(dbRouter, globalPool, tokenService)
 	businessOnboardingHandler := handler.NewBusinessOnboardingHandler(dbRouter, globalPool, tokenService)
 	kybHandler := handler.NewKYBHandler(dbRouter, globalPool, newKYBRegistry(cfg))
@@ -165,6 +165,9 @@ func Run() error {
 	kybHandler.NotifierFor = kybNotifierFor
 	kybHandler.Formats = onboarding.RegistrationNumberFormatOK
 	hiringHandler := newHiringHandler(dbRouter, globalPool)
+	publicHandler := newPublicHandler(cfg, dbRouter, globalPool, redisClient, log)
+	hiringHandler.Public = publicHandler.Public
+	hiringHandler.Applications = newApplicationsService(cfg, dbRouter, log)
 	authHandler.MeAccess = hiringHandler.Access
 	adminHandler := handler.NewAdminHandler(
 		adminStore,
@@ -184,18 +187,17 @@ func Run() error {
 	if docs.IsEnabled(cfg.AppEnv) {
 		docs.RegisterRoutes(router, docs.Config{PublicAPIURL: cfg.PublicAPIURL})
 
-		fluvioUIOrigin := cfg.FluvioUIOrigin
-		if fluvioUIOrigin == "" {
-			fluvioUIOrigin = "http://localhost:5173"
-		}
-		router.Handle("/fluvio/*", fluviui.Handler(fluvioClient, fluviui.WithAllowedOrigin(fluvioUIOrigin)))
+		mountFluvioUI(router, cfg, fluvioClient, log)
 	}
+
+	publicHandler.RegisterPages(router)
 
 	router.Route("/api/v1", func(r chi.Router) {
 		countriesHandler.RegisterRoutes(r)
 		waitlistHandler.RegisterRoutes(r)
 		r.Route("/auth", authHandler.RegisterRoutes)
 		productOnboardingHandler.RegisterRoutes(r)
+		publicHandler.RegisterRoutes(r)
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.RequireAuth)
 			authHandler.RegisterProtectedRoutes(r)
@@ -284,12 +286,16 @@ func newHiringHandler(router *dbrouter.DBRouter, global *pgxpool.Pool) *hiringht
 
 // newKYBRegistry installs the automated company verifiers that are configured.
 // A country without one is verified by a person (Tier 2), so the UK stays a
-// manual review until COMPANIES_HOUSE_API_KEY is set.
+// manual review until COMPANIES_HOUSE_API_KEY is set. Czechia (ARES) and Finland
+// (PRH) need no key and are always installed.
 func newKYBRegistry(cfg config.Config) *kyb.Registry {
 	reg := kyb.NewRegistry()
 	if cfg.CompaniesHouseAPIKey != "" {
 		reg.Register("GB", &kyb.CompaniesHouse{APIKey: cfg.CompaniesHouseAPIKey})
 	}
+	// Keyless open registries: always on.
+	reg.Register("CZ", &kyb.ARES{})
+	reg.Register("FI", &kyb.PRH{})
 	return reg
 }
 
@@ -304,5 +310,22 @@ func newKYBNotifierFactory(
 			return nil
 		}
 		return &kybnotify.Notifier{Regional: pool, Global: global, Enqueuer: enqueuer}
+	}
+}
+
+// wireAddressProviders picks the address search and verification providers from config.
+func wireAddressProviders(h *handler.ProductOnboardingHandler, cfg config.Config) {
+	google := onboarding.NewGoogleAddressProvider(cfg.GoogleMapsAPIKey)
+	switch cfg.AddressVerifyMode {
+	case "passthrough":
+		h.AddressProvider = onboarding.PassthroughAddressVerifier{}
+	case "google":
+		h.AddressProvider = google
+	}
+	switch cfg.AddressSearchMode {
+	case "passthrough":
+		h.AddressSearcher = onboarding.PassthroughAddressSearcher{}
+	case "google":
+		h.AddressSearcher = google
 	}
 }

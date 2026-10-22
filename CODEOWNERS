@@ -31,7 +31,6 @@
 # ──────────────────────────────────────────────
 # Infrastructure & deployment
 # ──────────────────────────────────────────────
-/infra/                     @[owner-username]
 /deploy/                    @[owner-username]
 docker-compose*.yml         @[owner-username]
 Dockerfile*                 @[owner-username]

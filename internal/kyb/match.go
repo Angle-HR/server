@@ -1,6 +1,7 @@
 package kyb
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -13,13 +14,21 @@ var legalSuffixes = map[string]bool{
 	"co": true, "company": true, "gmbh": true, "ag": true, "sa": true, "sarl": true,
 	"bv": true, "nv": true, "ab": true, "as": true, "oy": true, "srl": true, "spa": true,
 	"ug": true, "kg": true, "ou": true, "zoo": true, "sp": true,
+	"sro": true, "ks": true, "vos": true, "oyj": true,
 }
+
+// dottedAbbreviation matches abbreviations written as single letters and dots, such as "s.r.o." or "a.s.",
+// so they compare equal to the same form written without dots.
+var dottedAbbreviation = regexp.MustCompile(`\b\p{L}(?:\.\s?\p{L})+\.?`)
 
 // NormalizeName lower-cases a company name, turns "&" into "and", strips
 // punctuation, collapses whitespace and removes a leading "the" and trailing
 // legal-form words.
 func NormalizeName(name string) string {
 	name = strings.ToLower(strings.ReplaceAll(name, "&", " and "))
+	name = dottedAbbreviation.ReplaceAllStringFunc(name, func(m string) string {
+		return strings.NewReplacer(".", "", " ", "").Replace(m)
+	})
 	var b strings.Builder
 	for _, r := range name {
 		switch {

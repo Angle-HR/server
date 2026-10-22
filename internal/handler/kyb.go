@@ -202,7 +202,7 @@ func (h *KYBHandler) scope(w http.ResponseWriter, r *http.Request) (*kybScope, b
 
 func decodeKYB(w http.ResponseWriter, r *http.Request, dst any) bool {
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, kybMaxBodyBytes)).Decode(dst); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return false
 	}
 	return true
@@ -210,7 +210,15 @@ func decodeKYB(w http.ResponseWriter, r *http.Request, dst any) bool {
 
 // kybError maps a verification-flow error to an API error.
 func kybError(err error) error {
+	var invalid *kyb.InvalidInputError
 	switch {
+	case errors.As(err, &invalid):
+		fields := make([]map[string]string, 0, len(invalid.Fields))
+		for _, f := range invalid.Fields {
+			fields = append(fields, map[string]string{"path": f.Path, "message": f.Message})
+		}
+		return apperror.NewWithDetails(apperror.CodeValidationError, apperror.MsgInvalidRequest,
+			map[string]any{"fields": fields})
 	case errors.Is(err, kyb.ErrInvalidInput):
 		return apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequest)
 	case errors.Is(err, kyb.ErrResubmissionBlocked):

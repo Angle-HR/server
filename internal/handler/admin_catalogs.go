@@ -133,7 +133,7 @@ func (h *AdminHandler) createCatalog(w http.ResponseWriter, r *http.Request) {
 
 	var body catalogCreateBody
 	if err := decodeJSON(r, &body); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 
@@ -180,7 +180,7 @@ func (h *AdminHandler) patchCatalog(w http.ResponseWriter, r *http.Request) {
 
 	var body catalogCreateBody
 	if decodeJSONErr := decodeJSON(r, &body); decodeJSONErr != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(decodeJSONErr))
 		return
 	}
 

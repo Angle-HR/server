@@ -15,7 +15,7 @@ require (
 	github.com/pashagolub/pgxmock/v4 v4.9.0
 	github.com/pquerna/otp v1.5.0
 	github.com/redis/go-redis/v9 v9.20.0
-	github.com/software78/fluvio v0.3.1
+	github.com/software78/fluvio v0.3.4
 	github.com/swaggo/swag v1.16.4
 )
 

@@ -103,7 +103,7 @@ func TestWaitlistSignup_invalidEmail(t *testing.T) {
 	assertStatus(t, rec, http.StatusBadRequest)
 	errBody := decodeError(t, rec)
 	fields := decodeDetailsFields(t, errBody)
-	if len(fields) == 0 || fields[0]["field"] != "email" {
+	if len(fields) == 0 || fields[0]["path"] != "email" {
 		t.Fatalf("fields: got %v, want first field=email", fields)
 	}
 

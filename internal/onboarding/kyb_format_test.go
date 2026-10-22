@@ -16,6 +16,12 @@ func TestRegistrationNumberFormatOK(t *testing.T) {
 		{"NG", "RC 1234567", true},
 		{"DE", "HRB 12345", true},
 		{"DE", "12345", false},
+		{"CZ", "27082440", true},
+		{"CZ", "123", true}, // padded to eight digits
+		{"CZ", "HRB 12345", false},
+		{"FI", "0112038-9", true},
+		{"FI", "01120389", true}, // hyphen added
+		{"FI", "12345678-9", false},
 		{"US", "anything", true}, // multi-identifier countries are left to the verifier
 		{"FR", "anything", true},
 	}

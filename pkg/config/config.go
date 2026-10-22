@@ -34,6 +34,8 @@ type Config struct {
 	LogLevel               string
 	PublicAPIURL           string
 	FluvioUIOrigin         string
+	FluvioBasicAuthUser    string
+	FluvioBasicAuthPass    string
 	CORSAllowedOrigins     []string
 	JWTSecret              string
 	JWTAccessTTL           time.Duration
@@ -45,6 +47,7 @@ type Config struct {
 	TOTPEncryptionKey      string
 	AddressVerifyMode      string
 	AddressSearchMode      string
+	GoogleMapsAPIKey       string
 	CompaniesHouseAPIKey   string
 }
 
@@ -63,6 +66,8 @@ func Load() (Config, error) {
 		LogLevel:               strings.TrimSpace(os.Getenv("LOG_LEVEL")),
 		PublicAPIURL:           os.Getenv("PUBLIC_API_URL"),
 		FluvioUIOrigin:         os.Getenv("FLUVIO_UI_ORIGIN"),
+		FluvioBasicAuthUser:    os.Getenv("FLUVIO_BASIC_AUTH_USER"),
+		FluvioBasicAuthPass:    os.Getenv("FLUVIO_BASIC_AUTH_PASSWORD"),
 		JWTSecret:              os.Getenv("JWT_SECRET"),
 		AdminBootstrapEmail:    strings.TrimSpace(os.Getenv("ADMIN_BOOTSTRAP_EMAIL")),
 		AdminBootstrapPassword: os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
@@ -70,6 +75,7 @@ func Load() (Config, error) {
 		TOTPEncryptionKey:      strings.TrimSpace(os.Getenv("TOTP_ENCRYPTION_KEY")),
 		AddressVerifyMode:      strings.ToLower(strings.TrimSpace(os.Getenv("ADDRESS_VERIFY_MODE"))),
 		AddressSearchMode:      strings.ToLower(strings.TrimSpace(os.Getenv("ADDRESS_SEARCH_MODE"))),
+		GoogleMapsAPIKey:       strings.TrimSpace(os.Getenv("GOOGLE_MAPS_API_KEY")),
 	}
 
 	applyDefaults(&cfg)
@@ -155,6 +161,10 @@ func validate(cfg *Config) error {
 	port, err := strconv.Atoi(cfg.ServerPort)
 	if err != nil || port < 1 || port > maxPort {
 		return fmt.Errorf("invalid SERVER_PORT %q", cfg.ServerPort)
+	}
+
+	if (cfg.AddressVerifyMode == "google" || cfg.AddressSearchMode == "google") && cfg.GoogleMapsAPIKey == "" {
+		return errors.New("GOOGLE_MAPS_API_KEY is required when an address mode is google")
 	}
 
 	if cfg.PublicAPIURL == "" {

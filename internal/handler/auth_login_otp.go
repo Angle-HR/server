@@ -37,7 +37,7 @@ var _ = apidoc.ErrorEnvelope{}
 func (h *AuthHandler) loginOTPRequest(w http.ResponseWriter, r *http.Request) {
 	var req authLoginOTPRequestBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -99,7 +99,7 @@ func (h *AuthHandler) loginOTPRequest(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) loginOTPVerify(w http.ResponseWriter, r *http.Request) {
 	var req authLoginOTPVerifyBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {

@@ -1,11 +1,11 @@
 package handler
 
 import (
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"log/slog"
 	"net/http"
 	"strings"
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	"github.com/Angle-HR/server/internal/admin"
 	"github.com/Angle-HR/server/internal/apidoc"
@@ -16,7 +16,7 @@ import (
 	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/response"
 )
- 
+
 var _ = apidoc.ErrorEnvelope{}
 
 type createStaffBody struct {
@@ -62,7 +62,7 @@ func (h *AdminHandler) listStaff(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) createStaff(w http.ResponseWriter, r *http.Request) {
 	var body createStaffBody
 	if err := decodeJSON(r, &body); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	body.Email = strings.TrimSpace(strings.ToLower(body.Email))
@@ -166,7 +166,7 @@ func (h *AdminHandler) patchStaff(w http.ResponseWriter, r *http.Request) {
 
 	var body patchStaffBody
 	if decodeJSONErr := decodeJSON(r, &body); decodeJSONErr != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(decodeJSONErr))
 		return
 	}
 

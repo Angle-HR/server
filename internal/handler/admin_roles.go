@@ -55,7 +55,7 @@ func (h *AdminHandler) listRoles(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) createRole(w http.ResponseWriter, r *http.Request) {
 	var body createRoleBody
 	if err := decodeJSON(r, &body); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	body.Slug = strings.TrimSpace(strings.ToLower(body.Slug))
@@ -98,7 +98,7 @@ func (h *AdminHandler) patchRole(w http.ResponseWriter, r *http.Request) {
 
 	var body patchRoleBody
 	if decodeJSONErr := decodeJSON(r, &body); decodeJSONErr != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(decodeJSONErr))
 		return
 	}
 	if body.Name == nil && body.Permissions == nil {

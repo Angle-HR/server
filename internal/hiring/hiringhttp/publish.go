@@ -39,6 +39,7 @@ func (h *HiringHandler) registerPublishItemRoutes(r chi.Router) {
 		r.Post("/"+segment, h.lifecycle(action))
 	}
 	r.Post("/duplicate", h.duplicate)
+	r.Get("/share-kit", h.shareKit)
 	r.Get("/compliance", h.compliance)
 	r.Put("/compliance/{gate_id}", h.confirmGate)
 	r.Get("/members", h.getMembers)
@@ -119,7 +120,7 @@ func (h *HiringHandler) publishCheck(w http.ResponseWriter, r *http.Request) {
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			id			path		string	true	"Job id"
-//	@Param			If-Match	header		string	false	"Revision the client loaded"
+//	@Param			If-Match	header		string	true	"Revision the client loaded"
 //	@Success		200			{object}	hiringhttp.TransitionEnvelope
 //	@Failure		403			{object}	apidoc.ErrorEnvelope
 //	@Failure		404			{object}	apidoc.ErrorEnvelope
@@ -152,7 +153,7 @@ func (h *HiringHandler) publish(w http.ResponseWriter, r *http.Request) {
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			id			path		string	true	"Job id"
-//	@Param			If-Match	header		string	false	"Revision the client loaded"
+//	@Param			If-Match	header		string	true	"Revision the client loaded"
 //	@Success		200			{object}	hiringhttp.TransitionEnvelope
 //	@Failure		403			{object}	apidoc.ErrorEnvelope
 //	@Failure		404			{object}	apidoc.ErrorEnvelope
@@ -251,7 +252,7 @@ type ConfirmRequest struct {
 //	@Security		BearerAuth
 //	@Param			id			path		string						true	"Job id"
 //	@Param			gate_id		path		string						true	"Gate id, e.g. uk-lawful"
-//	@Param			If-Match	header		string						false	"Revision the client loaded"
+//	@Param			If-Match	header		string						true	"Revision the client loaded"
 //	@Param			body		body		hiringhttp.ConfirmRequest	true	"Confirmation"
 //	@Success		200			{object}	hiringhttp.GatesEnvelope
 //	@Failure		400			{object}	apidoc.ErrorEnvelope
@@ -273,7 +274,7 @@ func (h *HiringHandler) confirmGate(w http.ResponseWriter, r *http.Request) {
 	}
 	var req ConfirmRequest
 	if err := decodeStrict(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	states, err := svc.ConfirmGate(r.Context(), c, h.jobID(r), chi.URLParam(r, "gate_id"), req.Confirmed, rev)
@@ -322,7 +323,7 @@ type MembersRequest struct {
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			id			path		string						true	"Job id"
-//	@Param			If-Match	header		string						false	"Revision the client loaded"
+//	@Param			If-Match	header		string						true	"Revision the client loaded"
 //	@Param			body		body		hiringhttp.MembersRequest	true	"The whole team"
 //	@Success		200			{object}	hiringhttp.MembersEnvelope
 //	@Failure		400			{object}	apidoc.ErrorEnvelope
@@ -344,7 +345,7 @@ func (h *HiringHandler) putMembers(w http.ResponseWriter, r *http.Request) {
 	}
 	var req MembersRequest
 	if err := decodeStrict(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	ms, err := svc.SetMembers(r.Context(), c, h.jobID(r), rev, req.Members)
@@ -387,7 +388,7 @@ func (h *HiringHandler) getRules(w http.ResponseWriter, r *http.Request) {
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			id			path		string			true	"Job id"
-//	@Param			If-Match	header		string			false	"Revision the client loaded"
+//	@Param			If-Match	header		string			true	"Revision the client loaded"
 //	@Param			body		body		draft.RulesInput	true	"Rules"
 //	@Success		200			{object}	hiringhttp.RulesEnvelope
 //	@Failure		400			{object}	apidoc.ErrorEnvelope
@@ -409,7 +410,7 @@ func (h *HiringHandler) putRules(w http.ResponseWriter, r *http.Request) {
 	}
 	var req draft.RulesInput
 	if err := decodeStrict(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	v, err := svc.SetRules(r.Context(), c, h.jobID(r), rev, req)
@@ -429,7 +430,7 @@ type BulkRequest struct {
 // bulk godoc
 //
 //	@Summary		Change several jobs at once
-//	@Description	Pause, close, archive or move to draft, for up to 100 jobs. Not all-or-nothing: each job is changed on its own, and the ones that could not be are listed with the reason. The result carries each job's earlier status so the client can offer undo.
+//	@Description	Pause, resume, close, reopen, archive or move to draft, for up to 100 jobs. Resume and reopen run the publish checks for each job; a job that fails them is skipped with the reasons. Not all-or-nothing: each job is changed on its own, and the ones that could not be are listed with the reason. The result carries each job's earlier status so the client can offer undo.
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
@@ -449,7 +450,7 @@ func (h *HiringHandler) bulk(w http.ResponseWriter, r *http.Request) {
 	}
 	var req BulkRequest
 	if err := decodeStrict(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	res, err := svc.Bulk(r.Context(), c, req.Action, req.IDs)
@@ -578,7 +579,7 @@ func (h *HiringHandler) acceptAgreement(w http.ResponseWriter, r *http.Request) 
 	}
 	var req AcceptRequest
 	if err := decodeStrict(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	out, err := svc.AcceptDPA(r.Context(), c, req.Version)
@@ -613,7 +614,7 @@ func (h *HiringHandler) putPrivacyContact(w http.ResponseWriter, r *http.Request
 	}
 	var req draft.PrivacyContactInput
 	if err := decodeStrict(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	out, err := svc.SetPrivacyContact(r.Context(), c, req)
@@ -648,7 +649,7 @@ func (h *HiringHandler) putDPIA(w http.ResponseWriter, r *http.Request) {
 	}
 	var req draft.DPIAInput
 	if err := decodeStrict(raw, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	out, err := svc.RecordDPIA(r.Context(), c, req)

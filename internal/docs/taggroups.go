@@ -21,6 +21,7 @@ var onboardingTagGroup = map[string]any{
 		"onboarding/business",
 		"onboarding/individual",
 		"onboarding/session",
+		"organization/verification",
 	},
 }
 
@@ -35,6 +36,7 @@ var adminTagGroup = map[string]any{
 		"admin/staff",
 		"admin/roles",
 		"admin/audit",
+		"admin/verification",
 	},
 }
 
@@ -151,6 +153,16 @@ var apiTagDefinitions = []map[string]any{
 		"name":          "admin/audit",
 		"description":   "Immutable audit trail of admin mutations.",
 		"x-displayName": "Audit",
+	},
+	{
+		"name":          "admin/verification",
+		"description":   "KYB review queue: list organizations by verification status, view a case, and approve or reject it.",
+		"x-displayName": "Verification",
+	},
+	{
+		"name":          "organization/verification",
+		"description":   "KYB business verification for the signed-in organization: submit, retry, confirm name or address, and change country.",
+		"x-displayName": "Business verification",
 	},
 	{
 		"name": "jobs",

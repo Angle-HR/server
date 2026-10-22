@@ -158,7 +158,10 @@ func TestBulkPlan(t *testing.T) {
 	if _, _, err := BulkPlan(hr2, items, Action("expire")); !errors.Is(err, ErrUnknownAction) {
 		t.Error("expire in bulk")
 	}
-	if BulkActions[ActionPublish] || BulkActions[ActionResume] || BulkActions[ActionReopen] {
-		t.Error("checked actions are one job at a time")
+	if BulkActions[ActionPublish] {
+		t.Error("publish is one job at a time")
+	}
+	if !BulkActions[ActionResume] || !BulkActions[ActionReopen] {
+		t.Error("resume and reopen are allowed in bulk")
 	}
 }

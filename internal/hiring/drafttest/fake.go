@@ -170,6 +170,24 @@ func (f *Store) ListJobs(
 	return out, "", nil
 }
 
+// CountJobs implements draft.Store.
+func (f *Store) CountJobs(_ context.Context, tenant string, flt *hiringtypes.ListFilter) (map[string]int, error) {
+	out := map[string]int{}
+	for k, r := range f.Jobs {
+		if !strings.HasPrefix(k, tenant+"|") {
+			continue
+		}
+		if flt.OnlyMine != "" && r.Job.CreatedBy != flt.OnlyMine && !isMember(r, flt.OnlyMine) {
+			continue
+		}
+		if !fakeMatches(r, flt) {
+			continue
+		}
+		out[r.Job.Status]++
+	}
+	return out, nil
+}
+
 // fakeMatches applies the list filters that go beyond status and ownership.
 func fakeMatches(r *hiringtypes.JobRecord, flt *hiringtypes.ListFilter) bool {
 	d := r.Job.Details

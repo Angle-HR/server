@@ -175,9 +175,10 @@ type ListItem struct {
 	PublishedAt   string       `json:"published_at,omitempty"`
 	ClosingDate   string       `json:"closing_date,omitempty"`
 	Managers      []ListPerson `json:"managers"`
-	// ApplicantCount is always 0 until candidate applications exist in the API. The field is here so clients
-	// can build against it now.
-	ApplicantCount int `json:"applicant_count"`
+	// ApplicantCount is how many people have applied. NewApplicantCount is how many of them nobody on the hiring
+	// team has opened yet.
+	ApplicantCount    int `json:"applicant_count"`
+	NewApplicantCount int `json:"new_applicant_count"`
 }
 
 // ListPerson is a person shown on a jobs list row, such as a hiring manager.

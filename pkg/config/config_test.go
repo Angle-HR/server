@@ -92,3 +92,16 @@ func TestParseCORSAllowedOrigins(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateGoogleAddressModeNeedsKey(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{DBUrlGlobal: "postgres://x", RedisURL: "redis://x", ServerPort: "8080", AddressVerifyMode: "google"}
+	if err := validate(&cfg); err == nil {
+		t.Fatal("expected an error when GOOGLE_MAPS_API_KEY is empty")
+	}
+	cfg.GoogleMapsAPIKey = "key"
+	if err := validate(&cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

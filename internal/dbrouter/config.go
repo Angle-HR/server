@@ -9,11 +9,14 @@ import (
 	"github.com/Angle-HR/server/internal/region"
 )
 
-// RegionConfig holds per-region PostgreSQL and Cloudflare R2 connection settings.
+// RegionConfig holds per-region PostgreSQL and S3-compatible object storage (Cloudflare R2 or AWS S3) settings.
+// Empty R2AccessKey and R2SecretKey mean the client uses the AWS credential chain (env vars, then the ECS task
+// role).
 type RegionConfig struct {
 	Region      region.Region
 	PostgresDSN string
 	R2Endpoint  string
+	R2Region    string
 	R2AccessKey string
 	R2SecretKey string
 	R2Bucket    string
@@ -59,37 +62,56 @@ func envKey(suffix, name string) string {
 }
 
 // LoadConfigsFromEnv reads per-region settings from the environment.
-// R2_ACCESS_KEY, R2_SECRET_KEY, and R2_ENDPOINT are shared across all regions.
+//
+// R2_ACCESS_KEY and R2_SECRET_KEY are shared across all regions. Set both for Cloudflare R2 or static S3 keys, or
+// neither to use the AWS credential chain (the ECS task role in AWS).
+//
+// ANGLEHR_<REGION>_R2_ENDPOINT overrides R2_ENDPOINT for one region; every region needs one of them.
+// ANGLEHR_<REGION>_R2_REGION (then R2_REGION) is the signing region. When unset it comes from an AWS endpoint
+// such as s3.eu-west-2.amazonaws.com, and is "auto" otherwise, which is what R2 expects.
+//
 // All regions must be fully configured; missing variables return an error.
 func LoadConfigsFromEnv() ([]RegionConfig, error) {
 	accessKey := strings.TrimSpace(os.Getenv("R2_ACCESS_KEY"))
-	if accessKey == "" {
-		return nil, fmt.Errorf("dbrouter: R2_ACCESS_KEY is required")
-	}
-
 	secretKey := strings.TrimSpace(os.Getenv("R2_SECRET_KEY"))
-	if secretKey == "" {
-		return nil, fmt.Errorf("dbrouter: R2_SECRET_KEY is required")
+	if (accessKey == "") != (secretKey == "") {
+		return nil, fmt.Errorf("dbrouter: set both R2_ACCESS_KEY and R2_SECRET_KEY, or neither to use the AWS credential chain")
 	}
 
-	rawEndpoint := strings.TrimSpace(os.Getenv("R2_ENDPOINT"))
-	if rawEndpoint == "" {
-		return nil, fmt.Errorf("dbrouter: R2_ENDPOINT is required")
-	}
-
-	r2Endpoint := stripEndpointScheme(rawEndpoint)
-	defaultUseSSL := strings.HasPrefix(strings.ToLower(rawEndpoint), "https://") ||
-		strings.Contains(strings.ToLower(r2Endpoint), "r2.cloudflarestorage.com")
+	sharedEndpoint := strings.TrimSpace(os.Getenv("R2_ENDPOINT"))
+	sharedRegion := strings.TrimSpace(os.Getenv("R2_REGION"))
 
 	configs := make([]RegionConfig, 0, len(allRegions()))
 
 	for _, reg := range allRegions() {
 		suffix := envSuffix(reg)
+
+		rawEndpoint := strings.TrimSpace(os.Getenv(envKey(suffix, "R2_ENDPOINT")))
+		if rawEndpoint == "" {
+			rawEndpoint = sharedEndpoint
+		}
+		if rawEndpoint == "" {
+			return nil, fmt.Errorf("dbrouter: R2_ENDPOINT or %s is required", envKey(suffix, "R2_ENDPOINT"))
+		}
+		endpoint := stripEndpointScheme(rawEndpoint)
+
+		signingRegion := strings.TrimSpace(os.Getenv(envKey(suffix, "R2_REGION")))
+		if signingRegion == "" {
+			signingRegion = sharedRegion
+		}
+		if signingRegion == "" {
+			signingRegion = awsRegionFromEndpoint(endpoint)
+		}
+		if signingRegion == "" {
+			signingRegion = "auto"
+		}
+
 		cfg := RegionConfig{
 			Region:      reg,
 			R2AccessKey: accessKey,
 			R2SecretKey: secretKey,
-			R2Endpoint:  r2Endpoint,
+			R2Endpoint:  endpoint,
+			R2Region:    signingRegion,
 		}
 
 		postgresDSN := strings.TrimSpace(os.Getenv(envKey(suffix, "POSTGRES_DSN")))
@@ -107,13 +129,32 @@ func LoadConfigsFromEnv() ([]RegionConfig, error) {
 		if sslRaw := strings.TrimSpace(os.Getenv(envKey(suffix, "R2_USE_SSL"))); sslRaw != "" {
 			cfg.R2UseSSL = sslRaw == "1" || strings.EqualFold(sslRaw, "true")
 		} else {
-			cfg.R2UseSSL = defaultUseSSL
+			cfg.R2UseSSL = strings.HasPrefix(strings.ToLower(rawEndpoint), "https://") ||
+				strings.Contains(strings.ToLower(endpoint), "r2.cloudflarestorage.com") ||
+				strings.HasSuffix(strings.ToLower(endpoint), ".amazonaws.com")
 		}
 
 		configs = append(configs, cfg)
 	}
 
 	return configs, nil
+}
+
+// awsRegionFromEndpoint returns the region in an AWS S3 endpoint (s3.<region>.amazonaws.com or
+// s3.dualstack.<region>.amazonaws.com), or "" for anything else.
+func awsRegionFromEndpoint(endpoint string) string {
+	host := strings.ToLower(endpoint)
+	if i := strings.IndexAny(host, ":/"); i >= 0 {
+		host = host[:i]
+	}
+	if !strings.HasSuffix(host, ".amazonaws.com") {
+		return ""
+	}
+	parts := strings.Split(strings.TrimSuffix(host, ".amazonaws.com"), ".")
+	if len(parts) < 2 || parts[0] != "s3" {
+		return ""
+	}
+	return parts[len(parts)-1]
 }
 
 func stripEndpointScheme(endpoint string) string {

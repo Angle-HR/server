@@ -97,7 +97,7 @@ func (h *BusinessOnboardingHandler) submitBusinessOnboarding(w http.ResponseWrit
 
 	var req businessOnboardingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 

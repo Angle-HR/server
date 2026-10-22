@@ -75,8 +75,13 @@ const (
 	CodePayloadTooLarge         = "PAYLOAD_TOO_LARGE"
 	CodeGone                    = "GONE"
 	CodeTooManyAttempts         = "too_many_attempts"
+	CodeTooManyRequests         = "TOO_MANY_REQUESTS"
 	CodeServiceUnavailable      = "SERVICE_UNAVAILABLE"
 	CodePublishBlocked          = "PUBLISH_BLOCKED"
+	// CodePreconditionRequired: the request must carry the revision it was based on (If-Match).
+	CodePreconditionRequired = "PRECONDITION_REQUIRED"
+	// CodeIdempotencyKeyReused: an Idempotency-Key was sent again with a different request.
+	CodeIdempotencyKeyReused = "IDEMPOTENCY_KEY_REUSED"
 )
 
 var httpStatusByCode = map[string]int{
@@ -98,8 +103,11 @@ var httpStatusByCode = map[string]int{
 	CodePayloadTooLarge:         http.StatusRequestEntityTooLarge,
 	CodeGone:                    http.StatusGone,
 	CodeTooManyAttempts:         http.StatusTooManyRequests,
+	CodeTooManyRequests:         http.StatusTooManyRequests,
 	CodeServiceUnavailable:      http.StatusServiceUnavailable,
 	CodePublishBlocked:          http.StatusUnprocessableEntity,
+	CodePreconditionRequired:    http.StatusPreconditionRequired,
+	CodeIdempotencyKeyReused:    http.StatusUnprocessableEntity,
 }
 
 // AppError is a structured application error.
@@ -241,6 +249,7 @@ var publicMessages = map[string]string{
 	CodeOnboardingIncomplete:    MsgOnboardingStepIncomplete,
 	CodeInvalidAccountBranch:    MsgInvalidAccountTypeBranch,
 	CodeTooManyAttempts:         MsgTooManyAttempts,
+	CodeTooManyRequests:         "too many requests, try again later",
 	CodeServiceUnavailable:      "service temporarily unavailable, try again",
 }
 

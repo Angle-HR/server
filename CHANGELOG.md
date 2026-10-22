@@ -22,6 +22,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - E2E script: `scripts/e2e-onboarding.sh`.
 
 ### Changed
+- Staging test findings (employer flow): country codes are one format everywhere. `internal/countrycode` accepts ISO 3166-1 alpha-2 and the `UK` alias (stored as `GB`) on apply, KYB submit and KYB change-country, and refuses any unassigned code with `country_code` named in `details.fields`.
+- Applying with an `Idempotency-Key` is answered before validation: an identical retry returns the original success even when its upload token is spent, and the same key with a different body returns 422 `IDEMPOTENCY_KEY_REUSED`. A SHA-256 request fingerprint is stored with the application (`000017_hiring_idempotency_fingerprint`).
+- Apply and upload rate limits: `429` now carries a real `Retry-After` (time left in the window) and the code `TOO_MANY_REQUESTS`. Invalid requests count against a 15 minute flood limit only, never against the hour's quota for valid applications.
+- `If-Match` is required on every job write (publish, lifecycle actions, rules, members, gates, details, markets, form, delete). A missing header returns 428 `PRECONDITION_REQUIRED`.
+- Validation errors share one shape, `details.fields[].path`: waitlist/auth/onboarding validators (was `field`), malformed or unknown-field request bodies (was a bare "invalid request body"), and KYB input.
 - Object storage now uses Cloudflare R2 instead of self-hosted MinIO. Environment variables are renamed from `ANGLEHR_*_MINIO_*` to `ANGLEHR_*_R2_*`. `DBRouter.MinIO()` is now `DBRouter.R2()`. R2 credentials are shared via `R2_ACCESS_KEY` and `R2_SECRET_KEY`; `R2_ENDPOINT` is the default S3 API host with optional per-region `ANGLEHR_*_R2_ENDPOINT` overrides.
 - Email verification OTP expiry increased from 60 seconds to 5 minutes (300 seconds).
 - Removed redundant Markdown API docs under `docs/`; API reference is OpenAPI only (Scalar at `/`).

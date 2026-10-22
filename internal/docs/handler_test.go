@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func TestServeEmbeddedOpenAPI(t *testing.T) {
@@ -84,6 +87,7 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 		"onboarding/business",
 		"onboarding/individual",
 		"onboarding/session",
+		"organization/verification",
 	})
 	assertTagGroup(t, groups[2], "Admin", []string{
 		"admin/auth",
@@ -94,6 +98,7 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 		"admin/staff",
 		"admin/roles",
 		"admin/audit",
+		"admin/verification",
 	})
 	assertTagGroup(t, groups[3], "Hiring", []string{
 		"jobs",
@@ -103,8 +108,8 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 	})
 
 	tagDefs, ok := doc["tags"].([]any)
-	if !ok || len(tagDefs) != 22 {
-		t.Fatalf("tags: got %v, want 22 tag definitions", doc["tags"])
+	if !ok || len(tagDefs) != 24 {
+		t.Fatalf("tags: got %v, want 24 tag definitions", doc["tags"])
 	}
 	wantTagNames := []string{
 		"waitlist/reference",
@@ -125,6 +130,8 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 		"admin/staff",
 		"admin/roles",
 		"admin/audit",
+		"admin/verification",
+		"organization/verification",
 		"jobs",
 		"application-form",
 		"templates",
@@ -211,6 +218,34 @@ func TestSpecURL(t *testing.T) {
 	for _, tc := range tests {
 		if got := specURL(tc.origin); got != tc.want {
 			t.Errorf("specURL(%q) = %q, want %q", tc.origin, got, tc.want)
+		}
+	}
+}
+
+func TestRegisterRoutesServesDocsUnderAPI(t *testing.T) {
+	t.Parallel()
+	r := chi.NewRouter()
+	RegisterRoutes(r, Config{PublicAPIURL: "https://app.staging.example.com"})
+
+	for _, tc := range []struct{ path, wantType, wantBody string }{
+		{"/", "text/html", "https://app.staging.example.com/openapi.json"},
+		{APIDocsPath, "text/html", "/waitlist"}, // spec inlined, not fetched
+		{"/openapi.json", "application/json", `"paths"`},
+		{APISpecPath, "application/json", `"paths"`},
+	} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, tc.path, nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s: status %d", tc.path, w.Code)
+		}
+		if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, tc.wantType) {
+			t.Errorf("GET %s: content type %q, want %s", tc.path, ct, tc.wantType)
+		}
+		if !strings.Contains(w.Body.String(), tc.wantBody) {
+			t.Errorf("GET %s: body does not contain %s", tc.path, tc.wantBody)
+		}
+		if tc.path == APIDocsPath && strings.Contains(w.Body.String(), "openapi.json") {
+			t.Errorf("GET %s: page should embed the spec, not fetch it", tc.path)
 		}
 	}
 }

@@ -20,6 +20,15 @@ var openAPISpec embed.FS
 
 const productionEnv = "production"
 
+// The docs are also served under /api, the only prefix the CDN in front of staging forwards to the server (the
+// site root belongs to the frontend). That page embeds the spec instead of fetching it, so it works on whatever host
+// it is opened from (the CDN, a tunnel, localhost): Scalar only accepts absolute spec URLs, and behind the CDN the
+// request's Host is the origin, not the public name.
+const (
+	APIDocsPath = "/api/docs"
+	APISpecPath = "/api/openapi.json"
+)
+
 // Config holds runtime settings for API documentation routes.
 type Config struct {
 	PublicAPIURL string
@@ -46,6 +55,8 @@ func RegisterRoutes(r chi.Router, cfg Config) {
 
 	r.Get("/openapi.json", handler.serveOpenAPI)
 	r.Get("/", handler.serveScalar)
+	r.Get(APISpecPath, handler.serveOpenAPI)
+	r.Get(APIDocsPath, handler.serveScalarEmbedded)
 }
 
 type docHandler struct {
@@ -86,8 +97,22 @@ func (h *docHandler) serveOpenAPI(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *docHandler) serveScalar(w http.ResponseWriter, _ *http.Request) {
+	h.renderScalar(w, scalargo.WithSpecURL(h.specURL))
+}
+
+// serveScalarEmbedded renders the reference page with the spec inlined (see APIDocsPath).
+func (h *docHandler) serveScalarEmbedded(w http.ResponseWriter, _ *http.Request) {
+	content, err := h.patchedOpenAPISpec()
+	if err != nil {
+		http.Error(w, "openapi spec not found", http.StatusInternalServerError)
+		return
+	}
+	h.renderScalar(w, scalargo.WithSpecBytes(content))
+}
+
+func (h *docHandler) renderScalar(w http.ResponseWriter, spec scalargo.Option) {
 	html, err := scalargo.NewV2(
-		scalargo.WithSpecURL(h.specURL),
+		spec,
 		scalargo.WithMetaDataOpts(
 			scalargo.WithTitle("Angle HR API"),
 			scalargo.WithKeyValue("description", "Waitlist and product onboarding API"),

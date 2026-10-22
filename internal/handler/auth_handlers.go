@@ -201,7 +201,7 @@ type accountUser struct {
 func (h *AuthHandler) signup(w http.ResponseWriter, r *http.Request) {
 	var req authSignupBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -271,7 +271,7 @@ func (h *AuthHandler) signup(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) patchSignup(w http.ResponseWriter, r *http.Request) {
 	var req authSignupPatchBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -355,7 +355,7 @@ func (h *AuthHandler) patchSignup(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) verifyEmail(w http.ResponseWriter, r *http.Request) {
 	var req authVerifyEmailBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -404,7 +404,6 @@ func (h *AuthHandler) verifyEmail(w http.ResponseWriter, r *http.Request) {
 		Onboarding:   summary,
 	})
 }
-
 
 // markEmailVerified marks the user verified, seeds onboarding progress in the
 // user's database and records the user in the global registry, committing both
@@ -486,7 +485,7 @@ func (h *AuthHandler) markEmailVerified(
 func (h *AuthHandler) resendVerification(w http.ResponseWriter, r *http.Request) {
 	var req authResendBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -560,7 +559,7 @@ func (h *AuthHandler) resendVerification(w http.ResponseWriter, r *http.Request)
 func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 	var req authLoginBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
@@ -664,7 +663,7 @@ func (h *AuthHandler) unverifiedLoginError(
 func (h *AuthHandler) refresh(w http.ResponseWriter, r *http.Request) {
 	var req authRefreshBody
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, r, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidRequestBody))
+		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {

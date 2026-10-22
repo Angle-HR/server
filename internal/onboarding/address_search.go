@@ -16,7 +16,7 @@ type AddressSuggestion struct {
 
 // AddressSearcher returns address suggestions for a partial query.
 type AddressSearcher interface {
-	Search(ctx context.Context, countryID, query string) ([]AddressSuggestion, error)
+	Search(ctx context.Context, countrySlug, query string) ([]AddressSuggestion, error)
 }
 
 // PassthroughAddressSearcher returns no suggestions until a real provider is wired.

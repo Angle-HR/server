@@ -28,6 +28,13 @@ const (
 	TypeKYBReviewQueued      = "kyb_review_queued"
 	TypeKYBNudge1            = "kyb_nudge_1"
 	TypeKYBNudge2            = "kyb_nudge_2"
+
+	// Hiring emails. They are sent from the region's outbox by hiring-outbox, so candidate details stay in the
+	// region; they are not queued through the global job queue.
+	TypeApplicationReceived = "application_received"
+	TypeApplicationRejected = "application_rejected"
+	TypeApplicationHired    = "application_hired"
+	TypeRetentionNotice     = "retention_notice"
 )
 
 // EmailArgs defines job queue arguments for email notifications.
@@ -40,6 +47,14 @@ type EmailArgs struct {
 	Code             string `json:"code,omitempty"`
 	ExpiresInSeconds int    `json:"expires_in_seconds,omitempty"`
 	FailureReason    string `json:"failure_reason,omitempty"` // KYB emails: why verification failed
+
+	// Hiring emails. Subject, when set, replaces the template's default subject.
+	Subject   string   `json:"subject,omitempty"`
+	JobTitle  string   `json:"job_title,omitempty"`
+	JobCode   string   `json:"job_code,omitempty"`
+	NoticeURL string   `json:"notice_url,omitempty"` // the job's applicant privacy notice
+	Lines     []string `json:"lines,omitempty"`      // retention notice: one line per job
+	Count     int      `json:"count,omitempty"`
 }
 
 // Kind returns the job kind name.
@@ -129,6 +144,14 @@ func (m *Mailer) selectTemplate(emailType string) (templateName, subject, baseUR
 	case TypeKYBNudge2:
 		return "kyb_nudge_2.html", "Your company verification still needs attention", baseURL,
 			needsAppURL("kyb_nudge_2")
+	case TypeApplicationReceived:
+		return "application_received.html", "We received your application", baseURL, nil
+	case TypeApplicationRejected:
+		return "application_rejected.html", "An update on your application", baseURL, nil
+	case TypeApplicationHired:
+		return "application_hired.html", "Good news about your application", baseURL, nil
+	case TypeRetentionNotice:
+		return "retention_notice.html", "Applications deleted under your retention policy", baseURL, nil
 	default:
 		return "", "", "", fmt.Errorf("unknown email type: %s", emailType)
 	}
@@ -136,21 +159,30 @@ func (m *Mailer) selectTemplate(emailType string) (templateName, subject, baseUR
 
 // Send renders and delivers the email according to the job arguments.
 func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
+	// Hiring emails go to candidates: their address and name stay out of the logs.
+	rcpt, name := args.Recipient, args.FullName
+	if isHiringType(args.Type) {
+		rcpt, name = "(redacted)", "(redacted)"
+	}
 	m.logger.Info("email send started",
 		"type", args.Type,
-		"recipient", args.Recipient,
-		"full_name", args.FullName,
+		"recipient", rcpt,
+		"full_name", name,
 	)
 
 	templateName, subject, baseURL, err := m.selectTemplate(args.Type)
 	if err != nil {
-		m.logger.Error("email send failed", "type", args.Type, "recipient", args.Recipient, "error", err)
+		m.logger.Error("email send failed", "type", args.Type, "recipient", rcpt, "error", err)
 		return err
+	}
+
+	if sub := cleanHeader(args.Subject); sub != "" {
+		subject = sub
 	}
 
 	m.logger.Info("email template selected",
 		"type", args.Type,
-		"recipient", args.Recipient,
+		"recipient", rcpt,
 		"template", templateName,
 		"subject", subject,
 	)
@@ -164,7 +196,7 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 		err = fmt.Errorf("execute template %s: %w", templateName, err)
 		m.logger.Error("email template render failed",
 			"type", args.Type,
-			"recipient", args.Recipient,
+			"recipient", rcpt,
 			"template", templateName,
 			"error", err,
 		)
@@ -173,7 +205,7 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 
 	m.logger.Info("email template rendered",
 		"type", args.Type,
-		"recipient", args.Recipient,
+		"recipient", rcpt,
 		"template", templateName,
 		"body_bytes", body.Len(),
 	)
@@ -204,7 +236,7 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 	addr := fmt.Sprintf("%s:%s", m.cfg.Host, m.cfg.Port)
 	m.logger.Info("smtp send starting",
 		"type", args.Type,
-		"recipient", args.Recipient,
+		"recipient", rcpt,
 		"smtp_addr", addr,
 		"from", fromHeader,
 		"auth_enabled", authEnabled,
@@ -216,23 +248,42 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 		err = fmt.Errorf("smtp send mail to %s: %w", args.Recipient, err)
 		m.logger.Error("smtp send failed",
 			"type", args.Type,
-			"recipient", args.Recipient,
+			"recipient", rcpt,
 			"smtp_addr", addr,
 			"from", fromHeader,
 			"auth_enabled", authEnabled,
-			"error", err,
+			"error", strings.ReplaceAll(err.Error(), args.Recipient, rcpt),
 		)
 		return err
 	}
 
 	m.logger.Info("email sent successfully",
 		"type", args.Type,
-		"recipient", args.Recipient,
+		"recipient", rcpt,
 		"smtp_addr", addr,
 		"from", fromHeader,
 	)
 
 	return nil
+}
+
+func isHiringType(t string) bool {
+	switch t {
+	case TypeApplicationReceived, TypeApplicationRejected, TypeApplicationHired:
+		return true
+	}
+	return false
+}
+
+// cleanHeader makes a value safe to put in a mail header: a line break would let the text add headers of its own.
+func cleanHeader(v string) string {
+	v = strings.Map(func(r rune) rune {
+		if r == '\r' || r == '\n' || r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, v)
+	return strings.TrimSpace(v)
 }
 
 // formatFromHeader builds an RFC 5322 From value from optional display name + address.

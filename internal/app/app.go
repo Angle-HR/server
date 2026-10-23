@@ -190,6 +190,8 @@ func Run() error {
 		mountFluvioUI(router, cfg, fluvioClient, log)
 	}
 
+	handler.NewHealthHandler().RegisterRoutes(router)
+
 	publicHandler.RegisterPages(router)
 
 	router.Route("/api/v1", func(r chi.Router) {

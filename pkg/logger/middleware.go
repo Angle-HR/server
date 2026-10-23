@@ -18,7 +18,12 @@ import (
 
 const maxBodyLogBytes = 8192
 
-// RequestLogger logs method, path, status, bytes, duration, and request ID for every HTTP request.
+// healthPath is polled every few seconds by the load balancer and the container health check; successful probes are
+// not logged. It must match handler.HealthPath.
+const healthPath = "/healthz"
+
+// RequestLogger logs method, path, status, bytes, duration, and request ID for every HTTP request except successful
+// health probes.
 // When the logger is enabled at debug, it also logs request and response bodies (truncated, redacted).
 func RequestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 	if log == nil {
@@ -43,6 +48,9 @@ func RequestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 			}
 
 			defer func() { //nolint:contextcheck // r.Context() is the request context; flagged falsely for a closure capturing r
+				if r.URL.Path == healthPath && ww.Status() < http.StatusBadRequest {
+					return
+				}
 				attrs := requestAttrs(r, ww, start)
 				if logBodies {
 					attrs = append(attrs,

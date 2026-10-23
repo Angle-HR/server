@@ -85,3 +85,28 @@ func TestRequestLoggerOmitsBodiesAboveDebug(t *testing.T) {
 		t.Fatalf("response_body should be omitted at info: %v", entry)
 	}
 }
+
+func TestRequestLoggerSkipsSuccessfulHealthProbes(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		status  int
+		wantLog bool
+	}{
+		{http.StatusOK, false},
+		{http.StatusServiceUnavailable, true},
+	} {
+		var buf bytes.Buffer
+		log := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+		h := RequestLogger(log)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(tc.status)
+		}))
+
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, healthPath, http.NoBody)
+		h.ServeHTTP(httptest.NewRecorder(), req)
+
+		if logged := buf.Len() > 0; logged != tc.wantLog {
+			t.Fatalf("status %d: logged = %v, want %v", tc.status, logged, tc.wantLog)
+		}
+	}
+}

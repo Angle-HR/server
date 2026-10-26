@@ -9,7 +9,7 @@ import (
 // Client-visible message strings used in API responses.
 const (
 	MsgNotFound                               = "not found"
-	MsgEmailAlreadyRegistered                 = "email already registered"
+	MsgEmailAlreadyRegistered                 = "An account with this email already exists. Sign in instead."
 	MsgInvalidRequest                         = "invalid request"
 	MsgUnauthorized                           = "unauthorized"
 	MsgInvalidCredentials                     = "wrong email or password"

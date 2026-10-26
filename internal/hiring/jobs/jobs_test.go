@@ -468,3 +468,17 @@ func TestBuildPublicHidesInternals(t *testing.T) {
 		t.Error("lists must serialise as [] not null")
 	}
 }
+
+func TestPlainTextEditorHTML(t *testing.T) {
+	for _, tc := range []struct{ input, want string }{
+		{`<p>Join <b>Finance</b> &amp; Accounting.</p><ul><li>Build</li><li>Learn</li></ul>`, "Join Finance & Accounting.\n\n\nBuild\n\nLearn"},
+		{`<p>Hello<script>alert(1)</script><style>body{}</style> team</p>`, "Hello team"},
+		{`Salary < 100 & experience > 2`, "Salary < 100 & experience > 2"},
+	} {
+		raw, _ := json.Marshal(map[string]string{"text": tc.input})
+		got := PlainText(Sections{"role": raw})
+		if got != tc.want {
+			t.Errorf("PlainText(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}

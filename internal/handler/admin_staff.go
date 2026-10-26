@@ -1,11 +1,12 @@
 package handler
 
 import (
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/Angle-HR/server/internal/admin"
 	"github.com/Angle-HR/server/internal/apidoc"

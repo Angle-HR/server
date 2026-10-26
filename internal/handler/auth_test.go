@@ -1,6 +1,12 @@
 package handler
 
 import (
+	"encoding/json"
+	"errors"
+	"github.com/Angle-HR/server/internal/query"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/pashagolub/pgxmock/v4"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -85,5 +91,62 @@ func TestProductOnboarding_verifyAddressNotImplemented(t *testing.T) {
 	errBody := decodeError(t, rec)
 	if errBody.Code != apperror.CodeNotImplemented {
 		t.Fatalf("code: got %q", errBody.Code)
+	}
+}
+
+func TestAuthSignup_existingEmail(t *testing.T) {
+	for _, state := range []string{"regional", "pending", "registry failure"} {
+		for _, password := range []string{testLoginPassword, "different-password"} {
+			t.Run(state+"/"+password, func(t *testing.T) {
+				db, err := pgxmock.NewPool(pgxmock.QueryMatcherOption(pgxmock.QueryMatcherEqual))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer db.Close()
+				sql, args, err := query.LookupVerifiedRegistryEmail(testLoginEmail)
+				if err != nil {
+					t.Fatal(err)
+				}
+				expectation := db.ExpectQuery(sql).WithArgs(args...)
+				wantStatus := http.StatusConflict
+				switch state {
+				case "regional":
+					expectation.WillReturnRows(pgxmock.NewRows([]string{"user_id", "region"}).AddRow(uuid.New(), "uk"))
+				case "pending":
+					expectation.WillReturnError(pgx.ErrNoRows)
+					sql, args, err = query.LookupPendingUserByEmail(testLoginEmail)
+					if err != nil {
+						t.Fatal(err)
+					}
+					db.ExpectQuery(sql).WithArgs(args...).WillReturnRows(userAccountRows("existing-password-hash", nil))
+				case "registry failure":
+					expectation.WillReturnError(errors.New("database unavailable"))
+					wantStatus = http.StatusInternalServerError
+				}
+				h := NewAuthHandler(nil, db, nil, nil, nil, nil)
+				body, err := json.Marshal(authSignupBody{Email: "JERRY@example.com", Password: password})
+				if err != nil {
+					t.Fatal(err)
+				}
+				req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/auth/signup", strings.NewReader(string(body)))
+				rec := httptest.NewRecorder()
+				h.signup(rec, req)
+				if rec.Code != wantStatus {
+					t.Fatalf("status: got %d want %d: %s", rec.Code, wantStatus, rec.Body.String())
+				}
+				if wantStatus == http.StatusConflict {
+					got := decodeError(t, rec)
+					if got.Code != apperror.CodeEmailAlreadyRegistered {
+						t.Fatalf("code: got %q", got.Code)
+					}
+					if got.Message != "An account with this email already exists. Sign in instead." {
+						t.Fatalf("message: got %q", got.Message)
+					}
+				}
+				if err := db.ExpectationsWereMet(); err != nil {
+					t.Fatal(err)
+				}
+			})
+		}
 	}
 }

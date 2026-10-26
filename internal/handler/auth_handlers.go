@@ -212,11 +212,24 @@ func (h *AuthHandler) signup(w http.ResponseWriter, r *http.Request) {
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 	ctx := r.Context()
 
-	if existing, err := h.loadUserByEmail(ctx, region.RegionGlobal, email); err == nil {
-		if existing.EmailVerifiedAt != nil {
-			response.Error(w, r, apperror.New(apperror.CodeEmailAlreadyRegistered, apperror.MsgEmailAlreadyRegistered))
-			return
-		}
+	// Verified accounts may have moved out of pending_users into a regional
+	// database. The global registry retains their email across that move.
+	registrySQL, registryArgs, err := query.LookupVerifiedRegistryEmail(email)
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+	var registeredUserID uuid.UUID
+	var registeredRegion string
+	if err := h.GlobalDB.QueryRow(ctx, registrySQL, registryArgs...).Scan(&registeredUserID, &registeredRegion); err == nil {
+		response.Error(w, r, apperror.New(apperror.CodeEmailAlreadyRegistered, apperror.MsgEmailAlreadyRegistered))
+		return
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
+	if _, err := h.loadUserByEmail(ctx, region.RegionGlobal, email); err == nil {
 		response.Error(w, r, apperror.New(apperror.CodeEmailAlreadyRegistered, apperror.MsgEmailAlreadyRegistered))
 		return
 	} else if !errors.Is(err, pgx.ErrNoRows) {

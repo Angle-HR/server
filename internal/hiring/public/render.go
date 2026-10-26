@@ -71,7 +71,7 @@ func RenderPage(v *View, canonical, applyURL, privacyURL string) ([]byte, error)
 		Skills:      v.Job.Skills,
 		ClosingDate: v.ClosingDate,
 	}
-	d.Description = shorten(v.Job.DescriptionText, 200)
+	d.Description = shorten(jobs.PlainText(v.Job.Description), 200)
 	if d.Description == "" {
 		d.Description = fmt.Sprintf("%s at %s", v.Job.Title, v.Job.Company)
 	}
@@ -225,7 +225,7 @@ func JobPostingLD(v *View) map[string]any {
 		"@context":           "https://schema.org",
 		"@type":              "JobPosting",
 		"title":              j.Title,
-		"description":        j.DescriptionText,
+		"description":        jobs.PlainText(j.Description),
 		"identifier":         map[string]any{"@type": "PropertyValue", "name": j.Company, "value": j.JobCode},
 		"hiringOrganization": map[string]any{"@type": "Organization", "name": j.Company},
 		"directApply":        true,

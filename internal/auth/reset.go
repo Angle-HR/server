@@ -61,8 +61,17 @@ func (s *ResetStore) CreateToken(ctx context.Context, session ResetSession) (str
 	return raw, nil
 }
 
+// LoadToken loads a reset token without consuming it so validation can be retried.
+func (s *ResetStore) LoadToken(ctx context.Context, token string) (ResetSession, error) {
+	return s.loadToken(ctx, token, false)
+}
+
 // ConsumeToken loads and deletes a reset token.
 func (s *ResetStore) ConsumeToken(ctx context.Context, token string) (ResetSession, error) {
+	return s.loadToken(ctx, token, true)
+}
+
+func (s *ResetStore) loadToken(ctx context.Context, token string, consume bool) (ResetSession, error) {
 	if s == nil || s.client == nil {
 		return ResetSession{}, errors.New("reset store unavailable")
 	}
@@ -71,7 +80,13 @@ func (s *ResetStore) ConsumeToken(ctx context.Context, token string) (ResetSessi
 	}
 
 	key := resetKeyPrefix + token
-	raw, err := s.client.GetDel(ctx, key).Bytes()
+	var raw []byte
+	var err error
+	if consume {
+		raw, err = s.client.GetDel(ctx, key).Bytes()
+	} else {
+		raw, err = s.client.Get(ctx, key).Bytes()
+	}
 	if errors.Is(err, goredis.Nil) {
 		return ResetSession{}, ErrVerificationExpired
 	}

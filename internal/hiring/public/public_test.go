@@ -302,3 +302,28 @@ func TestSitemap(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderPageRemovesEditorHTML(t *testing.T) {
+	p := posting(jobs.StatusPublished)
+	p.Job.Description["role"] = json.RawMessage(`{"text":"<p>Join <b>Finance</b>.</p><ul><li>Build APIs</li><li>Learn together</li></ul>"}`)
+	s := newService(p, day)
+	v, err := s.Load(context.Background(), "jabcdefghijkl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := public.RenderPage(v, s.JobURL(v.PublicID), s.ApplyLink(v.PublicID, ""), "/p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := string(out)
+	for _, text := range []string{"Join Finance.", "Build APIs", "Learn together"} {
+		if !strings.Contains(page, text) {
+			t.Errorf("missing visible text %q", text)
+		}
+	}
+	for _, tag := range []string{"&lt;p&gt;", "&lt;b&gt;", "&lt;ul&gt;", "&lt;li&gt;"} {
+		if strings.Contains(page, tag) {
+			t.Errorf("visible editor tag %q", tag)
+		}
+	}
+}

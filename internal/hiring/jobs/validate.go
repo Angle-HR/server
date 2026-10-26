@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+
+	"golang.org/x/net/html"
 	"net/url"
 	"regexp"
 	"strings"
@@ -397,7 +399,7 @@ func PlainText(s Sections) string {
 func walkText(n any, b *strings.Builder) {
 	switch v := n.(type) {
 	case string:
-		b.WriteString(v)
+		b.WriteString(descriptionText(v))
 		b.WriteByte(' ')
 	case []any:
 		for _, c := range v {
@@ -405,7 +407,7 @@ func walkText(n any, b *strings.Builder) {
 		}
 	case map[string]any:
 		if t, ok := v["text"].(string); ok {
-			b.WriteString(t)
+			b.WriteString(descriptionText(t))
 			b.WriteByte(' ')
 		}
 		if c, ok := v["content"]; ok {
@@ -413,6 +415,48 @@ func walkText(n any, b *strings.Builder) {
 		}
 		if c, ok := v["children"]; ok {
 			walkText(c, b)
+		}
+	}
+}
+
+// descriptionText removes editor HTML while keeping readable block boundaries.
+func descriptionText(value string) string {
+	z := html.NewTokenizer(strings.NewReader(value))
+	var out strings.Builder
+	var hidden string
+	for {
+		switch z.Next() {
+		case html.ErrorToken:
+			return out.String()
+		case html.TextToken:
+			if hidden == "" {
+				out.Write(z.Text())
+			}
+		case html.StartTagToken, html.SelfClosingTagToken:
+			name, _ := z.TagName()
+			tag := string(name)
+			if hidden != "" {
+				continue
+			}
+			switch tag {
+			case "script", "style", "template":
+				hidden = tag
+			case "p", "div", "ul", "ol", "li", "br", "h1", "h2", "h3", "h4", "blockquote":
+				out.WriteByte('\n')
+			}
+		case html.EndTagToken:
+			name, _ := z.TagName()
+			tag := string(name)
+			if hidden != "" {
+				if tag == hidden {
+					hidden = ""
+				}
+				continue
+			}
+			switch tag {
+			case "p", "div", "ul", "ol", "li", "h1", "h2", "h3", "h4", "blockquote":
+				out.WriteByte('\n')
+			}
 		}
 	}
 }

@@ -94,8 +94,8 @@ type productAddressBody struct {
 	EntryMode        string            `json:"entry_mode" validate:"required,oneof=search manual"`
 	Line1            string            `json:"line_1" validate:"required_if=EntryMode manual,max=200"`
 	Line2            *string           `json:"line_2"`
-	City             string            `json:"city" validate:"required,max=100"`
-	StateOrCounty    string            `json:"state_or_county" validate:"required,max=100"`
+	City             string            `json:"city" validate:"required_if=EntryMode manual,max=100"`
+	StateOrCounty    string            `json:"state_or_county" validate:"required_if=EntryMode manual,max=100"`
 	PostCode         string            `json:"post_code" validate:"required_if=EntryMode manual,max=20"`
 	FormattedAddress *string           `json:"formatted_address"`
 	Identification   map[string]string `json:"identification"`
@@ -410,7 +410,7 @@ func (h *ProductOnboardingHandler) moveToCountryRegion(
 	}
 	newReg, err := migrateUserToRegion(ctx, h.Router, h.GlobalDB, userID, target)
 	if err != nil {
-		return region.RegionUnknown, apperror.ErrInternal
+		return region.RegionUnknown, fmt.Errorf("move account to country region: %w", err)
 	}
 	return newReg, nil
 }
@@ -431,12 +431,12 @@ func (h *ProductOnboardingHandler) saveAddress(
 
 	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
 	if err != nil {
-		return ProductAddressData{}, apperror.ErrInternal
+		return ProductAddressData{}, fmt.Errorf("save address: resolve database: %w", err)
 	}
 
 	accountType, err := h.loadAccountType(ctx, pool, reg, userID)
 	if err != nil {
-		return ProductAddressData{}, apperror.ErrInternal
+		return ProductAddressData{}, fmt.Errorf("save address: load account type: %w", err)
 	}
 	if accountType != onboarding.AccountBusiness {
 		return ProductAddressData{}, apperror.New(apperror.CodeInvalidAccountBranch, apperror.MsgInvalidAccountTypeBranch)
@@ -451,7 +451,7 @@ func (h *ProductOnboardingHandler) saveAddress(
 		}
 		pool, err = resolvePool(h.Router, h.GlobalDB, reg)
 		if err != nil {
-			return ProductAddressData{}, apperror.ErrInternal
+			return ProductAddressData{}, fmt.Errorf("save address: resolve regional database: %w", err)
 		}
 	}
 
@@ -467,7 +467,7 @@ func (h *ProductOnboardingHandler) saveAddress(
 
 	tokens, err := h.reissueIfMigrated(userID, originalReg, reg)
 	if err != nil {
-		return ProductAddressData{}, apperror.ErrInternal
+		return ProductAddressData{}, fmt.Errorf("save address: issue regional tokens: %w", err)
 	}
 
 	next := onboarding.NextStep(accountType, completed)
@@ -526,22 +526,22 @@ func (h *ProductOnboardingHandler) persistAddress(
 ) (completed []string, currentStep string, err error) {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
-		return nil, "", apperror.ErrInternal
+		return nil, "", fmt.Errorf("save address: begin transaction: %w", err)
 	}
 	defer rollbackOnError(ctx, tx)
 
 	id, err := h.loadOrganizationID(ctx, tx, userID)
 	if err != nil {
-		return nil, "", apperror.ErrInternal
+		return nil, "", fmt.Errorf("save address: load organization: %w", err)
 	}
 	orgID := &id
 
 	idSQL, idArgs, err := query.UpdateOrganizationIdentification(userID, binNumber, identificationPayload)
 	if err != nil {
-		return nil, "", apperror.ErrInternal
+		return nil, "", fmt.Errorf("save address: build identification update: %w", err)
 	}
 	if _, execErr := tx.Exec(ctx, idSQL, idArgs...); execErr != nil {
-		return nil, "", apperror.ErrInternal
+		return nil, "", fmt.Errorf("save address: update identification: %w", execErr)
 	}
 
 	addrSQL, addrArgs, err := query.UpsertAccountAddress(
@@ -549,19 +549,19 @@ func (h *ProductOnboardingHandler) persistAddress(
 		req.City, req.StateOrCounty, req.PostCode, req.FormattedAddress,
 	)
 	if err != nil {
-		return nil, "", apperror.ErrInternal
+		return nil, "", fmt.Errorf("save address: build address upsert: %w", err)
 	}
 	if _, execErr := tx.Exec(ctx, addrSQL, addrArgs...); execErr != nil {
-		return nil, "", apperror.ErrInternal
+		return nil, "", fmt.Errorf("save address: upsert address: %w", execErr)
 	}
 
 	completed, currentStep, err = h.advanceProgress(ctx, tx, reg, userID, onboarding.StepIdentificationAddress)
 	if err != nil {
-		return nil, "", apperror.ErrInternal
+		return nil, "", fmt.Errorf("save address: advance onboarding progress: %w", err)
 	}
 
 	if commitErr := tx.Commit(ctx); commitErr != nil {
-		return nil, "", apperror.ErrInternal
+		return nil, "", fmt.Errorf("save address: commit transaction: %w", commitErr)
 	}
 	return completed, currentStep, nil
 }
@@ -852,7 +852,7 @@ func (h *ProductOnboardingHandler) putCompliance(w http.ResponseWriter, r *http.
 
 	accountType, err := h.loadAccountType(ctx, pool, reg, userID)
 	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
+		response.Error(w, r, fmt.Errorf("load account type for compliance: %w", err))
 		return
 	}
 
@@ -1445,7 +1445,7 @@ func (h *ProductOnboardingHandler) loadAccountType(
 		return "", err
 	}
 	if accountType == nil {
-		return "", fmt.Errorf("account type not set")
+		return "", apperror.New(apperror.CodeOnboardingIncomplete, "complete the profile step before continuing")
 	}
 	return *accountType, nil
 }

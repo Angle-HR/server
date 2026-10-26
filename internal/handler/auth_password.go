@@ -108,15 +108,9 @@ func (h *AuthHandler) resetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := h.Resetter.ConsumeToken(ctx, req.Token)
+	session, err := h.Resetter.LoadToken(ctx, req.Token)
 	if err != nil {
 		response.Error(w, r, apperror.New(apperror.CodeVerificationExpired, "reset token invalid or expired"))
-		return
-	}
-
-	passwordHash, err := auth.HashPassword(req.Password)
-	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
 
@@ -129,6 +123,32 @@ func (h *AuthHandler) resetPassword(w http.ResponseWriter, r *http.Request) {
 	pool, err := h.Router.DB(reg)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
+	user, err := h.loadUserByID(ctx, reg, session.UserID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			response.Error(w, r, apperror.ErrNotFound)
+			return
+		}
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+	if auth.CheckPassword(user.PasswordHash, req.Password) {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, "New password can’t be the same as your current one."))
+		return
+	}
+
+	passwordHash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
+	// Consume only after validation so the user can retry with a different password.
+	if _, err := h.Resetter.ConsumeToken(ctx, req.Token); err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeVerificationExpired, "reset token invalid or expired"))
 		return
 	}
 

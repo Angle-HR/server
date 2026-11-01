@@ -1,9 +1,9 @@
 # Runs database migrations as a one-off ECS task inside the environment's VPC (RDS is private), started
 # manually from the Actions tab (Run workflow).
 #
-# The task runs the migrate image Terraform deployed (`image_tag` in envs/<env>/terraform.tfvars in Angle-HR/infra), so the
-# order for a release with new migrations is: push (Container Images builds the sha) → set image_tag and
-# `terraform apply` → run this workflow. The run fails if the deployed image is not the one you expect.
+# The task runs the latest revision of the migrate task definition. Container Images runs migrations itself on
+# environments with AUTO_ROLLOUT=true (except while staging is asleep); use this workflow for the others, after
+# `terraform apply`, or to re-run. The run fails if the deployed image is not the one you expect.
 #
 # GitHub Environment setup (Settings → Environments → Variables or Secrets), from `terraform output migrate_run_task` and
 # `terraform output github_deploy_role_arn` in Angle-HR/infra envs/<env>:

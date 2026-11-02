@@ -9,8 +9,13 @@
 #   AWS_DEPLOY_ROLE_ARN — `terraform output github_deploy_role_arn` in Angle-HR/infra envs/<env>
 #   AWS_REGION          — the stack's home region, e.g. eu-west-2
 #
-# Images are tagged with the full git sha only. ECR tags are immutable, so there is no `latest`; set
-# `image_tag` in envs/<env>/terraform.tfvars in Angle-HR/infra to the sha and apply to roll out.
+# Images are tagged with the full git sha only. ECR tags are immutable, so there is no `latest`.
+#
+# Rollout: when the environment has the variable AUTO_ROLLOUT=true, the job then runs migrations and points the
+# ECS services and job schedules at the new sha (scripts/ci/rollout.sh). It also needs ECS_CLUSTER,
+# MIGRATE_TASK_DEFINITION, MIGRATE_SUBNETS, MIGRATE_SECURITY_GROUP (see migrate.yml) and SCHEDULE_PREFIX
+# (e.g. openhr-staging-), and the deploy role needs `rollout` set in Angle-HR/infra. Without AUTO_ROLLOUT,
+# `terraform apply` in Angle-HR/infra envs/<env> rolls out the newest sha in ECR.
 
 name: Container Images
 
@@ -129,10 +134,26 @@ jobs:
           cache-from: type=gha,scope=migrate
           cache-to: type=gha,mode=max,scope=migrate
 
+      - name: Roll out
+        if: vars.AUTO_ROLLOUT == 'true'
+        env:
+          CLUSTER: ${{ vars.ECS_CLUSTER || secrets.ECS_CLUSTER }}
+          MIGRATE_TASK_DEFINITION: ${{ vars.MIGRATE_TASK_DEFINITION || secrets.MIGRATE_TASK_DEFINITION }}
+          MIGRATE_SUBNETS: ${{ vars.MIGRATE_SUBNETS || secrets.MIGRATE_SUBNETS }}
+          MIGRATE_SECURITY_GROUP: ${{ vars.MIGRATE_SECURITY_GROUP || secrets.MIGRATE_SECURITY_GROUP }}
+          SCHEDULE_PREFIX: ${{ vars.SCHEDULE_PREFIX }}
+        run: scripts/ci/rollout.sh
+
       - name: Summary
+        env:
+          ROLLED_OUT: ${{ vars.AUTO_ROLLOUT == 'true' }}
         run: |
           {
             echo "### Images for \`${TAG}\`"
             echo
-            echo "Set \`image_tag = \"${TAG}\"\` in Angle-HR/infra envs/${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }}/terraform.tfvars and apply."
+            if [[ "$ROLLED_OUT" == "true" ]]; then
+              echo "Rolled out to ECS (migrations, services, job schedules)."
+            else
+              echo "Not rolled out: run \`terraform apply\` in Angle-HR/infra envs/${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name }} (it picks the newest sha), or set AUTO_ROLLOUT=true on the environment."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

@@ -3,6 +3,7 @@ package onboarding
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -132,5 +133,25 @@ func TestGoogleSearchUnsupportedCountry(t *testing.T) {
 	got, err := g.Search(context.Background(), "nigeria", "lagos")
 	if err != nil || len(got) != 0 {
 		t.Fatalf("got %v, %v", got, err)
+	}
+}
+
+func TestGoogleVerify_badRequestIsInvalidInput(t *testing.T) {
+	g := newTestGoogle(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	})
+	_, err := g.Verify(context.Background(), ProductAddress{CountrySlug: "united-kingdom", Line1: "x", City: "y", PostCode: "zzz"})
+	if !errors.Is(err, ErrInvalidAddressInput) {
+		t.Fatalf("err = %v, want ErrInvalidAddressInput", err)
+	}
+}
+
+func TestGoogleVerify_serverErrorIsNotInvalidInput(t *testing.T) {
+	g := newTestGoogle(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	})
+	_, err := g.Verify(context.Background(), ProductAddress{CountrySlug: "united-kingdom", Line1: "x", City: "y", PostCode: "zzz"})
+	if err == nil || errors.Is(err, ErrInvalidAddressInput) {
+		t.Fatalf("err = %v, want plain error", err)
 	}
 }

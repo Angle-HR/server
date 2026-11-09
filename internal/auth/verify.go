@@ -17,6 +17,7 @@ const (
 	verifyKeyPrefix         = "verify:"
 	verifyResendPrefix      = "verify:resend:"
 	verifyResendEmailPrefix = "verify:resend:email:"
+	verifyLatestPrefix      = "verify:latest:"
 	codeTTL                 = 300
 	resendCooldownSeconds   = 30
 	maxVerifyAttempts       = 5
@@ -221,4 +222,78 @@ func CodeExpiresInSeconds() int {
 // ResendAvailableInSeconds returns the resend cooldown shown to clients.
 func ResendAvailableInSeconds() int {
 	return resendCooldownSeconds
+}
+
+// RetryAfterBySession returns the seconds left on the per-session resend
+// cooldown, or 0 when a resend is allowed.
+func (s *VerificationStore) RetryAfterBySession(ctx context.Context, sessionID string) (int, error) {
+	return s.retryAfter(ctx, verifyResendPrefix+sessionID)
+}
+
+// RetryAfterByEmail returns the seconds left on the per-email resend cooldown,
+// or 0 when a new code may be requested.
+func (s *VerificationStore) RetryAfterByEmail(ctx context.Context, email string) (int, error) {
+	return s.retryAfter(ctx, verifyResendEmailPrefix+email)
+}
+
+func (s *VerificationStore) retryAfter(ctx context.Context, key string) (int, error) {
+	if s == nil || s.client == nil {
+		return 0, errors.New("verification store unavailable")
+	}
+	ttl, err := s.client.TTL(ctx, key).Result()
+	if err != nil {
+		return 0, err
+	}
+	if ttl <= 0 {
+		return 0, nil
+	}
+	secs := int((ttl + time.Second - 1) / time.Second)
+	if secs < 1 {
+		secs = 1
+	}
+	return secs, nil
+}
+
+func latestKey(purpose, email string) string {
+	return verifyLatestPrefix + purpose + ":" + email
+}
+
+// ReplaceLatestSession records sessionID as the only live session for the email
+// and purpose, deleting the previously recorded one so its code stops working.
+func (s *VerificationStore) ReplaceLatestSession(ctx context.Context, purpose, email, sessionID string) error {
+	if s == nil || s.client == nil {
+		return errors.New("verification store unavailable")
+	}
+	key := latestKey(purpose, email)
+	prev, err := s.client.GetSet(ctx, key, sessionID).Result()
+	if err != nil && !errors.Is(err, goredis.Nil) {
+		return err
+	}
+	if err := s.client.Expire(ctx, key, time.Duration(codeTTL)*time.Second).Err(); err != nil {
+		return err
+	}
+	if prev != "" && prev != sessionID {
+		return s.DeleteSession(ctx, prev)
+	}
+	return nil
+}
+
+// LatestSessionID returns the live session recorded for the email and purpose,
+// or "" when none exists or it has expired.
+func (s *VerificationStore) LatestSessionID(ctx context.Context, purpose, email string) (string, error) {
+	if s == nil || s.client == nil {
+		return "", errors.New("verification store unavailable")
+	}
+	id, err := s.client.Get(ctx, latestKey(purpose, email)).Result()
+	if errors.Is(err, goredis.Nil) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	n, err := s.client.Exists(ctx, verifyKeyPrefix+id).Result()
+	if err != nil || n == 0 {
+		return "", err
+	}
+	return id, nil
 }

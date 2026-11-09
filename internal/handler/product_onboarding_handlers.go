@@ -9,10 +9,12 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/auth"
@@ -388,6 +390,12 @@ func (h *ProductOnboardingHandler) putAddress(w http.ResponseWriter, r *http.Req
 		response.Error(w, r, err)
 		return
 	}
+	if err := cleanAddressFields(
+		&req.Line1, req.Line2, &req.City, &req.StateOrCounty, &req.PostCode, req.EntryMode == "manual",
+	); err != nil {
+		response.Error(w, r, err)
+		return
+	}
 
 	ctx := r.Context()
 	data, err := h.saveAddress(ctx, userID, reg, &req)
@@ -462,6 +470,9 @@ func (h *ProductOnboardingHandler) saveAddress(
 
 	completed, currentStep, err := h.persistAddress(ctx, pool, reg, userID, countryID, &req, identificationPayload, binNumber)
 	if err != nil {
+		if isBadInputDBError(err) {
+			return ProductAddressData{}, invalidAddressError("line_1")
+		}
 		return ProductAddressData{}, err
 	}
 
@@ -679,6 +690,10 @@ func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.
 		response.Error(w, r, err)
 		return
 	}
+	if err := cleanAddressFields(&req.Line1, req.Line2, &req.City, &req.StateOrCounty, &req.PostCode, true); err != nil {
+		response.Error(w, r, err)
+		return
+	}
 
 	ctx := r.Context()
 	countryID := uuid.MustParse(req.CountryID)
@@ -706,6 +721,10 @@ func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.
 		PlaceID:          req.PlaceID,
 	})
 	if err != nil {
+		if errors.Is(err, onboarding.ErrInvalidAddressInput) {
+			response.Error(w, r, invalidAddressError("line_1"))
+			return
+		}
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
@@ -737,6 +756,54 @@ func (h *ProductOnboardingHandler) verifyAddress(w http.ResponseWriter, r *http.
 		VerificationStatus: result.Status,
 		FailureReason:      result.FailureReason,
 	})
+}
+
+// invalidAddressMessage is the field-level message shown for an unusable address.
+const invalidAddressMessage = "Enter a valid address"
+
+// invalidAddressError is a 400 VALIDATION_ERROR whose details.fields point at field.
+func invalidAddressError(field string) error {
+	return apperror.NewWithDetails(
+		apperror.CodeValidationError,
+		invalidAddressMessage,
+		map[string]any{"fields": []fieldError{{Path: field, Message: invalidAddressMessage}}},
+	)
+}
+
+// cleanAddressFields trims the address fields in place and rejects values the
+// database cannot store (control characters, e.g. NUL) and, when required is
+// set, blank values that passed the struct tags because they held only spaces.
+func cleanAddressFields(line1 *string, line2 *string, city, state, post *string, required bool) error {
+	var bad []fieldError
+	check := func(path string, v *string, mustHave bool) {
+		*v = strings.TrimSpace(*v)
+		if (mustHave && *v == "") || strings.ContainsFunc(*v, unicode.IsControl) {
+			bad = append(bad, fieldError{Path: path, Message: invalidAddressMessage})
+		}
+	}
+	check("line_1", line1, required)
+	check("city", city, required)
+	check("state_or_county", state, required)
+	check("post_code", post, required)
+	if line2 != nil {
+		check("line_2", line2, false)
+	}
+	if len(bad) == 0 {
+		return nil
+	}
+	return apperror.NewWithDetails(
+		apperror.CodeValidationError, invalidAddressMessage, map[string]any{"fields": bad},
+	)
+}
+
+// isBadInputDBError reports whether err is Postgres rejecting the data itself
+// (data exception class 22, or a check/not-null violation) rather than failing.
+func isBadInputDBError(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	return strings.HasPrefix(pgErr.Code, "22") || pgErr.Code == "23514" || pgErr.Code == "23502"
 }
 
 // requireFormattedAddress checks that a search-mode address carries the formatted address.

@@ -272,6 +272,11 @@ func (g *GoogleAddressProvider) do(ctx context.Context, req *http.Request, out a
 	if err != nil {
 		return err
 	}
+	// Google answers 400 when it cannot parse the address (bad postal code,
+	// unknown region, ...). That is bad input, not an outage.
+	if resp.StatusCode == http.StatusBadRequest {
+		return fmt.Errorf("%w: status %d", ErrInvalidAddressInput, resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("status %d", resp.StatusCode)
 	}

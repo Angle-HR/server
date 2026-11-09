@@ -125,6 +125,13 @@ func TestAuthLogin_unverifiedRateLimited(t *testing.T) {
 	if errBody.Code != apperror.CodeVerificationRateLimited {
 		t.Fatalf("code: got %q want %q", errBody.Code, apperror.CodeVerificationRateLimited)
 	}
+	secs, ok := errBody.Details["retry_after_seconds"].(float64)
+	if !ok || secs < 1 || secs > float64(auth.ResendAvailableInSeconds()) {
+		t.Fatalf("retry_after_seconds: got %v", errBody.Details["retry_after_seconds"])
+	}
+	if got := rec.Header().Get("Retry-After"); got == "" {
+		t.Fatal("expected Retry-After header")
+	}
 
 	assertMocksMet(t, globalMock, regionalMock)
 }

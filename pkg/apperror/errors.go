@@ -259,3 +259,25 @@ func publicMessageForCode(code string) string {
 	}
 	return MsgInternalServerError
 }
+
+// DetailRetryAfterSeconds is the details key carrying a rate-limit countdown.
+const DetailRetryAfterSeconds = "retry_after_seconds"
+
+// RateLimited returns a 429 error carrying retry_after_seconds (plus extra details).
+func RateLimited(code, message string, retryAfter int, extra map[string]any) *AppError {
+	details := map[string]any{DetailRetryAfterSeconds: retryAfter}
+	for k, v := range extra {
+		details[k] = v
+	}
+	return NewWithDetails(code, message, details)
+}
+
+// RetryAfterSeconds extracts the retry_after_seconds detail from err.
+func RetryAfterSeconds(err error) (int, bool) {
+	var appErr *AppError
+	if errors.As(err, &appErr) {
+		n, ok := appErr.Details[DetailRetryAfterSeconds].(int)
+		return n, ok && n > 0
+	}
+	return 0, false
+}

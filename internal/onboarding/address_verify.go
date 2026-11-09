@@ -2,6 +2,7 @@ package onboarding
 
 import (
 	"context"
+	"errors"
 	"strings"
 )
 
@@ -14,6 +15,10 @@ const (
 	FailureReasonNotVerifiable  = "not_verifiable"
 	FailureReasonInvalidAddress = "invalid_address"
 )
+
+// ErrInvalidAddressInput is returned by a verifier when the provider rejects the
+// address itself as malformed, as opposed to being unavailable.
+var ErrInvalidAddressInput = errors.New("invalid address input")
 
 // ProductAddress is the subset of address fields used for verification.
 type ProductAddress struct {

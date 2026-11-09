@@ -60,13 +60,13 @@ func (h *AuthHandler) loginOTPRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ok, err := h.Verifier.CanResendByEmail(ctx, email)
+	retryAfter, err := h.Verifier.RetryAfterByEmail(ctx, email)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
-	if !ok {
-		response.Error(w, r, apperror.New(apperror.CodeVerificationRateLimited, apperror.MsgVerificationRateLimited))
+	if retryAfter > 0 {
+		response.Error(w, r, verificationRateLimited(retryAfter, nil))
 		return
 	}
 
@@ -158,6 +158,9 @@ func (h *AuthHandler) beginLoginOTP(ctx context.Context, userID uuid.UUID, email
 	}
 
 	if err := h.Verifier.CreateSession(ctx, session); err != nil {
+		return AuthSignupData{}, err
+	}
+	if err := h.Verifier.ReplaceLatestSession(ctx, auth.PurposeLoginOTP, email, sessionID); err != nil {
 		return AuthSignupData{}, err
 	}
 

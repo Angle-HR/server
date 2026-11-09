@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5/middleware"
 
@@ -59,6 +60,12 @@ func Error(w http.ResponseWriter, r *http.Request, err error) {
 
 	if status >= http.StatusInternalServerError {
 		logInternalError(r, err, status, code)
+	}
+
+	if status == http.StatusTooManyRequests {
+		if secs, ok := apperror.RetryAfterSeconds(err); ok {
+			w.Header().Set("Retry-After", strconv.Itoa(secs))
+		}
 	}
 
 	write(w, status, Envelope{

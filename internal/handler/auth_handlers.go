@@ -507,13 +507,13 @@ func (h *AuthHandler) resendVerification(w http.ResponseWriter, r *http.Request)
 	}
 
 	ctx := r.Context()
-	ok, err := h.Verifier.CanResend(ctx, req.VerificationSessionID)
+	retryAfter, err := h.Verifier.RetryAfterBySession(ctx, req.VerificationSessionID)
 	if err != nil {
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
-	if !ok {
-		response.Error(w, r, apperror.New(apperror.CodeVerificationRateLimited, apperror.MsgVerificationRateLimited))
+	if retryAfter > 0 {
+		response.Error(w, r, verificationRateLimited(retryAfter, nil))
 		return
 	}
 
@@ -543,8 +543,18 @@ func (h *AuthHandler) resendVerification(w http.ResponseWriter, r *http.Request)
 		response.Error(w, r, apperror.ErrInternal)
 		return
 	}
+	// Share the cooldown with sign-in so a resend cannot be sidestepped (or
+	// blocked) by requesting a code through another entry point.
+	if err := h.Verifier.MarkResentByEmail(ctx, session.Email); err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
 
-	h.enqueueVerificationEmail(ctx, session.Email, code)
+	if session.Purpose == auth.PurposeLoginOTP {
+		h.enqueueLoginOTPEmail(ctx, session.Email, code)
+	} else {
+		h.enqueueVerificationEmail(ctx, session.Email, code)
+	}
 
 	response.Success(w, r, http.StatusOK, AuthSignupData{
 		VerificationSessionID:    session.SessionID,
@@ -637,12 +647,18 @@ func (h *AuthHandler) unverifiedLoginError(
 	email string,
 	reg region.Region,
 ) error {
-	ok, err := h.Verifier.CanResendByEmail(ctx, email)
+	retryAfter, err := h.Verifier.RetryAfterByEmail(ctx, email)
 	if err != nil {
 		return apperror.ErrInternal
 	}
-	if !ok {
-		return apperror.New(apperror.CodeVerificationRateLimited, apperror.MsgVerificationRateLimited)
+	if retryAfter > 0 {
+		// The caller has proven the password, so hand back the live session
+		// so the client can show the code page and count down to a resend.
+		extra := map[string]any{"email": email}
+		if id, idErr := h.Verifier.LatestSessionID(ctx, auth.PurposeEmailVerify, email); idErr == nil && id != "" {
+			extra["verification_session_id"] = id
+		}
+		return verificationRateLimited(retryAfter, extra)
 	}
 
 	data, err := h.beginVerification(ctx, userID, email, string(reg))
@@ -770,6 +786,9 @@ func (h *AuthHandler) beginVerification(
 	if err := h.Verifier.CreateSession(ctx, session); err != nil {
 		return AuthSignupData{}, err
 	}
+	if err := h.Verifier.ReplaceLatestSession(ctx, auth.PurposeEmailVerify, email, sessionID); err != nil {
+		return AuthSignupData{}, err
+	}
 
 	h.enqueueVerificationEmail(ctx, email, code)
 
@@ -779,6 +798,15 @@ func (h *AuthHandler) beginVerification(
 		CodeExpiresInSeconds:     auth.CodeExpiresInSeconds(),
 		ResendAvailableInSeconds: auth.ResendAvailableInSeconds(),
 	}, nil
+}
+
+// verificationRateLimited builds the 429 returned when a code was requested too
+// recently. details.retry_after_seconds (also sent as the Retry-After header)
+// is the time left until another code may be requested.
+func verificationRateLimited(retryAfter int, extra map[string]any) error {
+	return apperror.RateLimited(
+		apperror.CodeVerificationRateLimited, apperror.MsgVerificationRateLimited, retryAfter, extra,
+	)
 }
 
 func verificationDetails(data AuthSignupData) map[string]any {

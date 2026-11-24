@@ -332,7 +332,8 @@ func TestCORSAndOrigin(t *testing.T) {
 	})
 	if pre.StatusCode != 204 || pre.Header.Get("Access-Control-Allow-Origin") != "https://app.example.com" ||
 		pre.Header.Get("Access-Control-Allow-Credentials") != "true" ||
-		!strings.Contains(pre.Header.Get("Access-Control-Allow-Headers"), "X-CSRF-Token") {
+		!strings.Contains(pre.Header.Get("Access-Control-Allow-Headers"), "X-CSRF-Token") ||
+		!strings.Contains(pre.Header.Get("Access-Control-Allow-Headers"), "If-Match") { // job saves carry the revision
 		t.Errorf("preflight %d %v", pre.StatusCode, pre.Header)
 	}
 	if bad := do(t, "OPTIONS", f.edge.URL+"/api/v1/x", "", map[string]string{

@@ -84,7 +84,8 @@ func originAllowed(origin string, allowed []string) bool {
 	return false
 }
 
-const corsAllowHeaders = "Content-Type, Authorization, X-CSRF-Token, X-Request-Id, Idempotency-Key"
+// If-Match carries a job's revision on every save; the browser blocks the request without it here.
+const corsAllowHeaders = "Accept, Content-Type, If-Match, Authorization, X-CSRF-Token, X-Request-Id, Idempotency-Key"
 
 // CORS implements the allow-list with credentials, answers preflights itself and rejects unsafe methods whose
 // Origin header is not allow-listed (a CSRF defence in depth next to the CSRF token). Requests without an

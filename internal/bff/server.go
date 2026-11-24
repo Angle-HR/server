@@ -100,7 +100,10 @@ func NewHandler(cfg Config, d Deps) (http.Handler, error) {
 	r.Get("/readyz", readyHandler(d.Limiter, ready, cfg.UpstreamTimeout))
 	// The interactive API docs, outside production. They need no session and no upstream.
 	if cfg.Name == "web-bff" && docs.IsEnabled(cfg.AppEnv) {
-		docs.RegisterRoutes(r, docs.Config{PublicAPIURL: cfg.PublicAPIURL})
+		r.Group(func(r chi.Router) {
+			r.Use(docsCSP)
+			docs.RegisterRoutes(r, docs.Config{PublicAPIURL: cfg.PublicAPIURL})
+		})
 	}
 	r.Group(func(r chi.Router) {
 		r.Use(CORS(cfg))
@@ -216,4 +219,17 @@ func Run(cfg Config) error {
 		_ = ops.Shutdown(sctx)
 	}
 	return srv.Shutdown(sctx)
+}
+
+// docsCSP replaces the edge's lock-down policy (default-src 'none', right for JSON) on the docs pages: the Scalar
+// viewer loads its script and styles from jsDelivr and calls the API from the page. The page still cannot be framed.
+func docsCSP(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; "+
+			"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "+
+			"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "+
+			"font-src 'self' data: https://cdn.jsdelivr.net; "+
+			"img-src 'self' data: https:; connect-src 'self' https:; frame-ancestors 'none'")
+		next.ServeHTTP(w, r)
+	})
 }

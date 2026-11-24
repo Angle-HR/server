@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -114,5 +115,19 @@ func TestNoCatchAllUpstream(t *testing.T) {
 	}
 	if code := do(t, "GET", f.edge.URL+"/readyz", "", nil).StatusCode; code != http.StatusOK {
 		t.Fatalf("readyz: %d", code)
+	}
+}
+
+func TestDocsPagesGetTheirOwnCSP(t *testing.T) {
+	f := newFixture(t, func(c *Config) { c.Name = "web-bff"; c.AppEnv = "development"; c.PublicAPIURL = "http://localhost:8081" }, nil)
+	resp := do(t, "GET", f.edge.URL+"/api/docs", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("docs: %d", resp.StatusCode)
+	}
+	if csp := resp.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "cdn.jsdelivr.net") {
+		t.Fatalf("docs CSP does not allow the viewer script: %q", csp)
+	}
+	if csp := do(t, "GET", f.edge.URL+"/healthz", "", nil).Header.Get("Content-Security-Policy"); csp != "default-src 'none'; frame-ancestors 'none'" {
+		t.Fatalf("other routes must keep the lock-down policy: %q", csp)
 	}
 }

@@ -45,6 +45,10 @@ func publicPath(p string, admin bool) bool {
 		}
 		return false
 	}
+	// The interactive API docs and their spec (served by the monolith outside production, see internal/docs).
+	if p == "/api/docs" || p == "/api/openapi.json" {
+		return true
+	}
 	switch parts[0] {
 	case "auth":
 		if len(parts) >= 2 {

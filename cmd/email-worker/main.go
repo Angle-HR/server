@@ -38,8 +38,10 @@ func run() error {
 	smtpPassword := os.Getenv("SMTP_PASSWORD")
 	smtpFrom := os.Getenv("SMTP_FROM")
 	smtpFromName := os.Getenv("SMTP_FROM_NAME")
-	appURL := os.Getenv("APP_URL")
-	adminAppURL := os.Getenv("ADMIN_APP_URL")
+	appURL, adminAppURL, err := mailer.AppLinkURLs(appEnv, os.Getenv("APP_URL"), os.Getenv("ADMIN_APP_URL"))
+	if err != nil {
+		return err
+	}
 
 	if smtpHost == "" {
 		slogLogger.Warn("SMTP_HOST is not set; emails may fail to deliver")

@@ -77,4 +77,11 @@ fi
 echo "=== Migrating GLOBAL ==="
 DB_URL="$DB_URL_GLOBAL" bash "$migrations_dir/global_registry/migrate.sh" "$direction"
 
+# The notifications service's own database (events_inbox only). Optional: without NOTIFICATIONS_DB_URL the service
+# keeps its inbox in the global database, which the global migration above already covers.
+if [[ -n "${NOTIFICATIONS_DB_URL:-}" ]]; then
+	echo "=== Migrating NOTIFICATIONS ==="
+	DB_URL="$NOTIFICATIONS_DB_URL" bash "$migrations_dir/notifications/migrate.sh" "$direction"
+fi
+
 echo "All migrations complete."

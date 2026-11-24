@@ -139,7 +139,11 @@ func Run() error {
 		return fmt.Errorf("create Fluvio client: %w", err)
 	}
 
-	emailQueue := fluvioClient
+	emailQueue, stopEmailQueue, err := selectEmailEnqueuer(ctx, cfg, log, fluvioClient, globalPool, dbRouter)
+	if err != nil {
+		return fmt.Errorf("select email transport: %w", err)
+	}
+	defer stopEmailQueue()
 
 	sessionCfg := session.ManagerConfig{
 		IdleTTL: cfg.SessionIdleTTL, AbsoluteTTL: cfg.SessionAbsoluteTTL, Secure: cfg.CookieSecure,

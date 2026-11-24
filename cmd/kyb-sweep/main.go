@@ -61,9 +61,20 @@ func run() error {
 	}
 	defer router.Close()
 
-	enqueuer, err := queue.NewInsertClient(global)
-	if err != nil {
-		return fmt.Errorf("create Fluvio client: %w", err)
+	var enqueuer kybnotify.Enqueuer
+	var drain func(context.Context) error
+	if os.Getenv("NOTIFICATIONS_TRANSPORT") == "events" {
+		var stop func()
+		enqueuer, drain, stop, err = eventsTransport(ctx, slogger, global, router)
+		if err != nil {
+			return err
+		}
+		defer stop()
+	} else {
+		enqueuer, err = queue.NewInsertClient(global)
+		if err != nil {
+			return fmt.Errorf("create Fluvio client: %w", err)
+		}
 	}
 
 	failed := false
@@ -88,6 +99,12 @@ func run() error {
 			continue
 		}
 		slogger.Info("kyb sweep done", attrs...)
+	}
+	if drain != nil {
+		// A one-shot job has no long-running relay: publish what this run wrote to the outbox before exiting.
+		if err := drain(ctx); err != nil {
+			return fmt.Errorf("kyb sweep: publish email requests: %w", err)
+		}
 	}
 	if failed {
 		return errors.New("kyb sweep: one or more regions failed")

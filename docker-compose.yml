@@ -1,3 +1,5 @@
+name: openhr-local
+
 services:
   # ========== PostgreSQL (one instance, six databases) ==========
   postgres:
@@ -34,34 +36,36 @@ services:
     restart: unless-stopped
 
   minio:
-    image: minio/minio:latest
+    # minio/minio and quay.io/minio images were withdrawn from public registries; Chainguard still publishes a free build.
+    image: ${MINIO_IMAGE:-cgr.dev/chainguard/minio:latest}
     ports:
       - "${MINIO_API_PORT:-9000}:9000"
       - "${MINIO_CONSOLE_PORT:-9001}:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    command: server /data --console-address ":9001"
+    command: ["server", "/data", "--console-address", ":9001"]
     volumes:
       - minio_data:/data
     networks:
       - anglehr_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      # no curl/wget in the image; probe with bash /dev/tcp
+      test: ["CMD", "/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000; printf 'GET /minio/health/live HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; read -r l <&3; [[ $$l == *200* ]]"]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: unless-stopped
 
   minio-setup:
-    image: minio/mc:latest
+    image: ${MINIO_IMAGE:-cgr.dev/chainguard/minio:latest}
     depends_on:
       minio:
         condition: service_healthy
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    entrypoint: ["/bin/sh", "-c"]
+    entrypoint: ["/bin/bash", "-c"]
     command:
       - |
         set -e
@@ -108,9 +112,13 @@ services:
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://*.tryopenhr.com,http://localhost:3000}
       FLUVIO_UI_ORIGIN: ${FLUVIO_UI_ORIGIN:-http://localhost:5173}
-      JWT_SECRET: ${JWT_SECRET:-dev-insecure-jwt-secret-change-me}
-      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-3600}
-      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-604800}
+      SESSION_IDLE_TTL: ${SESSION_IDLE_TTL:-7200}
+      SESSION_ABSOLUTE_TTL: ${SESSION_ABSOLUTE_TTL:-43200}
+      # Plain-http local dev cannot set Secure cookies; production must keep the default (true).
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:-dev-insecure-jwt-secret-change-me}
+      ADMIN_TOTP_REQUIRED: ${ADMIN_TOTP_REQUIRED:-}
       AUTH_DEFAULT_REGION: ${AUTH_DEFAULT_REGION:-uk}
       ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-admin@anglehr.local}
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-changeme123}
@@ -120,6 +128,8 @@ services:
       R2_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       R2_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       R2_ENDPOINT: http://minio:9000
+      # What browsers and curl on the host use for presigned uploads and downloads (signed into the URL).
+      R2_PUBLIC_ENDPOINT: ${R2_PUBLIC_ENDPOINT:-http://localhost:${MINIO_API_PORT:-9000}}
       ANGLEHR_UK_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_uk?sslmode=disable
       ANGLEHR_UK_R2_BUCKET: ${ANGLEHR_UK_R2_BUCKET:-openhr-uk}
       ANGLEHR_US_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_us?sslmode=disable
@@ -142,7 +152,7 @@ services:
     networks:
       - anglehr_net
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/api/v1/countries || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/healthz || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -159,7 +169,9 @@ services:
       - anglehr_net
     restart: unless-stopped
 
+  # Legacy email path (Fluvio queue). Only needed with NOTIFICATIONS_TRANSPORT=fluvio: --profile legacy-email.
   email-worker:
+    profiles: [legacy-email]
     build:
       context: .
       dockerfile: Dockerfile
@@ -175,8 +187,8 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-no-reply@anglehr.local}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Angle HR}
-      APP_URL: ${APP_URL:-http://localhost:8080}
-      ADMIN_APP_URL: ${ADMIN_APP_URL:-https://testadminlocal.tryopenhr.com}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      ADMIN_APP_URL: ${ADMIN_APP_URL:-http://localhost:3001}
     depends_on:
       postgres:
         condition: service_healthy
@@ -207,7 +219,7 @@ services:
 
 networks:
   anglehr_net:
-    name: anglehr_net
+    name: ${LOCAL_NETWORK:-anglehr_net}
 
 volumes:
   postgres_data:

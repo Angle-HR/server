@@ -206,6 +206,8 @@ pr-description:
 	echo "✅ Wrote $$out"
 # Protobuf/gRPC contracts (proto, proto-lint, proto-breaking)
 include make/proto.mk
+# Local Docker stack targets (local-up, local-down, local-reset, local-logs, local-smoke, local-e2e)
+include make/local.mk
 
 # Legacy Fluvio email queue depth: exit 0 when empty, so email-worker can be retired. See docs/microservices/hardening.md.
 email-queue-depth: ## Report jobs left in the Fluvio email queue (DB_URL_GLOBAL, or LOCAL=1 for the docker stack)

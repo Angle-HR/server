@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE="${BASE:-http://localhost:8080/api/v1}"
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/e2e-common.sh"
+e2e_url BASE SERVER_PORT 8080 /api/v1
 EMAIL="${EMAIL:-e2e-$(date +%s)@example.com}"
 PASS="${PASS:-test-password-123}"
 UK_COUNTRY="a1b2c3d4-e5f6-4789-a012-3456789abcde"

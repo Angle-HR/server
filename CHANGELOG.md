@@ -9,6 +9,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- Individual accounts can hire: finishing individual onboarding creates a personal organization (`accounts.organizations.kind = 'individual'`), reviewed through the admin verification queue (`case_type: individual`). The compliance step asks individuals for the industry only; `POST /onboarding/complete` returns `organization`; `GET /organization/verification` returns `kind`. `cmd/org-backfill-individuals` migrates existing accounts. `org.*` events carry `company_kind`. See `docs/microservices/individual-accounts.md`.
+
+### Changed (small fixes)
+- `waitlist:read` and `waitlist:write` are deleted from `admin.permissions` and every role (migration `global_registry/000015`).
+- Admin audit rows store the bare client IP; older `ip:port` rows are rewritten (migration `global_registry/000016`, IPv6 aware).
+- `APP_URL` and `ADMIN_APP_URL` are the only source of email link origins; `cmd/notifications`, `cmd/email-worker` and `cmd/hiring-outbox` refuse to start without them (https) in staging and production.
+
+### Removed (BREAKING: waitlist)
+- The waitlist feature is removed: `POST /api/v1/waitlist`, the `/api/v1/admin/waitlist*` routes, the `waitlist:read` / `waitlist:write` permission constants, the waitlist confirmation email and its query builders. The `waitlist` database schema stays because the onboarding catalogs live there, and no waitlist data is dropped.
+
+### Changed
+- Email requests can leave the monolith as events (`NOTIFICATIONS_TRANSPORT=events`), consumed by the new `cmd/notifications` service. The default is still the Fluvio queue. See `docs/microservices/notifications.md`.
+- The Go toolchain is 1.26 (Dockerfiles use `golang:1.26-alpine`).
+
+### Changed (BREAKING: authentication)
+- JWT bearer authentication is gone for product and admin APIs. Authentication is now an opaque server-side session in Redis carried by an HttpOnly cookie (`__Host-openhr_session`; `openhr_session` when `COOKIE_SECURE=false`). Admin uses a separate cookie (`__Host-openhr_admin_session`) and Redis namespace. See `docs/microservices/sessions.md`.
+- `login`, `verify-email`, `login/otp/verify`, `login/totp`, `accept-invite` and `/admin/auth/login|accept-invite` return `{data:{onboarding?, user?, csrf_token}}` plus `Set-Cookie`. No `access_token`/`refresh_token`/`mfa_token`/`expires_in` in bodies. `GET /auth/me` (and `/admin/auth/me`) also returns `csrf_token`.
+- Every POST/PUT/PATCH/DELETE on an authenticated route requires `X-CSRF-Token` (403 `CSRF_INVALID`); unsafe requests whose `Origin`/`Referer` is not in `ALLOWED_ORIGINS` get 403. CORS now allows credentials.
+- TOTP login: password/OTP login for a TOTP user sets a single-use 5 minute pre-auth cookie (`openhr_preauth`) instead of returning `mfa_token`; `POST /auth/login/totp` takes only `{code}`.
+- Onboarding steps that migrate an account between regions now rotate the session; the `tokens` response field is replaced by `session: {csrf_token, region}`.
+- Session ids rotate on login, MFA completion and region change. Password reset, TOTP disable and admin staff deactivation revoke all of the user's sessions.
+- `POST /auth/refresh` and `/admin/auth/refresh` return 410 `SESSION_REFRESH_REMOVED` (removed next release). `POST /admin/auth/logout` added.
+- Config: removed `JWT_SECRET`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`; added `SESSION_IDLE_TTL` (7200), `SESSION_ABSOLUTE_TTL` (43200), `COOKIE_SECURE` (true), `ALLOWED_ORIGINS` (defaults to `CORS_ALLOWED_ORIGINS`). `JWT_SECRET` is still read as a legacy fallback for `TOTP_ENCRYPTION_KEY` only.
+- New `internal/session` package with a `session.Validator` interface so a BFF can reuse the same store.
+
+### Added
 - Product auth session APIs: `GET /auth/me`, `POST /auth/logout` (refresh `jti` denylist + per-user session revoke in Redis).
 - Password reset: `POST /auth/forgot-password`, `POST /auth/reset-password` with email template.
 - Passwordless login OTP: `POST /auth/login/otp/request`, `POST /auth/login/otp/verify` (separate from signup verification).
@@ -22,6 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - E2E script: `scripts/e2e-onboarding.sh`.
 
 ### Changed
+- Auth audit fixes (Phase 0): OTP attempts are counted with an atomic Redis `INCR` (5-attempt cap, constant-time code compare, single-use consume) and login-OTP verification is locked per email; `PATCH /auth/signup` shares the resend cooldowns (429 `retry_after_seconds`) and checks the verified-user registry; `POST /auth/forgot-password` has a per-email cooldown with the same generic 200; new passwords (signup, reset, product and admin accept-invite) must be 8-128 chars with a letter and a digit (`VALIDATION_ERROR`, `details.fields[].path = "password"`); login failures for unknown emails now count toward lockout and spend a dummy bcrypt compare; `POST /auth/login/otp/request` always returns 200 (decoy session for unknown or unverified emails); signing up again with an unverified pending email replaces its password and starts a fresh verification (201) instead of 409.
 - Staging test findings (employer flow): country codes are one format everywhere. `internal/countrycode` accepts ISO 3166-1 alpha-2 and the `UK` alias (stored as `GB`) on apply, KYB submit and KYB change-country, and refuses any unassigned code with `country_code` named in `details.fields`.
 - Applying with an `Idempotency-Key` is answered before validation: an identical retry returns the original success even when its upload token is spent, and the same key with a different body returns 422 `IDEMPOTENCY_KEY_REUSED`. A SHA-256 request fingerprint is stored with the application (`000017_hiring_idempotency_fingerprint`).
 - Apply and upload rate limits: `429` now carries a real `Retry-After` (time left in the window) and the code `TOO_MANY_REQUESTS`. Invalid requests count against a 15 minute flood limit only, never against the hour's quota for valid applications.

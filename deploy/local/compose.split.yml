@@ -1,0 +1,461 @@
+# Overlay for the split (microservice) local stack. Always used together with the base compose file:
+#
+#   docker compose -f docker-compose.yml -f deploy/local/compose.split.yml [--profile <p>...] up -d
+#
+# (`make local-up` does this.) Relative paths below resolve against the base file's directory (repo root).
+#
+# Always on (no profile): the base stack + `nats`.
+# Opt-in profiles, one per service so a service can be dropped in as soon as ./cmd/<service> exists:
+#   identity org hiring applications web-bff admin-bff                 -> that service (notifications is always on)
+#   split                                                              -> all seven services
+#   web                                                                -> ../client and ../admin frontends
+#   clamav                                                             -> ClamAV daemon (~1.2 GB RAM)
+# A profile whose cmd/<service> does not exist yet fails only when you ask for it; `up` without it is unaffected.
+#
+# Conventions: HTTP :8080 with /healthz (liveness) and /readyz (readiness); gRPC :9090 on the internal network only.
+
+x-service-env: &service-env
+  APP_ENV: ${APP_ENV:-development}
+  LOG_LEVEL: ${LOG_LEVEL:-debug}
+  HTTP_ADDR: ":8080"
+  GRPC_ADDR: ":9090"
+  NATS_URL: nats://nats:4222
+  REDIS_URL: redis://redis:6379/${REDIS_DB:-0}
+  PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8081}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
+  ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:3001}
+  JWT_SECRET: ${JWT_SECRET:-dev-insecure-jwt-secret-change-me}
+  # Admin console second factor (empty: false in development, true in production/staging).
+  ADMIN_TOTP_REQUIRED: ${ADMIN_TOTP_REQUIRED:-}
+  DB_URL_GLOBAL: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_global?sslmode=disable
+  ANGLEHR_UK_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_uk?sslmode=disable
+  ANGLEHR_US_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_us?sslmode=disable
+  ANGLEHR_AFRICA_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_africa?sslmode=disable
+  ANGLEHR_EU_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_eu?sslmode=disable
+  ANGLEHR_ASIA_POSTGRES_DSN: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_asia?sslmode=disable
+  R2_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+  R2_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+  R2_ENDPOINT: http://minio:9000
+  R2_PUBLIC_ENDPOINT: ${R2_PUBLIC_ENDPOINT:-http://localhost:${MINIO_API_PORT:-9000}}
+  # Peer gRPC addresses (internal network).
+  IDENTITY_GRPC_ADDR: identity:9090
+  ORG_GRPC_ADDR: org:9090
+  HIRING_GRPC_ADDR: hiring:9090
+  APPLICATIONS_GRPC_ADDR: applications:9090
+  NOTIFICATIONS_GRPC_ADDR: notifications:9090
+  # Service-to-service gRPC authentication: off (default), token or mtls. See docs/microservices/hardening.md.
+  # mtls needs `make local-grpc-certs` first; each gRPC service mounts its own certificate directory at /run/grpc.
+  GRPC_AUTH: ${GRPC_AUTH:-off}
+  GRPC_AUTH_SECRET: ${GRPC_AUTH_SECRET:-dev-insecure-grpc-secret-change-me}
+  GRPC_TLS_CERT_FILE: /run/grpc/tls.crt
+  GRPC_TLS_KEY_FILE: /run/grpc/tls.key
+  GRPC_TLS_CA_FILE: /run/grpc/ca.crt
+
+x-service-base: &service-base
+  depends_on:
+    nats:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
+    minio-setup:
+      condition: service_completed_successfully
+  networks:
+    - anglehr_net
+  healthcheck:
+    test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+    start_period: 10s
+  restart: unless-stopped
+  mem_limit: 256m
+
+services:
+  postgres:
+    # Every service opens a pool per region (six databases): the default 100 connections run out with the services
+    # all running ("too many clients already").
+    command: ["postgres", "-c", "max_connections=400"]
+    volumes:
+      # Creates openhr_notifications on a fresh volume (the migrate container creates it otherwise).
+      - ./deploy/local/postgres-init:/docker-entrypoint-initdb.d:ro
+
+  # Adds the notifications database to the migration run (db/migrations/notifications).
+  migrate:
+    environment:
+      NOTIFICATIONS_DB_URL: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_notifications?sslmode=disable
+
+  # Email transport of the monolith. Locally the default is "events": the outbox plus the always-on notifications
+  # service send the mail. For the old Fluvio path run NOTIFICATIONS_TRANSPORT=fluvio make local-up PROFILES=legacy-email.
+  server:
+    volumes: ["${GRPC_CERT_DIR:-./deploy/local/certs}/server:/run/grpc:ro"]
+    environment:
+      SERVICE_NAME: server
+      GRPC_AUTH: ${GRPC_AUTH:-off}
+      GRPC_AUTH_SECRET: ${GRPC_AUTH_SECRET:-dev-insecure-grpc-secret-change-me}
+      GRPC_TLS_CERT_FILE: /run/grpc/tls.crt
+      GRPC_TLS_KEY_FILE: /run/grpc/tls.key
+      GRPC_TLS_CA_FILE: /run/grpc/ca.crt
+      NATS_URL: nats://nats:4222
+      NOTIFICATIONS_TRANSPORT: ${NOTIFICATIONS_TRANSPORT:-events}
+      # Every process that touches the notifications stream must use the same retention (see hardening.md).
+      NOTIFICATIONS_STREAM_MAX_AGE: ${NOTIFICATIONS_STREAM_MAX_AGE:-}
+      # "on": the monolith stops serving the applications routes (cmd/applications serves them).
+      APPLICATIONS_REMOTE: ${APPLICATIONS_REMOTE:-off}
+      # "on": the monolith stops serving the hiring routes (jobs, drafts, forms, templates, catalog, settings,
+      # lifecycle, the DPIA route, the careers page and sitemap); cmd/hiring serves them.
+      HIRING_REMOTE: ${HIRING_REMOTE:-off}
+      # Job lifecycle events (hiring.job.*) through the outbox; the monolith relays them to NATS. With
+      # HIRING_REMOTE=on the hiring service emits and relays them instead: set SERVER_HIRING_EVENTS=off.
+      HIRING_EVENTS: ${SERVER_HIRING_EVENTS:-${HIRING_EVENTS:-off}}
+      # "on": the monolith stops serving the org routes (cmd/org serves them), including the agreements routes.
+      ORG_REMOTE: ${ORG_REMOTE:-off}
+      # org.* events (company verified, KYB rejected, agreement accepted, ...) through the outbox.
+      ORG_EVENTS: ${ORG_EVENTS:-off}
+      # "on": the monolith stops serving the identity routes (/auth/*, /organizations/invites, identity half of /admin).
+      IDENTITY_REMOTE: ${IDENTITY_REMOTE:-off}
+      IDENTITY_EVENTS: ${IDENTITY_EVENTS:-off}
+      # Where the job list gets its applicant counters: db (the shared table) or grpc (ApplicationsService, needs the
+      # applications profile and APPLICATIONS_GRPC_ADDR).
+      APPLICANT_COUNTS: ${APPLICANT_COUNTS:-db}
+      APPLICATIONS_GRPC_ADDR: ${APPLICATIONS_GRPC_ADDR:-applications:9090}
+    depends_on:
+      nats:
+        condition: service_healthy
+
+  nats:
+    image: nats:2-alpine
+    # -js JetStream, -sd store dir, -m monitoring port (/healthz, /jsz, /varz)
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports:
+      - "${NATS_PORT:-4222}:4222"
+      - "${NATS_MONITOR_PORT:-8222}:8222"
+    volumes:
+      - nats_data:/data
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    mem_limit: 128m
+
+  # ---------- services (profiles) ----------
+  identity:
+    <<: *service-base
+    profiles: [identity, split]
+    build: &build-identity
+      context: .
+      dockerfile: deploy/local/Dockerfile.service
+      args: { SERVICE: identity }
+    image: ${LOCAL_IMAGE_PREFIX:-openhr-local}/identity:dev
+    ports: ["${IDENTITY_PORT:-8101}:8080"]
+    volumes: ["${GRPC_CERT_DIR:-./deploy/local/certs}/identity:/run/grpc:ro"]
+    environment:
+      <<: *service-env
+      SERVICE_NAME: identity
+      # Sessions, CSRF and origin rules: identical to the monolith (same Redis, cookie names and TTLs).
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://*.tryopenhr.com,http://localhost:3000}
+      SESSION_IDLE_TTL: ${SESSION_IDLE_TTL:-7200}
+      SESSION_ABSOLUTE_TTL: ${SESSION_ABSOLUTE_TTL:-43200}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:-dev-insecure-jwt-secret-change-me}
+      AUTH_DEFAULT_REGION: ${AUTH_DEFAULT_REGION:-uk}
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-admin@anglehr.local}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-changeme123}
+      ADMIN_BOOTSTRAP_NAME: ${ADMIN_BOOTSTRAP_NAME:-Bootstrap Admin}
+      # identity.user.* / identity.staff.invited events through the outbox.
+      IDENTITY_EVENTS: ${IDENTITY_EVENTS:-off}
+      # How a KYB decision reaches org: db (interim, writes the regional database) or grpc (ORG_GRPC_ADDR).
+      ORG_APPLY: ${ORG_APPLY:-db}
+      # The regional database config requires a bucket name per region (the service stores no files).
+      ANGLEHR_UK_R2_BUCKET: ${ANGLEHR_UK_R2_BUCKET:-openhr-uk}
+      ANGLEHR_US_R2_BUCKET: ${ANGLEHR_US_R2_BUCKET:-openhr-us}
+      ANGLEHR_AFRICA_R2_BUCKET: ${ANGLEHR_AFRICA_R2_BUCKET:-openhr-africa}
+      ANGLEHR_EU_R2_BUCKET: ${ANGLEHR_EU_R2_BUCKET:-openhr-eu}
+      ANGLEHR_ASIA_R2_BUCKET: ${ANGLEHR_ASIA_R2_BUCKET:-openhr-asia}
+
+  org:
+    <<: *service-base
+    profiles: [org, split]
+    build:
+      context: .
+      dockerfile: deploy/local/Dockerfile.service
+      args: { SERVICE: org }
+    image: ${LOCAL_IMAGE_PREFIX:-openhr-local}/org:dev
+    ports: ["${ORG_PORT:-8102}:8080"]
+    volumes: ["${GRPC_CERT_DIR:-./deploy/local/certs}/org:/run/grpc:ro"]
+    environment:
+      <<: *service-env
+      SERVICE_NAME: org
+      # Email requests: events (outbox -> notifications service) as the monolith does locally.
+      NOTIFICATIONS_TRANSPORT: ${NOTIFICATIONS_TRANSPORT:-events}
+      # org.* events through the outbox (relayed to NATS_URL by this service).
+      ORG_EVENTS: ${ORG_EVENTS:-off}
+      # KYB review items: db (write admin.verification_queue directly) or grpc (identity's EnqueueVerification).
+      IDENTITY_QUEUE: ${IDENTITY_QUEUE:-db}
+      # Sessions, CSRF and origin rules: identical to the monolith, so the cookie it issued is accepted here.
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://*.tryopenhr.com,http://localhost:3000}
+      SESSION_IDLE_TTL: ${SESSION_IDLE_TTL:-7200}
+      SESSION_ABSOLUTE_TTL: ${SESSION_ABSOLUTE_TTL:-43200}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      AUTH_DEFAULT_REGION: ${AUTH_DEFAULT_REGION:-uk}
+      # Blob store per region: the router requires the setting although org stores no files.
+      ANGLEHR_UK_R2_BUCKET: ${ANGLEHR_UK_R2_BUCKET:-openhr-uk}
+      ANGLEHR_US_R2_BUCKET: ${ANGLEHR_US_R2_BUCKET:-openhr-us}
+      ANGLEHR_AFRICA_R2_BUCKET: ${ANGLEHR_AFRICA_R2_BUCKET:-openhr-africa}
+      ANGLEHR_EU_R2_BUCKET: ${ANGLEHR_EU_R2_BUCKET:-openhr-eu}
+      ANGLEHR_ASIA_R2_BUCKET: ${ANGLEHR_ASIA_R2_BUCKET:-openhr-asia}
+
+  hiring:
+    <<: *service-base
+    profiles: [hiring, split]
+    build:
+      context: .
+      dockerfile: deploy/local/Dockerfile.service
+      args: { SERVICE: hiring }
+    image: ${LOCAL_IMAGE_PREFIX:-openhr-local}/hiring:dev
+    ports: ["${HIRING_PORT:-8103}:8080"]
+    volumes: ["${GRPC_CERT_DIR:-./deploy/local/certs}/hiring:/run/grpc:ro"]
+    environment:
+      <<: *service-env
+      SERVICE_NAME: hiring
+      # hiring.job.* and hiring.job.members_changed.v1 through the outbox, relayed to NATS_URL by this service.
+      HIRING_EVENTS: ${HIRING_EVENTS:-off}
+      # Where the publish readiness (KYB, DPA, privacy contact), the caller's membership and the industry catalog
+      # come from: db (the shared accounts tables, default) or grpc (OrgService at ORG_GRPC_ADDR). Publishing
+      # fails closed (503) when ORG_READINESS=grpc and org is unreachable.
+      ORG_READINESS: ${ORG_READINESS:-db}
+      ORG_MEMBERSHIP: ${ORG_MEMBERSHIP:-db}
+      ORG_INDUSTRIES: ${ORG_INDUSTRIES:-db}
+      ORG_GRPC_ADDR: ${ORG_GRPC_ADDR:-org:9090}
+      ORG_GRPC_TIMEOUT: ${ORG_GRPC_TIMEOUT:-3s}
+      # Company row (public page, job events, settings page, accept DPA, privacy contact) and the hiring managers'
+      # names on the job list: db (accounts tables) or grpc (OrgService / IdentityService.BatchGetUsers).
+      ORG_COMPANY: ${ORG_COMPANY:-db}
+      IDENTITY_USERS: ${IDENTITY_USERS:-db}
+      # Consume org.company.deleted.v1 and archive the company's live jobs.
+      HIRING_ORG_EVENTS: ${HIRING_ORG_EVENTS:-off}
+      # Applicant counters of the job list: db (shared table) or grpc (ApplicationsService at APPLICATIONS_GRPC_ADDR).
+      APPLICANT_COUNTS: ${APPLICANT_COUNTS:-db}
+      # Sessions, CSRF and origin rules: identical to the monolith, so its cookie is accepted here.
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://*.tryopenhr.com,http://localhost:3000}
+      SESSION_IDLE_TTL: ${SESSION_IDLE_TTL:-7200}
+      SESSION_ABSOLUTE_TTL: ${SESSION_ABSOLUTE_TTL:-43200}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      AUTH_DEFAULT_REGION: ${AUTH_DEFAULT_REGION:-uk}
+      # The regional router needs each region's bucket setting (hiring does not read the bucket).
+      ANGLEHR_UK_R2_BUCKET: ${ANGLEHR_UK_R2_BUCKET:-openhr-uk}
+      ANGLEHR_US_R2_BUCKET: ${ANGLEHR_US_R2_BUCKET:-openhr-us}
+      ANGLEHR_AFRICA_R2_BUCKET: ${ANGLEHR_AFRICA_R2_BUCKET:-openhr-africa}
+      ANGLEHR_EU_R2_BUCKET: ${ANGLEHR_EU_R2_BUCKET:-openhr-eu}
+      ANGLEHR_ASIA_R2_BUCKET: ${ANGLEHR_ASIA_R2_BUCKET:-openhr-asia}
+
+  applications:
+    <<: *service-base
+    profiles: [applications, split]
+    build:
+      context: .
+      dockerfile: deploy/local/Dockerfile.service
+      args: { SERVICE: applications }
+    image: ${LOCAL_IMAGE_PREFIX:-openhr-local}/applications:dev
+    ports: ["${APPLICATIONS_PORT:-8104}:8080"]
+    volumes: ["${GRPC_CERT_DIR:-./deploy/local/certs}/applications:/run/grpc:ro"]
+    environment:
+      <<: *service-env
+      SERVICE_NAME: applications
+      CLAMAV_ADDR: ${CLAMAV_ADDR:-}   # set to clamav:3310 when running the clamav profile
+      # Where the service learns about jobs: db (hiring tables through internal/hiring/jobsource) or events.
+      APPLICATIONS_JOBSOURCE: ${APPLICATIONS_JOBSOURCE:-db}
+      # applications.application.* events through the outbox (relayed to NATS_URL by this service).
+      APPLICATIONS_EVENTS: ${APPLICATIONS_EVENTS:-off}
+      # Who resolves the caller's company and roles: db (accounts tables) or grpc (org service, ORG_GRPC_ADDR).
+      CALLER_RESOLVER: ${CALLER_RESOLVER:-db}
+      # With APPLICATIONS_JOBSOURCE=events: companies to sweep (ORG_TENANTS) and the retention notice recipient
+      # (ORG_NOTICE) from db (hiring/accounts tables) or grpc (OrgService); ORG_GRPC_ADDR is the org address.
+      # APPLICATIONS_JOBFALLBACK=off never reads the hiring tables (answers not found instead).
+      ORG_TENANTS: ${ORG_TENANTS:-db}
+      ORG_NOTICE: ${ORG_NOTICE:-db}
+      APPLICATIONS_JOBFALLBACK: ${APPLICATIONS_JOBFALLBACK:-db}
+      # Local-only keys (insecure on purpose) so special category answers and the reapply block work in the stack.
+      ANGLEHR_UK_SENSITIVE_KEYS: ${ANGLEHR_UK_SENSITIVE_KEYS:-v1:bG9jYWwtZGV2LWluc2VjdXJlLXNlbnNpdGl2ZS1rZSE=}
+      ANGLEHR_REAPPLY_HMAC_KEY: ${ANGLEHR_REAPPLY_HMAC_KEY:-local-dev-insecure-reapply-hmac-key-0001}
+      # Consume org.company.deleted.v1 (delete the company's applications data).
+      APPLICATIONS_ORG_EVENTS: ${APPLICATIONS_ORG_EVENTS:-off}
+      # Sessions, CSRF and origin rules: identical to the monolith (docker-compose.yml, service `server`), so the
+      # cookie the monolith issued is accepted here (same Redis, same cookie names).
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://*.tryopenhr.com,http://localhost:3000}
+      SESSION_IDLE_TTL: ${SESSION_IDLE_TTL:-7200}
+      SESSION_ABSOLUTE_TTL: ${SESSION_ABSOLUTE_TTL:-43200}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      AUTH_DEFAULT_REGION: ${AUTH_DEFAULT_REGION:-uk}
+      # Blob store per region (the monolith's settings; R2_ENDPOINT/keys come from the shared service env).
+      ANGLEHR_UK_R2_BUCKET: ${ANGLEHR_UK_R2_BUCKET:-openhr-uk}
+      ANGLEHR_US_R2_BUCKET: ${ANGLEHR_US_R2_BUCKET:-openhr-us}
+      ANGLEHR_AFRICA_R2_BUCKET: ${ANGLEHR_AFRICA_R2_BUCKET:-openhr-africa}
+      ANGLEHR_EU_R2_BUCKET: ${ANGLEHR_EU_R2_BUCKET:-openhr-eu}
+      ANGLEHR_ASIA_R2_BUCKET: ${ANGLEHR_ASIA_R2_BUCKET:-openhr-asia}
+
+  notifications:
+    <<: *service-base
+    build:
+      context: .
+      dockerfile: deploy/local/Dockerfile.service
+      args: { SERVICE: notifications }
+    image: ${LOCAL_IMAGE_PREFIX:-openhr-local}/notifications:dev
+    ports: ["${NOTIFICATIONS_PORT:-8105}:8080"]
+    environment:
+      <<: *service-env
+      SERVICE_NAME: notifications
+      # The service's own database (events_inbox only). Set NOTIFICATIONS_DB_URL= (empty) to fall back to the
+      # global database. The migrate service above creates and migrates it.
+      NOTIFICATIONS_DB_URL: ${NOTIFICATIONS_DB_URL-postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_notifications?sslmode=disable}
+      NOTIFICATIONS_STREAM_MAX_AGE: ${NOTIFICATIONS_STREAM_MAX_AGE:-}
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@anglehr.local}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Angle HR}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      # The admin_invite email links to this origin (/admin/accept-invite?token=...); the mailer refuses without it.
+      ADMIN_APP_URL: ${ADMIN_APP_URL:-http://localhost:3001}
+    depends_on:
+      nats:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      mailhog:
+        condition: service_started
+
+  # The BFFs are the only services the frontends talk to. They sit in front of the monolith until it is gone.
+  web-bff:
+    <<: *service-base
+    profiles: [web-bff, split]
+    build:
+      context: .
+      dockerfile: deploy/local/Dockerfile.service
+      args: { SERVICE: web-bff }
+    image: ${LOCAL_IMAGE_PREFIX:-openhr-local}/web-bff:dev
+    ports: ["${WEB_BFF_PORT:-8081}:8080"]
+    environment:
+      <<: *service-env
+      SERVICE_NAME: web-bff
+      LISTEN_ADDR: ":8080"
+      SESSION_COOKIE_NAME: openhr_session
+      UPSTREAM_API_URL: http://server:8080
+      # Set to http://applications:8080 (profile applications) to route the applications paths to that service.
+      UPSTREAM_APPLICATIONS_URL: ${UPSTREAM_APPLICATIONS_URL:-}
+      # Set to http://hiring:8080 (profile hiring) to route the hiring paths (bff.HiringPath) to that service.
+      UPSTREAM_HIRING_URL: ${UPSTREAM_HIRING_URL:-}
+      # Set to http://org:8080 (profile org) to route the org paths (bff.OrgPath) to that service.
+      UPSTREAM_ORG_URL: ${UPSTREAM_ORG_URL:-}
+      # Set to http://identity:8080 (profile identity, with IDENTITY_REMOTE=on on the monolith) to route identity paths.
+      UPSTREAM_IDENTITY_URL: ${UPSTREAM_IDENTITY_URL:-}
+      # on: validate session cookies against Redis at the edge and forward X-Openhr-* headers.
+      SESSION_VALIDATION: ${SESSION_VALIDATION:-off}
+      # The apply e2e (UPLOADS=on) presigns and submits more often than the production edge default allows.
+      RATE_LIMIT_PUBLIC_APPLY: ${RATE_LIMIT_PUBLIC_APPLY:-}
+      # make local-e2e-all signs the bootstrap admin in from several scripts: raise these (for example 1000/1m) on a
+      # throwaway stack, or the edge answers 429 before the service does.
+      RATE_LIMIT_LOGIN_EMAIL: ${RATE_LIMIT_LOGIN_EMAIL:-}
+      RATE_LIMIT_LOGIN_TOTP_EMAIL: ${RATE_LIMIT_LOGIN_TOTP_EMAIL:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      SESSION_IDLE_TTL: ${SESSION_IDLE_TTL:-7200}
+      SESSION_ABSOLUTE_TTL: ${SESSION_ABSOLUTE_TTL:-43200}
+
+  admin-bff:
+    <<: *service-base
+    profiles: [admin-bff, split]
+    build:
+      context: .
+      dockerfile: deploy/local/Dockerfile.service
+      args: { SERVICE: admin-bff }
+    image: ${LOCAL_IMAGE_PREFIX:-openhr-local}/admin-bff:dev
+    ports: ["${ADMIN_BFF_PORT:-8082}:8080"]
+    environment:
+      <<: *service-env
+      SERVICE_NAME: admin-bff
+      LISTEN_ADDR: ":8080"
+      # Forwards only /api/v1/admin/* to the monolith. Cookie name: __Host-openhr_admin_session, or
+      # openhr_admin_session when COOKIE_SECURE=false (local http); must match the monolith's COOKIE_SECURE.
+      UPSTREAM_API_URL: http://server:8080
+      # Set to http://identity:8080 (with IDENTITY_REMOTE=on on the monolith) to route /admin/auth and the other
+      # identity admin paths (bff.IdentityPath) to the identity service.
+      UPSTREAM_IDENTITY_URL: ${UPSTREAM_IDENTITY_URL:-}
+      # e2e-admin-totp makes ~12 TOTP attempts within minutes: raise these (for example 1000/1m) on a throwaway stack.
+      RATE_LIMIT_ADMIN_LOGIN: ${RATE_LIMIT_ADMIN_LOGIN:-}
+      RATE_LIMIT_ADMIN_LOGIN_EMAIL: ${RATE_LIMIT_ADMIN_LOGIN_EMAIL:-}
+      RATE_LIMIT_ADMIN_LOGIN_TOTP: ${RATE_LIMIT_ADMIN_LOGIN_TOTP:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Origins of the admin app (browser Origin on unsafe requests must be listed).
+      ALLOWED_ORIGINS: ${ADMIN_BFF_ALLOWED_ORIGINS:-http://localhost:3001,http://localhost:5174}
+
+  # ---------- frontends (profile: web) ----------
+  # Context directories default to siblings of the server checkout; override CLIENT_DIR / ADMIN_DIR for worktrees.
+  client:
+    profiles: [web]
+    build:
+      context: ${CLIENT_DIR:-../client}
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${WEB_API_URL:-http://localhost:8080}
+    image: ${LOCAL_IMAGE_PREFIX:-openhr-local}/client:dev
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${WEB_API_URL:-http://localhost:8080}
+    ports: ["${CLIENT_PORT:-3000}:3000"]
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    mem_limit: 512m
+
+  admin:
+    profiles: [web]
+    build:
+      context: ${ADMIN_DIR:-../admin}
+      args:
+        VITE_API_BASE_URL: ${WEB_API_URL:-http://localhost:8080}/api/v1
+    image: ${LOCAL_IMAGE_PREFIX:-openhr-local}/admin:dev
+    ports: ["${ADMIN_PORT:-3001}:3000"]
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    mem_limit: 512m
+
+  # ---------- optional: antivirus ----------
+  # ClamAV loads ~1 GB of signatures into RAM and takes ~1-2 min to become ready, so it is opt-in.
+  clamav:
+    # clamav/clamav:stable has no arm64 build; on Apple silicon set CLAMAV_IMAGE=clamav/clamav-debian:stable.
+    image: ${CLAMAV_IMAGE:-clamav/clamav:stable}
+    profiles: [clamav]
+    ports: ["${CLAMAV_PORT:-3310}:3310"]
+    networks:
+      - anglehr_net
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck.sh || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+    restart: unless-stopped
+    mem_limit: 1536m
+
+volumes:
+  nats_data:

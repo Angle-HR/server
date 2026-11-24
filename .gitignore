@@ -34,3 +34,7 @@ go.work.sum
 # Local PR drafts (see `make pr-description`)
 pr_template/
 Claude Outputs/
+/jobmodel-verify
+
+# Throwaway gRPC development CA and service certificates (make local-grpc-certs)
+/deploy/local/certs/

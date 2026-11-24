@@ -61,13 +61,13 @@ Services stay as they are: applications owns applications, org owns companies, h
 - **API:** idempotency keys and optimistic concurrency on mutations, swagger updated, BFF route predicates extended.
 - **Tests:** an e2e script per phase.
 
-## Decisions needed
+## Decisions (settled)
 
-1. **Disqualified/Hired reversible?** The current model says final; the design needs reinstatement.
-2. **Stages per job or per company?** The design edits stages inside a job, which suggests per job with a company default.
-3. **Company slug:** chosen by the owner or derived from the name, and can it change?
-4. **E-sign:** our own simple signature with an audit trail (enough for most UK/EU offer letters) or an external provider? Suggested: start with our own.
-5. **Delete candidate:** hard delete or anonymise?
-6. **Inbound email and CV parsing:** confirm both are out of scope for now.
+1. **Disqualified and Hired are final.** No reinstate action. Stage moves only happen between open stages; Disqualified, Hired and Withdrawn are terminal. The existing status rules in migration 000016 stay, so Phase 2 only adds stages on top of them. Disqualify keeps a reason and optional note.
+2. **Stages are per job**, seeded from a default set when the job is created.
+3. **Company slug is chosen by the owner** (uniqueness and reserved-word checks).
+4. **E-sign starts with our own** signature and audit trail; no external provider.
+5. **Deleting a candidate anonymises** the record. Notes, emails, events and interviews are scrubbed of personal data and kept as counts and audit rows.
+6. **Inbound email and CV parsing are out of scope** for now.
 
-Phase 1 is unblocked once #3 is answered. Phase 2 needs #1 and #2.
+All decisions are made, so Phase 1 and Phase 2 are unblocked.

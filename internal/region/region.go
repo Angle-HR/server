@@ -24,7 +24,7 @@ const (
 	// yet told us where it is: its data lives in the global database's
 	// holding tables (accounts.pending_users / accounts.pending_onboarding_progress)
 	// until an onboarding step resolves a real region and migrates it.
-	// It's included in Valid() so JWTs and the auth context can carry it —
+	// It's included in Valid() so sessions and the auth context can carry it —
 	// pending accounts still need to log in and call protected onboarding
 	// endpoints — but callers that turn a region into a database pool must
 	// special-case it (see internal/handler.resolvePool).
@@ -84,7 +84,7 @@ func MustGetRegion(ctx context.Context) Region {
 	return region
 }
 
-// GetRegionSource returns the resolution source string (jwt, subdomain, db, param, geo).
+// GetRegionSource returns the resolution source string (session, subdomain, db, param, geo).
 func GetRegionSource(ctx context.Context) (string, bool) {
 	source, ok := ctx.Value(regionSourceContextKey).(string)
 	if !ok || source == "" {

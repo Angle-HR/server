@@ -6,7 +6,7 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/Angle-HR/server/internal/hiring/questions"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 // The applicant privacy notice is generated from the job, so it always says what this job actually collects.
@@ -137,7 +137,7 @@ func RenderNotice(v *View, jobURL string) ([]byte, error) {
 
 // collected lists the kinds of information the form asks for, by section. Only the question labels are shown,
 // never any answer, and special category questions are listed in their own section instead.
-func collected(form []questions.FormQuestion) []string {
+func collected(form []formschema.FormQuestion) []string {
 	order := []string{"personal_information", "profile", "eligibility", "screening"}
 	by := map[string][]string{}
 	for i := range form {

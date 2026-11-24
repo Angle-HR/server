@@ -10,8 +10,8 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/drafttest"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/questions"
 	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 const dept = "44444444-4444-4444-8444-444444444444"
@@ -49,8 +49,8 @@ func wantField(t *testing.T, err error, path string) {
 
 const yesNoConfig = `{"options":[{"id":"yes","label":"Yes"},{"id":"no","label":"No"}]}`
 
-func knockoutQuestion(label string) questions.FormQuestion {
-	return questions.FormQuestion{Section: "screening", Type: "single_choice", Label: label, Required: true,
+func knockoutQuestion(label string) formschema.FormQuestion {
+	return formschema.FormQuestion{Section: "screening", Type: "single_choice", Label: label, Required: true,
 		Config: json.RawMessage(yesNoConfig), Knockout: json.RawMessage(`{"option_ids":["no"]}`)}
 }
 
@@ -82,7 +82,7 @@ func TestCreateNeedsPermissionAndStartsWithStandardForm(t *testing.T) {
 		t.Fatalf("unexpected draft: %+v", v.Job)
 	}
 	rec, _ := st.GetJob(context.Background(), org, v.ID)
-	if len(rec.Form) != len(questions.DefaultForm()) {
+	if len(rec.Form) != len(formschema.DefaultForm()) {
 		t.Fatalf("form has %d questions", len(rec.Form))
 	}
 	if v.RetentionMonths != jobs.DefaultRetentionMonths || !v.ShowOnCareerPage {
@@ -312,7 +312,7 @@ func TestFormRules(t *testing.T) {
 	s, st := newService()
 	c := caller(userA, rbac.RoleFounder)
 	v := newDraft(t, s, c, fullDetails)
-	form := questions.DefaultForm()
+	form := formschema.DefaultForm()
 	form = append(form, knockoutQuestion("Can you work in the UK?"))
 
 	_, err := s.SaveForm(context.Background(), c, v.ID, 0, FormInput{Questions: form})
@@ -320,15 +320,15 @@ func TestFormRules(t *testing.T) {
 		t.Fatalf("knockout accepted while automated screening is off: %v", err)
 	}
 
-	decl := []questions.Declaration{{Category: "health_disability", LegalCondition: "explicit_consent", Purpose: "Adjustments"}}
-	_, err = s.SaveForm(context.Background(), c, v.ID, 0, FormInput{Questions: questions.DefaultForm(), Declarations: decl})
+	decl := []formschema.Declaration{{Category: "health_disability", LegalCondition: "explicit_consent", Purpose: "Adjustments"}}
+	_, err = s.SaveForm(context.Background(), c, v.ID, 0, FormInput{Questions: formschema.DefaultForm(), Declarations: decl})
 	wantField(t, err, "declarations")
 
-	got, err := s.SaveForm(context.Background(), c, v.ID, 0, FormInput{Questions: questions.DefaultForm()})
+	got, err := s.SaveForm(context.Background(), c, v.ID, 0, FormInput{Questions: formschema.DefaultForm()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Questions) != len(questions.DefaultForm()) || got.AutomatedScreeningEnabled {
+	if len(got.Questions) != len(formschema.DefaultForm()) || got.AutomatedScreeningEnabled {
 		t.Fatalf("form view: %+v", got)
 	}
 	rec, _ := st.GetJob(context.Background(), org, v.ID)
@@ -349,10 +349,10 @@ func TestFormEditsDoNotLoseDetailsAndDeclarationsNeedLawfulBasis(t *testing.T) {
 	if _, err := s.Save(context.Background(), c, v.ID, 0, patch(t, `{"lawful_basis":"legitimate_interests"}`), false); err != nil {
 		t.Fatal(err)
 	}
-	form := append(questions.DefaultForm(), questions.FormQuestion{Section: "eligibility", Type: "single_choice",
+	form := append(formschema.DefaultForm(), formschema.FormQuestion{Section: "eligibility", Type: "single_choice",
 		Label: "Do you have a disability?", SpecialCategory: "health_disability",
 		Config: json.RawMessage(yesNoConfig)})
-	decl := []questions.Declaration{{Category: "health_disability", LegalCondition: "explicit_consent", Purpose: "Adjustments"}}
+	decl := []formschema.Declaration{{Category: "health_disability", LegalCondition: "explicit_consent", Purpose: "Adjustments"}}
 	if _, err := s.SaveForm(context.Background(), c, v.ID, 0, FormInput{Questions: form, Declarations: decl}); err != nil {
 		t.Fatalf("form with declaration: %v %v", err, fields(err))
 	}
@@ -406,7 +406,7 @@ func TestFormTemplateRoundTripDropsQuestionIDs(t *testing.T) {
 	s, st := newService()
 	c := caller(userA, rbac.RoleFounder)
 	src := newDraft(t, s, c, fullDetails)
-	form := append(questions.DefaultForm(), questions.FormQuestion{Section: "profile", Type: "short_text", Label: "Portfolio link", Config: json.RawMessage(`{}`)})
+	form := append(formschema.DefaultForm(), formschema.FormQuestion{Section: "profile", Type: "short_text", Label: "Portfolio link", Config: json.RawMessage(`{}`)})
 	if _, err := s.SaveForm(context.Background(), c, src.ID, 0, FormInput{Questions: form}); err != nil {
 		t.Fatal(err)
 	}
@@ -467,7 +467,7 @@ func TestPreviewHidesKnockoutAndShowsPayOnlyWhenVisible(t *testing.T) {
 	st.Screening = true
 	c := caller(userA, rbac.RoleFounder)
 	v := newDraft(t, s, c, fullDetails)
-	form := append(questions.DefaultForm(), knockoutQuestion("Right to work?"))
+	form := append(formschema.DefaultForm(), knockoutQuestion("Right to work?"))
 	if _, err := s.SaveForm(context.Background(), c, v.ID, 0, FormInput{Questions: form}); err != nil {
 		t.Fatal(err)
 	}

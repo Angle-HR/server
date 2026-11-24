@@ -15,8 +15,8 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/gates"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/questions"
 	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 // Store is the regional database as the service sees it.
@@ -143,7 +143,7 @@ func invalid(fields ...jobs.FieldError) error { return &ValidationError{Fields: 
 
 func fe(path, msg string) jobs.FieldError { return jobs.FieldError{Path: path, Message: msg} }
 
-func fromQuestionErrors(in []questions.FieldError) []jobs.FieldError {
+func fromQuestionErrors(in []formschema.FieldError) []jobs.FieldError {
 	out := make([]jobs.FieldError, len(in))
 	for i, e := range in {
 		out[i] = jobs.FieldError{Path: e.Path, Message: e.Message}
@@ -198,12 +198,12 @@ type JobView struct {
 
 // FormView is the application form of a job.
 type FormView struct {
-	JobID                     string                   `json:"job_id"`
-	JobRevision               int                      `json:"job_revision"`
-	Questions                 []questions.FormQuestion `json:"questions"`
-	Declarations              []questions.Declaration  `json:"declarations"`
-	AutomatedScreeningEnabled bool                     `json:"automated_screening_enabled"`
-	Warnings                  []jobs.Warning           `json:"warnings"`
+	JobID                     string                    `json:"job_id"`
+	JobRevision               int                       `json:"job_revision"`
+	Questions                 []formschema.FormQuestion `json:"questions"`
+	Declarations              []formschema.Declaration  `json:"declarations"`
+	AutomatedScreeningEnabled bool                      `json:"automated_screening_enabled"`
+	Warnings                  []jobs.Warning            `json:"warnings"`
 }
 
 func (s *Service) view(ctx context.Context, c Caller, rec *hiringtypes.JobRecord, cat jobs.MarketCatalog) *JobView {

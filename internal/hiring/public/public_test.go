@@ -11,7 +11,7 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/public"
-	"github.com/Angle-HR/server/internal/hiring/questions"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 type fakeRegistry struct {
@@ -66,7 +66,7 @@ func posting(status string) *public.Posting {
 		Job:         j,
 		FormVersion: 1,
 		Company:     public.Company{Name: "Acme Ltd", PrivacyEmail: "privacy@acme.test"},
-		Form: []questions.FormQuestion{
+		Form: []formschema.FormQuestion{
 			{ID: "q1", Section: "personal_information", Type: "short_text", Label: "Full name", Required: true, SystemKey: "full_name"},
 		},
 	}
@@ -240,11 +240,11 @@ func TestNoticeReflectsTheJob(t *testing.T) {
 	p := posting(jobs.StatusPublished)
 	p.Job.RetentionMonths = 12
 	p.Job.LawfulBasis = "consent"
-	p.Declarations = []questions.Declaration{{Category: "health_disability", LegalCondition: "x", Purpose: "Plan adjustments"}}
+	p.Declarations = []formschema.Declaration{{Category: "health_disability", LegalCondition: "x", Purpose: "Plan adjustments"}}
 	p.Form = append(p.Form,
-		questions.FormQuestion{ID: "q2", Section: "screening", Type: "short_text", Label: "Why <us>?"},
-		questions.FormQuestion{ID: "q3", Section: "screening", Type: "single_choice", Label: "Disability?", SpecialCategory: "health_disability"},
-		questions.FormQuestion{ID: "q4", Section: "screening", Type: "number", Label: "Years", Knockout: json.RawMessage(`{"operator":"lt","value":2}`)},
+		formschema.FormQuestion{ID: "q2", Section: "screening", Type: "short_text", Label: "Why <us>?"},
+		formschema.FormQuestion{ID: "q3", Section: "screening", Type: "single_choice", Label: "Disability?", SpecialCategory: "health_disability"},
+		formschema.FormQuestion{ID: "q4", Section: "screening", Type: "number", Label: "Years", Knockout: json.RawMessage(`{"operator":"lt","value":2}`)},
 	)
 	s := newService(p, day)
 	v, _ := s.Load(context.Background(), "jabcdefghijkl")

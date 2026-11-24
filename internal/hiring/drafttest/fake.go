@@ -13,7 +13,7 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/gates"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/questions"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 // Store is an in-memory Store that follows the real store's contract: tenant scoping, optimistic
@@ -61,7 +61,7 @@ func (f *Store) write(tenant, actor string, rec *hiringtypes.JobRecord, res *hir
 		rec.Job.Details = *res.Details
 	}
 	if res.Form != nil {
-		rec.Form = append([]questions.FormQuestion(nil), *res.Form...)
+		rec.Form = append([]formschema.FormQuestion(nil), *res.Form...)
 		for i := range rec.Form {
 			if rec.Form[i].ID == "" {
 				rec.Form[i].ID = f.uuid()
@@ -73,7 +73,7 @@ func (f *Store) write(tenant, actor string, rec *hiringtypes.JobRecord, res *hir
 		if len(*res.Decls) > 0 && rec.Job.LawfulBasis == "" {
 			return hiringtypes.ErrLawfulBasisRequired
 		}
-		rec.Declarations = append([]questions.Declaration(nil), *res.Decls...)
+		rec.Declarations = append([]formschema.Declaration(nil), *res.Decls...)
 	}
 	f.writePhase2(rec, res)
 	rec.Job.CompletedSections = res.Completed

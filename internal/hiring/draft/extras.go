@@ -9,8 +9,8 @@ import (
 
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/questions"
 	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 // ---- departments ----
@@ -128,14 +128,14 @@ func isConflict(err error) bool { return err == hiringtypes.ErrConflict }
 // numbers its author could not see.
 func templatePayload(c Caller, rec *hiringtypes.JobRecord, kind string) (json.RawMessage, error) {
 	if kind == hiringtypes.KindApplicationForm {
-		qs := make([]questions.FormQuestion, len(rec.Form))
+		qs := make([]formschema.FormQuestion, len(rec.Form))
 		copy(qs, rec.Form)
 		for i := range qs {
 			qs[i].ID = ""
 		}
 		decls := rec.Declarations
 		if decls == nil {
-			decls = []questions.Declaration{}
+			decls = []formschema.Declaration{}
 		}
 		return json.Marshal(formPayload{Questions: qs, Declarations: decls})
 	}

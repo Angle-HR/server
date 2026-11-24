@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package openhr.events.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// ApplicationSubmitted is emitted by applications after a candidate applies.
+// Hiring consumes it to maintain job applicant counters; notifications may consume
+// it for the receipt email. No candidate PII beyond the email recipient is included.
+// CloudEvent type: applications.application.submitted.
+message ApplicationSubmitted {
+  string application_id = 1;
+  string job_id = 2;
+  string company_id = 3;
+  string region = 4;
+  string candidate_email = 5;
+  string candidate_name = 6;
+  string job_title = 7;
+  string company_name = 8;
+  string source = 9;
+  google.protobuf.Timestamp submitted_at = 10;
+}
+
+// ApplicationStatusChanged is emitted on every status transition.
+// CloudEvent type: applications.application.status_changed.
+message ApplicationStatusChanged {
+  string application_id = 1;
+  string job_id = 2;
+  string company_id = 3;
+  string region = 4;
+  // Status slugs: received, in_review, flagged, rejected, withdrawn, hired.
+  string from_status = 5;
+  string to_status = 6;
+  string changed_by_user_id = 7;
+  // Whether the company wants the candidate emailed about this change.
+  bool notify_candidate = 8;
+  string candidate_email = 9;
+  string candidate_name = 10;
+  string job_title = 11;
+  string company_name = 12;
+  google.protobuf.Timestamp changed_at = 13;
+}
+
+// RetentionDue is emitted when an application passes its retention period and must
+// be erased (or a pre-expiry notice is due). Consumed by applications' own retention
+// worker and by notifications for the notice email.
+// CloudEvent type: applications.retention.due.
+message RetentionDue {
+  enum Action {
+    ACTION_UNSPECIFIED = 0;
+    // Tell the company that applications will be deleted soon.
+    ACTION_NOTIFY = 1;
+    // Erase the application data and its files.
+    ACTION_ERASE = 2;
+  }
+  string application_id = 1;
+  string job_id = 2;
+  string company_id = 3;
+  string region = 4;
+  Action action = 5;
+  google.protobuf.Timestamp due_at = 6;
+}

@@ -1,0 +1,269 @@
+syntax = "proto3";
+
+package openhr.identity.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// IdentityService owns people: credentials, sessions, TOTP, the global
+// users_registry (user -> region) and the regional accounts.users rows.
+// The public sign-up/login flows are served to the web BFF by this service; the
+// RPCs below are the ones other services and BFFs need to resolve identities.
+// Region and acting user travel in CallContext metadata (see pkg/rpc).
+service IdentityService {
+  // ValidateAccessToken verifies a product access token and returns its claims.
+  // BFFs call this once per request (results may be cached until expiry).
+  rpc ValidateAccessToken(ValidateAccessTokenRequest) returns (ValidateAccessTokenResponse);
+  // ValidateAdminToken is the same for platform staff tokens.
+  rpc ValidateAdminToken(ValidateAdminTokenRequest) returns (ValidateAdminTokenResponse);
+
+  // GetUser returns one user from the caller's region.
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  // BatchGetUsers resolves display data for many users (job team lists, notices).
+  rpc BatchGetUsers(BatchGetUsersRequest) returns (BatchGetUsersResponse);
+  // LookupRegion reads users_registry: which region holds this email or user id.
+  rpc LookupRegion(LookupRegionRequest) returns (LookupRegionResponse);
+
+  // PrepareRegionMove copies the user row from the global holding area into the
+  // target region (idempotent). Step 1 of the onboarding region-migration saga
+  // driven by the org service.
+  rpc PrepareRegionMove(PrepareRegionMoveRequest) returns (PrepareRegionMoveResponse);
+  // CommitRegionMove repoints users_registry at the target region, releases the
+  // pending row and issues a fresh token pair whose region claim is the new one.
+  // Step 3 of the saga; the org service has copied its own rows in step 2.
+  rpc CommitRegionMove(CommitRegionMoveRequest) returns (CommitRegionMoveResponse);
+
+  // CreateOrgInvite stores a hashed invite token for a company and asks
+  // notifications to mail it.
+  rpc CreateOrgInvite(CreateOrgInviteRequest) returns (CreateOrgInviteResponse);
+  // AcceptOrgInvite consumes an invite token, creates the user and calls
+  // org.v1.OrgService.AddMember.
+  rpc AcceptOrgInvite(AcceptOrgInviteRequest) returns (AcceptOrgInviteResponse);
+}
+
+// AdminIdentityService is the staff-facing surface (admin-bff): user registry
+// browsing, account disabling, and staff/role management.
+service AdminIdentityService {
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+  // SetUserActive soft-disables or re-enables an account (accounts.users.deleted_at).
+  rpc SetUserActive(SetUserActiveRequest) returns (SetUserActiveResponse);
+  rpc InviteStaff(InviteStaffRequest) returns (InviteStaffResponse);
+  rpc ListAdminRoles(ListAdminRolesRequest) returns (ListAdminRolesResponse);
+  // HasAdminPermission answers admin RBAC checks (admin.roles/permissions).
+  rpc HasAdminPermission(HasAdminPermissionRequest) returns (HasAdminPermissionResponse);
+  // The KYB review queue (admin.verification_queue) belongs to this admin module. It stores ids, region and status
+  // only; company details stay with org.
+  rpc ListVerificationQueue(ListVerificationQueueRequest) returns (ListVerificationQueueResponse);
+  // ReviewVerification closes the open item and asks org to apply the decision (OrgService.ApplyKybDecision).
+  rpc ReviewVerification(ReviewVerificationRequest) returns (ReviewVerificationResponse);
+  // EnqueueVerification opens a review item. Called by org when a company's KYB needs a person; not by admin-bff.
+  rpc EnqueueVerification(EnqueueVerificationRequest) returns (EnqueueVerificationResponse);
+}
+
+message User {
+  string id = 1;
+  string email = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string legal_full_name = 5;
+  // "individual" or "business".
+  string account_type = 6;
+  string region = 7;
+  bool email_verified = 8;
+  bool active = 9;
+  google.protobuf.Timestamp created_at = 10;
+}
+
+message TokenPair {
+  string access_token = 1;
+  string refresh_token = 2;
+  int32 access_expires_in_seconds = 3;
+}
+
+message ValidateAccessTokenRequest {
+  string token = 1;
+}
+
+message ValidateAccessTokenResponse {
+  string user_id = 1;
+  string region = 2;
+  bool email_verified = 3;
+  google.protobuf.Timestamp expires_at = 4;
+}
+
+message ValidateAdminTokenRequest {
+  string token = 1;
+}
+
+message ValidateAdminTokenResponse {
+  string admin_user_id = 1;
+  repeated string permissions = 2;
+  google.protobuf.Timestamp expires_at = 3;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+message BatchGetUsersRequest {
+  repeated string user_ids = 1;
+  // When true, deactivated users are omitted (matches the u.deleted_at IS NULL joins).
+  bool exclude_inactive = 2;
+}
+
+message BatchGetUsersResponse {
+  repeated User users = 1;
+}
+
+message LookupRegionRequest {
+  oneof key {
+    string email = 1;
+    string user_id = 2;
+  }
+}
+
+message LookupRegionResponse {
+  string user_id = 1;
+  string region = 2;
+  bool found = 3;
+}
+
+message PrepareRegionMoveRequest {
+  string user_id = 1;
+  string target_region = 2;
+}
+
+message PrepareRegionMoveResponse {
+  // True when the user already existed in the target region (retry).
+  bool already_present = 1;
+}
+
+message CommitRegionMoveRequest {
+  string user_id = 1;
+  string target_region = 2;
+}
+
+message CommitRegionMoveResponse {
+  string region = 1;
+  // New tokens: the ones the caller holds carry the stale pre-move region.
+  TokenPair tokens = 2;
+}
+
+message CreateOrgInviteRequest {
+  string email = 1;
+  string role = 2;
+}
+
+message CreateOrgInviteResponse {
+  string invite_id = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message AcceptOrgInviteRequest {
+  string token = 1;
+  string password = 2;
+  string legal_full_name = 3;
+}
+
+message AcceptOrgInviteResponse {
+  User user = 1;
+  string company_id = 2;
+  TokenPair tokens = 3;
+}
+
+message ListUsersRequest {
+  string query = 1;
+  string region = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message ListUsersResponse {
+  repeated User users = 1;
+  string next_page_token = 2;
+}
+
+message SetUserActiveRequest {
+  string user_id = 1;
+  bool active = 2;
+}
+
+message SetUserActiveResponse {
+  User user = 1;
+}
+
+message InviteStaffRequest {
+  string email = 1;
+  string role_id = 2;
+}
+
+message InviteStaffResponse {
+  string invite_id = 1;
+}
+
+message AdminRole {
+  string id = 1;
+  string name = 2;
+  repeated string permissions = 3;
+}
+
+message ListAdminRolesRequest {}
+
+message ListAdminRolesResponse {
+  repeated AdminRole roles = 1;
+}
+
+message HasAdminPermissionRequest {
+  string admin_user_id = 1;
+  string permission = 2;
+}
+
+message HasAdminPermissionResponse {
+  bool allowed = 1;
+}
+
+message VerificationQueueItem {
+  string company_id = 1;
+  string region = 2;
+  string country_code = 3;
+  google.protobuf.Timestamp submitted_at = 4;
+  // "business" (default when empty) or "individual".
+  string case_type = 5;
+}
+
+message ListVerificationQueueRequest {
+  string region = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListVerificationQueueResponse {
+  repeated VerificationQueueItem items = 1;
+  string next_page_token = 2;
+}
+
+message ReviewVerificationRequest {
+  string company_id = 1;
+  string region = 2;
+  string reviewer_admin_id = 3;
+  bool approve = 4;
+  string reason = 5;
+}
+
+message ReviewVerificationResponse {
+  // "approved" or "rejected".
+  string status = 1;
+}
+
+message EnqueueVerificationRequest {
+  string company_id = 1;
+  string region = 2;
+  string country_code = 3;
+  // "business" (default when empty) or "individual" (a personal organization's identity review).
+  string case_type = 4;
+}
+
+message EnqueueVerificationResponse {}

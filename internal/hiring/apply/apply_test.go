@@ -14,9 +14,9 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/public"
-	"github.com/Angle-HR/server/internal/hiring/questions"
-	"github.com/Angle-HR/server/internal/hiring/screening"
 	"github.com/Angle-HR/server/internal/sensitive"
+	"github.com/Angle-HR/server/pkg/formschema"
+	"github.com/Angle-HR/server/pkg/formschema/screening"
 )
 
 type fakeRegistry struct{}
@@ -134,7 +134,7 @@ func target() *apply.Target {
 		JobID: "job-1", JobCode: "JB-1", Status: jobs.StatusPublished, ClosingDate: "2026-11-30",
 		LawfulBasis: "legitimate_interests", RetentionMonths: 6, Markets: []string{"UK", "EU"},
 		FormID: "form-1", FormVersion: 2,
-		Questions: []questions.FormQuestion{
+		Questions: []formschema.FormQuestion{
 			{ID: "name", Section: "personal_information", Type: "short_text", Label: "Full name", Required: true, SystemKey: "full_name"},
 			{ID: "mail", Section: "personal_information", Type: "email", Label: "Email", Required: true, SystemKey: "email"},
 			{ID: "rtw", Section: "eligibility", Type: "single_choice", Label: "Right to work?", Required: true, Config: options(),
@@ -500,8 +500,8 @@ func TestLimiterOutageDoesNotBlockApplications(t *testing.T) {
 func specialTarget() *apply.Target {
 	tg := target()
 	tg.Region, tg.TenantID = "uk", "org-1"
-	tg.Declarations = []questions.Declaration{{Category: "health_disability", LegalCondition: "explicit_consent", Purpose: "Reasonable adjustments"}}
-	tg.Questions = append(tg.Questions, questions.FormQuestion{
+	tg.Declarations = []formschema.Declaration{{Category: "health_disability", LegalCondition: "explicit_consent", Purpose: "Reasonable adjustments"}}
+	tg.Questions = append(tg.Questions, formschema.FormQuestion{
 		ID: "health", Section: "screening", Type: "single_choice", Label: "Disability?", Config: options(),
 		SpecialCategory: "health_disability",
 	})
@@ -660,7 +660,7 @@ func TestReapplyBlock(t *testing.T) {
 
 func TestFileQuestionsNeedTheUploadStep(t *testing.T) {
 	tg := target()
-	tg.Questions = append(tg.Questions, questions.FormQuestion{
+	tg.Questions = append(tg.Questions, formschema.FormQuestion{
 		ID: "cv", Section: "profile", Type: "autofill_resume", Label: "CV", Required: true, SystemKey: "cv", Config: json.RawMessage(`{}`),
 	})
 	in := input()
@@ -694,7 +694,7 @@ func TestFileQuestionsNeedTheUploadStep(t *testing.T) {
 
 func TestUploadProblems(t *testing.T) {
 	tg := target()
-	tg.Questions = append(tg.Questions, questions.FormQuestion{
+	tg.Questions = append(tg.Questions, formschema.FormQuestion{
 		ID: "cv", Section: "profile", Type: "autofill_resume", Label: "CV", Required: true, SystemKey: "cv", Config: json.RawMessage(`{}`),
 	})
 	in := input()
@@ -730,7 +730,7 @@ func TestUploadProblems(t *testing.T) {
 
 	// An optional file question left empty needs no upload step.
 	tg2 := target()
-	tg2.Questions = append(tg2.Questions, questions.FormQuestion{
+	tg2.Questions = append(tg2.Questions, formschema.FormQuestion{
 		ID: "extra", Section: "profile", Type: "file_upload", Label: "Portfolio", Config: json.RawMessage(`{}`),
 	})
 	if _, err := service(&fakeStore{target: tg2}, nil).Submit(context.Background(), input()); err != nil {
@@ -770,7 +770,7 @@ func TestRetentionUntil(t *testing.T) {
 
 func TestMultiChoiceKnockoutMatchAll(t *testing.T) {
 	tg := target()
-	tg.Questions = append(tg.Questions, questions.FormQuestion{
+	tg.Questions = append(tg.Questions, formschema.FormQuestion{
 		ID: "tools", Section: "screening", Type: "checkbox", Label: "Tools", Config: json.RawMessage(
 			`{"options":[{"id":"a","label":"A"},{"id":"b","label":"B"},{"id":"c","label":"C"}]}`),
 		Knockout: json.RawMessage(`{"option_ids":["a","b"],"match":"all","reason":"Uses both"}`),

@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package openhr.events.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// CompanyVerified is emitted by org when KYB reaches verified (automatic or after
+// manual review). Hiring uses it to refresh its company read model and to re-run
+// publish gates for jobs that were blocked on verification.
+// CloudEvent type: org.company.verified.
+message CompanyVerified {
+  string company_id = 1;
+  string region = 2;
+  google.protobuf.Timestamp verified_at = 3;
+}
+
+// CompanyKybRejected is emitted when KYB fails or a reviewer rejects.
+// CloudEvent type: org.company.kyb_rejected.
+message CompanyKybRejected {
+  string company_id = 1;
+  string region = 2;
+  string reason = 3;
+}
+
+// MembershipChanged is emitted when a member is added, removed, or their roles change.
+// Consumers (hiring job team read model, BFF membership caches) invalidate by
+// (company_id, user_id). CloudEvent type: org.membership.changed.
+message MembershipChanged {
+  enum Change {
+    CHANGE_UNSPECIFIED = 0;
+    CHANGE_ADDED = 1;
+    CHANGE_REMOVED = 2;
+    CHANGE_ROLES_UPDATED = 3;
+  }
+  string company_id = 1;
+  string user_id = 2;
+  string region = 3;
+  Change change = 4;
+  // Roles after the change; empty for CHANGE_REMOVED.
+  repeated string roles = 5;
+}
+
+// CompanyProfileUpdated carries the company fields other services denormalize
+// (public careers page, application emails). CloudEvent type: org.company.profile_updated.
+message CompanyProfileUpdated {
+  string company_id = 1;
+  string region = 2;
+  string legal_name = 3;
+  string privacy_contact_email = 4;
+  string dpo_contact = 5;
+}
+
+// AgreementAccepted is emitted when a company accepts an agreement version.
+// CloudEvent type: org.agreement.accepted.
+message AgreementAccepted {
+  string company_id = 1;
+  string region = 2;
+  string kind = 3;
+  string version = 4;
+  string accepted_by_user_id = 5;
+  google.protobuf.Timestamp accepted_at = 6;
+}

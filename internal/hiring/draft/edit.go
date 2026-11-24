@@ -9,8 +9,8 @@ import (
 
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/questions"
 	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 // CreateRequest starts a draft. Every field is optional: the page can create an empty draft on first save.
@@ -411,14 +411,14 @@ func (s *Service) startingPatch(ctx context.Context, c Caller, templateID string
 }
 
 type formPayload struct {
-	Questions    []questions.FormQuestion `json:"questions"`
-	Declarations []questions.Declaration  `json:"declarations"`
+	Questions    []formschema.FormQuestion `json:"questions"`
+	Declarations []formschema.Declaration  `json:"declarations"`
 }
 
 // formFromTemplate builds a form out of a saved template and reports what is wrong with it.
 func formFromTemplate(
-	t *hiringtypes.Template, d *jobs.Details, pol questions.Policy,
-) ([]questions.FormQuestion, []questions.Declaration, []jobs.FieldError) {
+	t *hiringtypes.Template, d *jobs.Details, pol formschema.Policy,
+) ([]formschema.FormQuestion, []formschema.Declaration, []jobs.FieldError) {
 	var fp formPayload
 	if err := json.Unmarshal(t.Payload, &fp); err != nil {
 		return nil, nil, []jobs.FieldError{fe("form_template_id", "this template cannot be used")}
@@ -426,7 +426,7 @@ func formFromTemplate(
 	for i := range fp.Questions {
 		fp.Questions[i].ID = ""
 	}
-	form, decls, qerrs := questions.Build(fp.Questions, fp.Declarations, pol)
+	form, decls, qerrs := formschema.Build(fp.Questions, fp.Declarations, pol)
 	errs := fromQuestionErrors(qerrs)
 	if len(errs) == 0 && len(decls) > 0 && d.LawfulBasis == "" {
 		errs = append(errs, fe("form_template_id",
@@ -435,8 +435,8 @@ func formFromTemplate(
 	return form, decls, errs
 }
 
-func standardForm(pol questions.Policy) ([]questions.FormQuestion, []questions.Declaration, error) {
-	form, decls, errs := questions.Build(questions.DefaultForm(), nil, pol)
+func standardForm(pol formschema.Policy) ([]formschema.FormQuestion, []formschema.Declaration, error) {
+	form, decls, errs := formschema.Build(formschema.DefaultForm(), nil, pol)
 	if len(errs) > 0 {
 		return nil, nil, fmt.Errorf("draft: standard form is invalid: %v", errs)
 	}
@@ -446,8 +446,8 @@ func standardForm(pol questions.Policy) ([]questions.FormQuestion, []questions.D
 // startingForm returns the form a new draft starts with: a saved form template or the standard form.
 func (s *Service) startingForm(
 	ctx context.Context, c Caller, templateID string, d *jobs.Details, knockout bool,
-) ([]questions.FormQuestion, []questions.Declaration, error) {
-	pol := questions.Policy{AllowKnockout: knockout}
+) ([]formschema.FormQuestion, []formschema.Declaration, error) {
+	pol := formschema.Policy{AllowKnockout: knockout}
 	t, explicit, err := s.pickTemplate(ctx, c, templateID, hiringtypes.KindApplicationForm, "form_template_id")
 	if err != nil {
 		return nil, nil, err
@@ -470,8 +470,8 @@ func (s *Service) startingForm(
 
 // FormInput replaces the whole application form.
 type FormInput struct {
-	Questions    []questions.FormQuestion `json:"questions"`
-	Declarations []questions.Declaration  `json:"declarations"`
+	Questions    []formschema.FormQuestion `json:"questions"`
+	Declarations []formschema.Declaration  `json:"declarations"`
 }
 
 // GetForm returns the application form of a job the caller may see.
@@ -487,7 +487,7 @@ func (s *Service) GetForm(ctx context.Context, c Caller, id string) (*FormView, 
 	return formView(rec, settings.AutomatedScreeningEnabled), nil
 }
 
-func hasKnockout(form []questions.FormQuestion) bool {
+func hasKnockout(form []formschema.FormQuestion) bool {
 	for _, q := range form {
 		if len(q.Knockout) > 0 && string(q.Knockout) != "null" {
 			return true
@@ -502,10 +502,10 @@ func formView(rec *hiringtypes.JobRecord, screening bool) *FormView {
 		AutomatedScreeningEnabled: screening, Warnings: []jobs.Warning{},
 	}
 	if v.Questions == nil {
-		v.Questions = []questions.FormQuestion{}
+		v.Questions = []formschema.FormQuestion{}
 	}
 	if v.Declarations == nil {
-		v.Declarations = []questions.Declaration{}
+		v.Declarations = []formschema.Declaration{}
 	}
 	if hasKnockout(rec.Form) {
 		v.Warnings = append(v.Warnings, jobs.Warning{Code: "knockout_review", Severity: "info",
@@ -516,12 +516,12 @@ func formView(rec *hiringtypes.JobRecord, screening bool) *FormView {
 
 // applyForm decides the change for one form save, under the row lock.
 func applyForm(
-	c Caller, cur *hiringtypes.JobRecord, in FormInput, pol questions.Policy,
+	c Caller, cur *hiringtypes.JobRecord, in FormInput, pol formschema.Policy,
 ) (*hiringtypes.UpdateResult, error) {
 	if err := draftEditable(c, cur); err != nil {
 		return nil, err
 	}
-	form, decls, qerrs := questions.Build(in.Questions, in.Declarations, pol)
+	form, decls, qerrs := formschema.Build(in.Questions, in.Declarations, pol)
 	errs := fromQuestionErrors(qerrs)
 	if len(decls) > 0 && cur.Job.LawfulBasis == "" {
 		errs = append(errs, fe("declarations", "choose a lawful basis on the job details before asking for special data"))
@@ -556,7 +556,7 @@ func (s *Service) SaveForm(ctx context.Context, c Caller, id string, ifMatch int
 	if err != nil {
 		return nil, err
 	}
-	pol := questions.Policy{AllowKnockout: settings.AutomatedScreeningEnabled}
+	pol := formschema.Policy{AllowKnockout: settings.AutomatedScreeningEnabled}
 	rec, err := s.Store.UpdateJob(ctx, c.OrgID, c.UserID, id, ifMatch,
 		func(cur *hiringtypes.JobRecord) (*hiringtypes.UpdateResult, error) {
 			return applyForm(c, cur, in, pol)

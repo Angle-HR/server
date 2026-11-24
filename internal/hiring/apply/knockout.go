@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/Angle-HR/server/internal/hiring/questions"
-	"github.com/Angle-HR/server/internal/hiring/screening"
+	"github.com/Angle-HR/server/pkg/formschema"
+	"github.com/Angle-HR/server/pkg/formschema/screening"
 )
 
 // MarketFor maps a candidate's country (ISO 3166-1 alpha-2) to the hiring market that covers it. The United
@@ -48,7 +48,7 @@ const defaultKnockoutReason = "Answer flagged by a screening question"
 
 // knockoutFlags evaluates the per-question knockout rules of the frozen form. A knockout never rejects anyone:
 // it flags the application so a person reviews it. An unanswered question never flags.
-func knockoutFlags(form []questions.FormQuestion, answers map[string]json.RawMessage) []Flag {
+func knockoutFlags(form []formschema.FormQuestion, answers map[string]json.RawMessage) []Flag {
 	var out []Flag
 	for i := range form {
 		q := &form[i]

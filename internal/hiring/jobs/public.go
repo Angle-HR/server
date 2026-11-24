@@ -3,7 +3,7 @@ package jobs
 import (
 	"encoding/json"
 
-	"github.com/Angle-HR/server/internal/hiring/questions"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 // PublicQuestion is a question as a candidate sees it. It never carries the knockout rule: a candidate must
@@ -72,7 +72,7 @@ type PublicInput struct {
 	Industry    string
 	Seniority   string
 	Experience  string
-	Form        []questions.FormQuestion
+	Form        []formschema.FormQuestion
 	SkillLabels []string
 }
 

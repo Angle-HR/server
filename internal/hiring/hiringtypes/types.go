@@ -12,8 +12,8 @@ import (
 
 	"github.com/Angle-HR/server/internal/hiring/gates"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/questions"
-	"github.com/Angle-HR/server/internal/hiring/screening"
+	"github.com/Angle-HR/server/pkg/formschema"
+	"github.com/Angle-HR/server/pkg/formschema/screening"
 )
 
 // Errors the HTTP layer maps to responses.
@@ -40,8 +40,8 @@ func (e *StaleRevisionError) Error() string {
 // JobRecord is a job with its application form.
 type JobRecord struct {
 	Job          jobs.Job
-	Form         []questions.FormQuestion
-	Declarations []questions.Declaration
+	Form         []formschema.FormQuestion
+	Declarations []formschema.Declaration
 	FormRevision int
 
 	// Phase 2.
@@ -107,17 +107,17 @@ type CreateInput struct {
 	Details   jobs.Details
 	Completed []string
 	Step      string
-	Form      []questions.FormQuestion
-	Decls     []questions.Declaration
+	Form      []formschema.FormQuestion
+	Decls     []formschema.Declaration
 }
 
 // UpdateResult is what an update callback asks the store to write.
 type UpdateResult struct {
-	Details     *jobs.Details             // replace the job's details (nil leaves them)
-	Completed   []string                  // completed data sections after the update
-	Step        string                    // wizard step after the update
-	Form        *[]questions.FormQuestion // replace the whole form (nil leaves it)
-	Decls       *[]questions.Declaration  // replace the special category declarations (nil leaves them)
+	Details     *jobs.Details              // replace the job's details (nil leaves them)
+	Completed   []string                   // completed data sections after the update
+	Step        string                     // wizard step after the update
+	Form        *[]formschema.FormQuestion // replace the whole form (nil leaves it)
+	Decls       *[]formschema.Declaration  // replace the special category declarations (nil leaves them)
 	AuditAction string
 	AuditDiff   map[string]any
 

@@ -11,8 +11,8 @@ import (
 
 	"github.com/Angle-HR/server/internal/hiring/apply"
 	"github.com/Angle-HR/server/internal/hiring/public"
-	"github.com/Angle-HR/server/internal/hiring/questions"
-	"github.com/Angle-HR/server/internal/hiring/screening"
+	"github.com/Angle-HR/server/pkg/formschema"
+	"github.com/Angle-HR/server/pkg/formschema/screening"
 )
 
 // ---- public job pages and applications (phase 3a, 3b) ----
@@ -39,11 +39,11 @@ FROM accounts.organizations WHERE id = $1::uuid`
 
 // frozenSchema is the shape freezeFormSQL writes: the form's questions as they were at publish.
 type frozenSchema struct {
-	Questions []questions.FormQuestion `json:"questions"`
+	Questions []formschema.FormQuestion `json:"questions"`
 }
 
 // loadFrozenForm returns the form id, newest version and questions. ErrNotFound when the job never published.
-func loadFrozenForm(ctx context.Context, tx pgx.Tx, tenantID, jobID string) (string, int, []questions.FormQuestion, error) {
+func loadFrozenForm(ctx context.Context, tx pgx.Tx, tenantID, jobID string) (string, int, []formschema.FormQuestion, error) {
 	var (
 		formID  string
 		version int
@@ -61,7 +61,7 @@ func loadFrozenForm(ctx context.Context, tx pgx.Tx, tenantID, jobID string) (str
 		return "", 0, nil, fmt.Errorf("hiringstore: decode frozen form: %w", err)
 	}
 	if schema.Questions == nil {
-		schema.Questions = []questions.FormQuestion{}
+		schema.Questions = []formschema.FormQuestion{}
 	}
 	return formID, version, schema.Questions, nil
 }

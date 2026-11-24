@@ -12,7 +12,7 @@ import (
 
 	"github.com/Angle-HR/server/internal/hiring/gates"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
-	"github.com/Angle-HR/server/internal/hiring/screening"
+	"github.com/Angle-HR/server/pkg/formschema/screening"
 )
 
 // memberRetentionMonths is how long a hiring-team record is kept after it is written. The retention schedule

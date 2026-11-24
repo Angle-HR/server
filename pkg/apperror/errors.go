@@ -57,11 +57,16 @@ var (
 
 // Stable application error codes.
 const (
-	CodeNotFound                = "NOT_FOUND"
-	CodeConflict                = "CONFLICT"
-	CodeValidationError         = "VALIDATION_ERROR"
-	CodeUnauthorized            = "UNAUTHORIZED"
-	CodeForbidden               = "FORBIDDEN"
+	CodeNotFound              = "NOT_FOUND"
+	CodeConflict              = "CONFLICT"
+	CodeValidationError       = "VALIDATION_ERROR"
+	CodeUnauthorized          = "UNAUTHORIZED"
+	CodeForbidden             = "FORBIDDEN"
+	CodeCSRFInvalid           = "CSRF_INVALID"
+	CodeSessionRefreshRemoved = "SESSION_REFRESH_REMOVED"
+	// CodeTOTPEnrollmentRequired: the admin session has not passed a second factor and ADMIN_TOTP_REQUIRED is on;
+	// only the TOTP enrolment routes work until the admin enrols.
+	CodeTOTPEnrollmentRequired  = "TOTP_ENROLLMENT_REQUIRED"
 	CodeInternalError           = "INTERNAL_ERROR"
 	CodeInvalidReference        = "INVALID_REFERENCE"
 	CodeNotImplemented          = "NOT_IMPLEMENTED"
@@ -90,6 +95,9 @@ var httpStatusByCode = map[string]int{
 	CodeValidationError:         http.StatusBadRequest,
 	CodeUnauthorized:            http.StatusUnauthorized,
 	CodeForbidden:               http.StatusForbidden,
+	CodeCSRFInvalid:             http.StatusForbidden,
+	CodeSessionRefreshRemoved:   http.StatusGone,
+	CodeTOTPEnrollmentRequired:  http.StatusForbidden,
 	CodeInternalError:           http.StatusInternalServerError,
 	CodeInvalidReference:        http.StatusBadRequest,
 	CodeNotImplemented:          http.StatusNotImplemented,

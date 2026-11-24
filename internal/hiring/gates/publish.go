@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/questions"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 // Issue codes.
@@ -52,7 +52,7 @@ func (r *Report) OK() bool { return len(r.Blocking) == 0 }
 // Input is everything the publish checks read. The service loads it; this package decides.
 type Input struct {
 	Job        *jobs.Job
-	Form       []questions.FormQuestion
+	Form       []formschema.FormQuestion
 	Catalog    jobs.MarketCatalog
 	Gates      []Gate
 	Confirms   []Confirmation
@@ -72,7 +72,7 @@ type Input struct {
 
 // UsesScreening reports whether the job asks for automated screening: any knockout on a question, or any
 // disqualification rule.
-func UsesScreening(form []questions.FormQuestion, hasRules bool) bool {
+func UsesScreening(form []formschema.FormQuestion, hasRules bool) bool {
 	if hasRules {
 		return true
 	}

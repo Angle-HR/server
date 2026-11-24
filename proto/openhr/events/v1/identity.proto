@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package openhr.events.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Event payloads are the `data` of a CloudEvent. The CloudEvents envelope (id, type,
+// source, time, subject, traceparent) is built by pkg/events, so payloads carry only
+// business facts. Types are named "<service>.<entity>.<fact>", for example
+// "identity.user.verified". Payloads never contain secrets or free-text PII beyond
+// what consumers need; consumers must tolerate redelivery (at-least-once) and use the
+// CloudEvent id for idempotency.
+
+// UserVerified is emitted by identity once a user's email is verified.
+// CloudEvent type: identity.user.verified.
+message UserVerified {
+  string user_id = 1;
+  string region = 2;
+  // "individual" or "business".
+  string account_type = 3;
+  google.protobuf.Timestamp verified_at = 4;
+}
+
+// UserRegionMoved is emitted by identity after CommitRegionMove. Services that cache
+// a user's region must invalidate it. CloudEvent type: identity.user.region_moved.
+message UserRegionMoved {
+  string user_id = 1;
+  string from_region = 2;
+  string to_region = 3;
+}
+
+// UserActiveChanged is emitted when staff disable or re-enable an account.
+// CloudEvent type: identity.user.active_changed.
+message UserActiveChanged {
+  string user_id = 1;
+  string region = 2;
+  bool active = 3;
+}

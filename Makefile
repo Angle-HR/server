@@ -204,3 +204,5 @@ pr-description:
 		fi; \
 	} >> "$$out"; \
 	echo "✅ Wrote $$out"
+# Protobuf/gRPC contracts (proto, proto-lint, proto-breaking)
+include make/proto.mk

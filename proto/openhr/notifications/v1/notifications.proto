@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package openhr.notifications.v1;
+
+// NotificationsService owns outbound email: templates (internal/mailer), delivery,
+// and the retry queue. The default path for other services is the event
+// openhr.events.v1.EmailRequested published from their own transaction; SendEmail
+// is the synchronous alternative when the caller needs an immediate acceptance
+// answer (for example the OTP resend endpoint).
+service NotificationsService {
+  rpc SendEmail(SendEmailRequest) returns (SendEmailResponse);
+  rpc GetEmailStatus(GetEmailStatusRequest) returns (GetEmailStatusResponse);
+}
+
+// AdminNotificationsService exposes queue visibility to staff (admin-bff), replacing
+// handler/admin_jobs.go which reads the River queue directly.
+service AdminNotificationsService {
+  rpc ListEmailJobs(ListEmailJobsRequest) returns (ListEmailJobsResponse);
+  rpc RetryEmailJob(RetryEmailJobRequest) returns (RetryEmailJobResponse);
+}
+
+enum EmailType {
+  EMAIL_TYPE_UNSPECIFIED = 0;
+  // 1 was the waitlist confirmation; the waitlist was removed.
+  reserved 1;
+  reserved "EMAIL_TYPE_WAITLIST_CONFIRMATION";
+  EMAIL_TYPE_MORE_INFO_ACK = 2;
+  EMAIL_TYPE_EMAIL_VERIFICATION = 3;
+  EMAIL_TYPE_ONBOARDING_COMPLETE = 4;
+  EMAIL_TYPE_ADMIN_INVITE = 5;
+  EMAIL_TYPE_PASSWORD_RESET = 6;
+  EMAIL_TYPE_LOGIN_OTP = 7;
+  EMAIL_TYPE_ORG_INVITE = 8;
+  EMAIL_TYPE_KYB_FAILED = 9;
+  EMAIL_TYPE_KYB_REVIEW_QUEUED = 10;
+  EMAIL_TYPE_KYB_NUDGE_1 = 11;
+  EMAIL_TYPE_KYB_NUDGE_2 = 12;
+  EMAIL_TYPE_APPLICATION_RECEIVED = 13;
+  EMAIL_TYPE_APPLICATION_REJECTED = 14;
+  EMAIL_TYPE_APPLICATION_HIRED = 15;
+  EMAIL_TYPE_RETENTION_NOTICE = 16;
+}
+
+message SendEmailRequest {
+  EmailType type = 1;
+  string to = 2;
+  // Template variables as a JSON object. Secrets (OTP, invite tokens) are allowed
+  // here; they must not be logged by callers or by the service.
+  string data_json = 3;
+  // Same key means same email: duplicates are accepted but not sent twice.
+  string idempotency_key = 4;
+}
+
+message SendEmailResponse {
+  string email_id = 1;
+  // True when the idempotency key matched an earlier request.
+  bool duplicate = 2;
+}
+
+message GetEmailStatusRequest {
+  string email_id = 1;
+}
+
+message GetEmailStatusResponse {
+  // queued, sent, failed or discarded.
+  string state = 1;
+  int32 attempts = 2;
+}
+
+message EmailJob {
+  int64 id = 1;
+  string kind = 2;
+  string state = 3;
+  int32 attempt = 4;
+  int32 max_attempts = 5;
+}
+
+message ListEmailJobsRequest {
+  string state = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListEmailJobsResponse {
+  repeated EmailJob jobs = 1;
+  string next_page_token = 2;
+}
+
+message RetryEmailJobRequest {
+  int64 job_id = 1;
+}
+
+message RetryEmailJobResponse {}

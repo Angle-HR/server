@@ -16,8 +16,8 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/public"
-	"github.com/Angle-HR/server/internal/hiring/questions"
 	"github.com/Angle-HR/server/internal/hiring/uploads"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 var now = time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
@@ -155,7 +155,7 @@ func (l *fakeLimiter) Allow(context.Context, string, int, time.Duration) (bool, 
 func target() *apply.Target {
 	return &apply.Target{
 		JobID: "job-1", Status: jobs.StatusPublished, ClosingDate: "2026-11-30", LawfulBasis: "legitimate_interests",
-		Questions: []questions.FormQuestion{
+		Questions: []formschema.FormQuestion{
 			{ID: "cv", Type: "autofill_resume", Config: []byte(`{"max_mb":5,"accept":["pdf"]}`)},
 			{ID: "photo", Type: "image_upload", Config: []byte(`{}`)},
 			{ID: "name", Type: "short_text", Config: []byte(`{}`)},

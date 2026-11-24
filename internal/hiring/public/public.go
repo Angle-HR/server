@@ -12,7 +12,7 @@ import (
 
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/questions"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 // Errors the HTTP layer maps to responses.
@@ -81,9 +81,9 @@ type Company struct {
 // editable one, so what they see is what the server validates against.
 type Posting struct {
 	Job            jobs.Job
-	Form           []questions.FormQuestion
+	Form           []formschema.FormQuestion
 	FormVersion    int
-	Declarations   []questions.Declaration
+	Declarations   []formschema.Declaration
 	Company        Company
 	ScreeningRules bool // the job has disqualification rules
 }
@@ -139,8 +139,8 @@ type View struct {
 	LawfulBasis     string
 	RetentionMonths int
 	Markets         []string
-	Declarations    []questions.Declaration
-	Form            []questions.FormQuestion
+	Declarations    []formschema.Declaration
+	Form            []formschema.FormQuestion
 	FormVersion     int
 	ScreeningActive bool
 	Region          string
@@ -289,7 +289,7 @@ func nameOf(ctx context.Context, list func(context.Context) ([]hiringtypes.Catal
 	return ""
 }
 
-func hasKnockout(form []questions.FormQuestion) bool {
+func hasKnockout(form []formschema.FormQuestion) bool {
 	for i := range form {
 		if k := string(form[i].Knockout); k != "" && k != "null" {
 			return true

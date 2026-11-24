@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Angle-HR/server/internal/hiring/questions"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 var now = time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
@@ -426,7 +426,7 @@ func TestBuildPublicHidesInternals(t *testing.T) {
 	j.Description = Sections{"role": json.RawMessage(`"Build things"`)}
 	j.AssessmentURL = "https://assess.example.com/x"
 	j.Pay.Visible = true
-	form := []questions.FormQuestion{
+	form := []formschema.FormQuestion{
 		{ID: "q1", Section: "screening", Type: "single_choice", Label: "Right to work?", Required: true,
 			Config:   json.RawMessage(`{"options":[{"id":"y","label":"Yes"},{"id":"n","label":"No"}]}`),
 			Knockout: json.RawMessage(`{"option_ids":["n"],"reason":"secret"}`)},

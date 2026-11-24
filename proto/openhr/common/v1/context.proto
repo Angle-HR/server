@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package openhr.common.v1;
+
+// CallContext is who is calling and on whose behalf. The BFF builds it once per
+// request from the verified access token plus the caller's membership and sends it
+// to every downstream service. pkg/rpc carries it in gRPC metadata (never in
+// request bodies), so RPC messages stay free of auth plumbing. A service trusts it
+// only because the mesh is internal; it never re-parses end-user tokens.
+message CallContext {
+  // Deployment region of the caller's data: uk, us, eu, africa, asia, or global
+  // while the account is still in the pre-onboarding holding area.
+  string region = 1;
+  // Company the caller acts for. Empty for individuals, admins and public calls.
+  string company_id = 2;
+  // Authenticated user. Empty for public (anonymous) calls such as apply.
+  string user_id = 3;
+  // Effective permission slugs, for example "job.create" (see internal/rbac).
+  repeated string permissions = 4;
+  // W3C trace id (32 lowercase hex chars) shared by every hop of one request.
+  string trace_id = 5;
+  // Unique id of this request, echoed in logs and error responses.
+  string request_id = 6;
+  // What kind of principal made the call.
+  ActorType actor_type = 7;
+}
+
+enum ActorType {
+  ACTOR_TYPE_UNSPECIFIED = 0;
+  // A signed-in product user.
+  ACTOR_TYPE_USER = 1;
+  // A platform staff member (admin-bff).
+  ACTOR_TYPE_ADMIN = 2;
+  // An unauthenticated visitor (public careers and apply).
+  ACTOR_TYPE_ANONYMOUS = 3;
+  // A scheduled job or another service acting without a user.
+  ACTOR_TYPE_SYSTEM = 4;
+}

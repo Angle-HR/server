@@ -23,9 +23,9 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/public"
-	"github.com/Angle-HR/server/internal/hiring/questions"
-	"github.com/Angle-HR/server/internal/hiring/screening"
 	"github.com/Angle-HR/server/internal/sensitive"
+	"github.com/Angle-HR/server/pkg/formschema"
+	"github.com/Angle-HR/server/pkg/formschema/screening"
 )
 
 // Errors the HTTP layer maps to responses.
@@ -76,9 +76,9 @@ type Target struct {
 	JobCode         string
 	Title           string
 	CompanyName     string
-	Declarations    []questions.Declaration // the legal condition and purpose of each special category on the job
-	Region          string                  // set by Submit from the registry
-	TenantID        string                  // set by Submit from the registry
+	Declarations    []formschema.Declaration // the legal condition and purpose of each special category on the job
+	Region          string                   // set by Submit from the registry
+	TenantID        string                   // set by Submit from the registry
 	Status          string
 	ClosingDate     string // last day to apply, YYYY-MM-DD, or ""
 	LawfulBasis     string
@@ -86,7 +86,7 @@ type Target struct {
 	Markets         []string // market codes the job is open to
 	FormID          string
 	FormVersion     int // newest frozen form version
-	Questions       []questions.FormQuestion
+	Questions       []formschema.FormQuestion
 	Rules           []screening.Rule
 }
 
@@ -249,7 +249,7 @@ type ClaimRequest struct {
 	JobID      string
 	QuestionID string
 	Token      string
-	Question   *questions.FormQuestion
+	Question   *formschema.FormQuestion
 }
 
 // Uploads verifies an upload a candidate refers to: the token was issued for this job and question, is not
@@ -483,7 +483,7 @@ func (s *Service) build(ctx context.Context, in Input, t *Target) (*NewApplicati
 		add("consent", "this employer needs your consent to handle your application")
 	}
 
-	byID := map[string]*questions.FormQuestion{}
+	byID := map[string]*formschema.FormQuestion{}
 	for i := range t.Questions {
 		byID[t.Questions[i].ID] = &t.Questions[i]
 	}
@@ -525,7 +525,7 @@ func (s *Service) build(ctx context.Context, in Input, t *Target) (*NewApplicati
 				add(path, "this question is required")
 				continue
 			}
-			if err := questions.ValidateAnswer(q.Type, q.Config, raw); err != nil {
+			if err := formschema.ValidateAnswer(q.Type, q.Config, raw); err != nil {
 				add(path, err.Error())
 				continue
 			}
@@ -557,7 +557,7 @@ func (s *Service) build(ctx context.Context, in Input, t *Target) (*NewApplicati
 			}
 			continue
 		}
-		if err := questions.ValidateAnswer(q.Type, q.Config, raw); err != nil {
+		if err := formschema.ValidateAnswer(q.Type, q.Config, raw); err != nil {
 			add(path, err.Error())
 			continue
 		}
@@ -661,13 +661,13 @@ func source(src string) string {
 	return "direct"
 }
 
-func declaration(list []questions.Declaration, category string) (questions.Declaration, bool) {
+func declaration(list []formschema.Declaration, category string) (formschema.Declaration, bool) {
 	for _, d := range list {
 		if d.Category == category {
 			return d, true
 		}
 	}
-	return questions.Declaration{}, false
+	return formschema.Declaration{}, false
 }
 
 // confirmation is the "we received your application" email.

@@ -10,9 +10,9 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/gates"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/questions"
-	"github.com/Angle-HR/server/internal/hiring/screening"
 	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/formschema"
+	"github.com/Angle-HR/server/pkg/formschema/screening"
 )
 
 type fakeCompany struct {
@@ -544,7 +544,7 @@ func TestDuplicateCopiesDetailsNotState(t *testing.T) {
 	}
 }
 
-func questionYesNo(label string) questions.FormQuestion {
-	return questions.FormQuestion{Section: "screening", Type: "single_choice", Label: label, Required: true,
+func questionYesNo(label string) formschema.FormQuestion {
+	return formschema.FormQuestion{Section: "screening", Type: "single_choice", Label: label, Required: true,
 		Config: json.RawMessage(yesNoConfig)}
 }

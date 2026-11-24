@@ -28,7 +28,7 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/public"
-	"github.com/Angle-HR/server/internal/hiring/questions"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 // Limits.
@@ -155,7 +155,7 @@ type uploadConfig struct {
 }
 
 // rules reads a question's size limit and accepted formats.
-func (s *Service) rules(ctx context.Context, tenantID string, q *questions.FormQuestion) (int64, []string) {
+func (s *Service) rules(ctx context.Context, tenantID string, q *formschema.FormQuestion) (int64, []string) {
 	var c uploadConfig
 	_ = json.Unmarshal(q.Config, &c)
 	mb := c.MaxMB
@@ -239,7 +239,7 @@ func (s *Service) Presign(ctx context.Context, in PresignInput) (*Presigned, err
 		return nil, apply.ErrNotAccepting
 	}
 
-	var q *questions.FormQuestion
+	var q *formschema.FormQuestion
 	for i := range t.Questions {
 		if t.Questions[i].ID == in.QuestionID {
 			q = &t.Questions[i]

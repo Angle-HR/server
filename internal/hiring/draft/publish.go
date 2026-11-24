@@ -14,8 +14,8 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/lifecycle"
-	"github.com/Angle-HR/server/internal/hiring/screening"
 	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/formschema/screening"
 )
 
 // CompanyState is what the publish checks need to know about the company. It lives in the account tables

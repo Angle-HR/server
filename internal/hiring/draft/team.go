@@ -10,9 +10,9 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/lifecycle"
-	"github.com/Angle-HR/server/internal/hiring/questions"
-	"github.com/Angle-HR/server/internal/hiring/screening"
 	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/formschema"
+	"github.com/Angle-HR/server/pkg/formschema/screening"
 )
 
 // ---- hiring team (the Permissions step) ----
@@ -467,14 +467,14 @@ func (s *Service) Duplicate(ctx context.Context, c Caller, id string) (*JobView,
 	if !c.can(rbac.JobSalaryRangeSet) {
 		d.Pay = jobs.NewDetails().Pay // do not hand pay to someone who may not set it
 	}
-	form := make([]questions.FormQuestion, len(rec.Form))
+	form := make([]formschema.FormQuestion, len(rec.Form))
 	copy(form, rec.Form)
 	for i := range form {
 		form[i].ID = ""
 	}
 	created, err := s.Store.CreateJob(ctx, &hiringtypes.CreateInput{
 		TenantID: c.OrgID, UserID: c.UserID, Details: d, Completed: jobs.Completed(&d), Step: jobs.StepDetails,
-		Form: form, Decls: append([]questions.Declaration(nil), rec.Declarations...),
+		Form: form, Decls: append([]formschema.Declaration(nil), rec.Declarations...),
 	})
 	if err != nil {
 		return nil, mapStoreError(err)

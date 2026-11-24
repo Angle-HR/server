@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package openhr.events.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// JobPublished is emitted by hiring when a job goes live (or is re-published). It
+// carries everything applications needs to accept applications without calling
+// hiring on the apply path. CloudEvent type: hiring.job.published.
+message JobPublished {
+  string job_id = 1;
+  string company_id = 2;
+  string region = 3;
+  string public_id = 4;
+  int64 job_number = 5;
+  string title = 6;
+  int32 retention_months = 7;
+  google.protobuf.Timestamp published_at = 8;
+  google.protobuf.Timestamp closing_at = 9;
+  int32 form_version = 10;
+  // Frozen form schema (JSON) for form_version.
+  string form_schema_json = 11;
+  // Company data snapshot used in candidate emails and the public page.
+  string company_name = 12;
+  string privacy_contact_email = 13;
+  string dpo_contact = 14;
+  repeated string hiring_manager_ids = 15;
+}
+
+// JobPaused is emitted when a published job stops accepting applications but may
+// resume. CloudEvent type: hiring.job.paused.
+message JobPaused {
+  string job_id = 1;
+  string company_id = 2;
+  string region = 3;
+}
+
+// JobClosed is emitted when a job closes, expires or is archived.
+// CloudEvent type: hiring.job.closed.
+message JobClosed {
+  enum Reason {
+    REASON_UNSPECIFIED = 0;
+    REASON_MANUAL = 1;
+    REASON_EXPIRED = 2;
+    REASON_ARCHIVED = 3;
+  }
+  string job_id = 1;
+  string company_id = 2;
+  string region = 3;
+  Reason reason = 4;
+  google.protobuf.Timestamp closed_at = 5;
+}
+
+// JobAccessChanged is emitted when a job's team (hiring managers, collaborators)
+// changes; applications keeps a job-access read model from it.
+// CloudEvent type: hiring.job.access_changed.
+message JobAccessChanged {
+  message Member {
+    string user_id = 1;
+    // For example "hiring_manager" or "collaborator".
+    string role = 2;
+  }
+  string job_id = 1;
+  string company_id = 2;
+  string region = 3;
+  repeated Member members = 4;
+}

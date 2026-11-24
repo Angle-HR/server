@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/questions"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 func i64(v int64) *int64 { return &v }
@@ -141,7 +141,7 @@ func goodInput() *Input {
 	d.Pay = jobs.Pay{Type: "range", Currency: "GBP", Period: "year", Min: i64(50000), Max: i64(70000), Visible: true}
 	d.LawfulBasis = "contract"
 	return &Input{
-		Job: j, Form: questions.DefaultForm(), Catalog: catalog, Gates: gateCatalog,
+		Job: j, Form: formschema.DefaultForm(), Catalog: catalog, Gates: gateCatalog,
 		Confirms:        []Confirmation{{GateID: "uk-lawful", Version: 1, Confirmed: true}, {GateID: "bad-trigger", Version: 1, Confirmed: true}},
 		CompanyVerified: true, DPAAccepted: true, PrivacyContactSet: true,
 	}
@@ -218,7 +218,7 @@ func TestCheckLawfulBasis(t *testing.T) {
 }
 
 func TestCheckAutomatedScreening(t *testing.T) {
-	ko := questions.FormQuestion{Section: "screening", Type: "number", Label: "Years", Knockout: raw(`{"min":1}`)}
+	ko := formschema.FormQuestion{Section: "screening", Type: "number", Label: "Years", Knockout: raw(`{"min":1}`)}
 	in := goodInput()
 	in.Form = append(in.Form, ko)
 	steps := []struct {
@@ -254,7 +254,7 @@ func TestCheckAutomatedScreening(t *testing.T) {
 
 func TestCheckSpecialCategoryNeedsDeclaration(t *testing.T) {
 	in := goodInput()
-	in.Form = append(in.Form, questions.FormQuestion{Section: "eligibility", Type: "short_text", Label: "x", SpecialCategory: "health_disability"})
+	in.Form = append(in.Form, formschema.FormQuestion{Section: "eligibility", Type: "short_text", Label: "x", SpecialCategory: "health_disability"})
 	if !codes(Check(in).Blocking)[CodeSpecialCategory] {
 		t.Error("undeclared category must block")
 	}

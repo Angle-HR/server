@@ -1,0 +1,185 @@
+syntax = "proto3";
+
+package openhr.applications.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// ApplicationsService owns candidate applications: public apply, knockout
+// screening, uploads, review tasks, status changes, reapply blocks, per-company
+// application settings, and retention deletion.
+// Company, user, region and permissions arrive as CallContext metadata (pkg/rpc).
+service ApplicationsService {
+  // SubmitApplication is the public apply endpoint (anonymous: no CallContext user). It validates against the
+  // job's frozen form, claims the uploads the answers name (scanning them), screens (a failed knockout flags the
+  // application, it never rejects), stores, and emits applications.application.submitted. The receipt is the
+  // same for a new application and a repeat, so it cannot be used to learn whether an email has applied.
+  rpc SubmitApplication(SubmitApplicationRequest) returns (SubmitApplicationResponse);
+  rpc ListApplications(ListApplicationsRequest) returns (ListApplicationsResponse);
+  rpc GetApplication(GetApplicationRequest) returns (GetApplicationResponse);
+  rpc ChangeStatus(ChangeStatusRequest) returns (ChangeStatusResponse);
+
+  // CreateUploadUrl issues a one-time presigned upload target for one file question of a public job, before the
+  // application exists (anonymous). The returned token is the answer to the question on SubmitApplication.
+  rpc CreateUploadUrl(CreateUploadUrlRequest) returns (CreateUploadUrlResponse);
+  // ConfirmUpload is an optional pre-flight after the client PUT the file: it runs the same check SubmitApplication
+  // runs for that token (object present, size, type, magic bytes, malware scan) so the candidate learns about a
+  // bad file before submitting. It attaches nothing and is safe to repeat; the claim that counts still happens on
+  // SubmitApplication.
+  rpc ConfirmUpload(ConfirmUploadRequest) returns (ConfirmUploadResponse);
+
+  rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
+  rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse);
+
+  // GetApplicantCounts returns per-job totals for the hiring job list screens.
+  rpc GetApplicantCounts(GetApplicantCountsRequest) returns (GetApplicantCountsResponse);
+}
+
+enum ApplicationStatus {
+  APPLICATION_STATUS_UNSPECIFIED = 0;
+  APPLICATION_STATUS_RECEIVED = 1;
+  APPLICATION_STATUS_IN_REVIEW = 2;
+  APPLICATION_STATUS_FLAGGED = 3;
+  APPLICATION_STATUS_REJECTED = 4;
+  APPLICATION_STATUS_WITHDRAWN = 5;
+  APPLICATION_STATUS_HIRED = 6;
+}
+
+message Application {
+  string id = 1;
+  string job_id = 2;
+  string company_id = 3;
+  string candidate_name = 4;
+  string candidate_email = 5;
+  ApplicationStatus status = 6;
+  google.protobuf.Timestamp submitted_at = 7;
+}
+
+message SubmitApplicationRequest {
+  reserved 2, 3, 4, 5;
+  reserved "candidate_name", "candidate_email", "answers_json", "notice_version";
+  // The public id of the job (the /j/{public_id} link), not the internal job id.
+  string public_job_id = 1;
+  // ISO 3166-1 alpha-2; must belong to one of the job's markets.
+  string candidate_country = 8;
+  // Answers keyed by form question id. Each value is the JSON of that answer in the shape the question's type
+  // expects (a string answer is "\"text\"", a file answer is the upload token as a JSON string).
+  map<string, string> answers = 9;
+  bool privacy_notice_acknowledged = 10;
+  // Required only when the job's lawful basis is consent.
+  bool consent = 11;
+  // The share channel the candidate came from; anything unknown becomes "direct".
+  string source = 6;
+  // Makes retries safe: 8 to 64 characters of [A-Za-z0-9_.:-]. A retry with the same key and request creates
+  // no second application; the same key with a different request is rejected (ALREADY_EXISTS).
+  string idempotency_key = 7;
+  // The candidate's network address as the edge saw it, for the flood limits. Empty disables the per-address limit.
+  string client_ip = 13;
+}
+
+message SubmitApplicationResponse {
+  reserved 1, 2;
+  reserved "application_id", "duplicate";
+  // True for a new application and for a repeat alike.
+  bool received = 3;
+}
+
+message ListApplicationsRequest {
+  string job_id = 1;
+  repeated ApplicationStatus statuses = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message ListApplicationsResponse {
+  repeated Application applications = 1;
+  string next_page_token = 2;
+}
+
+message GetApplicationRequest {
+  string application_id = 1;
+}
+
+message GetApplicationResponse {
+  Application application = 1;
+  string answers_json = 2;
+}
+
+message ChangeStatusRequest {
+  string application_id = 1;
+  ApplicationStatus status = 2;
+  string note = 3;
+}
+
+message ChangeStatusResponse {
+  Application application = 1;
+}
+
+message CreateUploadUrlRequest {
+  reserved 1, 2;
+  reserved "application_id", "file_name";
+  string public_job_id = 5;
+  // The file question the upload answers.
+  string question_id = 6;
+  string filename = 7;
+  string content_type = 3;
+  int64 size_bytes = 4;
+  string client_ip = 8;
+}
+
+message CreateUploadUrlResponse {
+  reserved 1, 2;
+  reserved "file_id", "upload_url";
+  // The answer to the question on SubmitApplication.
+  string token = 4;
+  // Send the file with this method to url, with exactly these headers, before expires_at.
+  string method = 5;
+  string url = 6;
+  map<string, string> headers = 7;
+  google.protobuf.Timestamp expires_at = 3;
+  int64 max_bytes = 9;
+}
+
+message ConfirmUploadRequest {
+  reserved 1, 2;
+  reserved "application_id", "file_id";
+  string public_job_id = 3;
+  string question_id = 4;
+  string token = 5;
+}
+
+message ConfirmUploadResponse {
+  // Size and SHA-256 (hex) of the scanned file.
+  int64 size_bytes = 1;
+  string sha256 = 2;
+}
+
+message GetSettingsRequest {}
+
+message GetSettingsResponse {
+  int32 reapply_block_months = 1;
+  bool send_status_emails = 2;
+}
+
+message UpdateSettingsRequest {
+  optional int32 reapply_block_months = 1;
+  optional bool send_status_emails = 2;
+}
+
+message UpdateSettingsResponse {
+  int32 reapply_block_months = 1;
+  bool send_status_emails = 2;
+}
+
+message ApplicantCount {
+  string job_id = 1;
+  int32 total = 2;
+  int32 new_count = 3;
+}
+
+message GetApplicantCountsRequest {
+  repeated string job_ids = 1;
+}
+
+message GetApplicantCountsResponse {
+  repeated ApplicantCount counts = 1;
+}

@@ -1,0 +1,274 @@
+syntax = "proto3";
+
+package openhr.org.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// OrgService owns companies: accounts.organizations, members and their roles,
+// agreements (terms/DPA), KYB verification and the onboarding catalogs.
+service OrgService {
+  // ResolveMembership answers "which company does this user act for and with what
+  // permissions". It replaces the join over organizations, members and member_roles
+  // that hiring runs today (hiringhttp/scope.go). The web BFF calls it once per
+  // request and puts the result in CallContext.
+  rpc ResolveMembership(ResolveMembershipRequest) returns (ResolveMembershipResponse);
+  rpc GetCompany(GetCompanyRequest) returns (GetCompanyResponse);
+  // GetCompanyContact returns where notices go: the privacy contact, else the
+  // owner's email (retention notices, KYB nudges).
+  rpc GetCompanyContact(GetCompanyContactRequest) returns (GetCompanyContactResponse);
+  // GetPublishReadiness is the authoritative company-side input to the job publish
+  // gate: KYB status, accepted agreement version, privacy contact.
+  rpc GetPublishReadiness(GetPublishReadinessRequest) returns (GetPublishReadinessResponse);
+  // ListMembers lists (or batch-resolves) the people in a company.
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse);
+  // AddMember is called by identity when an org invite is accepted.
+  rpc AddMember(AddMemberRequest) returns (AddMemberResponse);
+  rpc SetMemberRoles(SetMemberRolesRequest) returns (SetMemberRolesResponse);
+  rpc AcceptAgreement(AcceptAgreementRequest) returns (AcceptAgreementResponse);
+  rpc SetPrivacyContact(SetPrivacyContactRequest) returns (SetPrivacyContactResponse);
+  // ListCompanies pages through every company in a region for sweepers and for
+  // seeding read models.
+  rpc ListCompanies(ListCompaniesRequest) returns (ListCompaniesResponse);
+  // ListIndustries and ValidateIndustry expose the onboarding industry catalog that
+  // hiring checks job industries against (hiringstore/global.go).
+  rpc ListIndustries(ListIndustriesRequest) returns (ListIndustriesResponse);
+  rpc ValidateIndustry(ValidateIndustryRequest) returns (ValidateIndustryResponse);
+
+  // CompleteRegionOnboarding drives the region-migration saga. Org copies its pending
+  // organization and onboarding progress into the target region between
+  // identity.PrepareRegionMove and identity.CommitRegionMove, and returns the tokens
+  // identity issued so the BFF can swap them.
+  rpc CompleteRegionOnboarding(CompleteRegionOnboardingRequest) returns (CompleteRegionOnboardingResponse);
+
+  // SubmitKyb starts or re-runs business verification for the caller's company.
+  rpc SubmitKyb(SubmitKybRequest) returns (SubmitKybResponse);
+  rpc GetKybStatus(GetKybStatusRequest) returns (GetKybStatusResponse);
+}
+
+// AdminOrgService is the staff-facing review surface (admin-bff).
+service AdminOrgService {
+  // ApplyKybDecision records a reviewer's decision on a company's KYB case. The review queue itself belongs to
+  // identity's admin module (AdminIdentityService); it calls this after the reviewer decides.
+  rpc ApplyKybDecision(ApplyKybDecisionRequest) returns (ApplyKybDecisionResponse);
+  // GetCompanyByOwner supports the admin user detail page (handler/admin_users.go).
+  rpc GetCompanyByOwner(GetCompanyByOwnerRequest) returns (GetCompanyByOwnerResponse);
+  // DeleteCompany marks a company deleted (idempotent) and emits org.company.deleted.v1 through the outbox in the
+  // same transaction. Downstream services remove the company's data when they consume it. The identity admin
+  // route DELETE /admin/companies/{id} (superadmin only) calls it.
+  rpc DeleteCompany(DeleteCompanyRequest) returns (DeleteCompanyResponse);
+}
+
+enum KybStatus {
+  KYB_STATUS_UNSPECIFIED = 0;
+  KYB_STATUS_NOT_STARTED = 1;
+  KYB_STATUS_PENDING = 2;
+  KYB_STATUS_IN_REVIEW = 3;
+  KYB_STATUS_VERIFIED = 4;
+  KYB_STATUS_FAILED = 5;
+}
+
+message Company {
+  string id = 1;
+  string legal_name = 2;
+  string registered_address = 3;
+  string owner_user_id = 4;
+  KybStatus kyb_status = 5;
+  string privacy_contact_email = 6;
+  string dpo_contact = 7;
+  string region = 8;
+}
+
+message ResolveMembershipRequest {
+  string user_id = 1;
+}
+
+message ResolveMembershipResponse {
+  // False when the user has no company (individuals, still onboarding).
+  bool has_company = 1;
+  string company_id = 2;
+  string legal_name = 3;
+  string registered_address = 4;
+  bool is_owner = 5;
+  repeated string roles = 6;
+  // Union of default permissions of all roles (owners always include founder).
+  repeated string permissions = 7;
+}
+
+message GetCompanyRequest {
+  string company_id = 1;
+}
+
+message GetCompanyResponse {
+  Company company = 1;
+}
+
+message GetCompanyContactRequest {
+  string company_id = 1;
+}
+
+message GetCompanyContactResponse {
+  string legal_name = 1;
+  string notice_email = 2;
+}
+
+message GetPublishReadinessRequest {
+  string company_id = 1;
+  // The agreement version that counts as current.
+  string dpa_version = 2;
+}
+
+message GetPublishReadinessResponse {
+  KybStatus kyb_status = 1;
+  bool dpa_accepted = 2;
+  google.protobuf.Timestamp dpa_accepted_at = 3;
+  string privacy_contact_email = 4;
+  string dpo_contact = 5;
+}
+
+message CompanyMember {
+  string user_id = 1;
+  repeated string roles = 2;
+  bool is_owner = 3;
+}
+
+message ListMembersRequest {
+  string company_id = 1;
+  // Optional restriction to specific users.
+  repeated string user_ids = 2;
+}
+
+message ListMembersResponse {
+  repeated CompanyMember members = 1;
+}
+
+message AddMemberRequest {
+  string company_id = 1;
+  string user_id = 2;
+  repeated string roles = 3;
+}
+
+message AddMemberResponse {
+  string member_id = 1;
+}
+
+message SetMemberRolesRequest {
+  string company_id = 1;
+  string user_id = 2;
+  repeated string roles = 3;
+}
+
+message SetMemberRolesResponse {
+  CompanyMember member = 1;
+}
+
+message AcceptAgreementRequest {
+  string company_id = 1;
+  string accepted_by_user_id = 2;
+  // For example "terms_dpa".
+  string kind = 3;
+  string version = 4;
+}
+
+message AcceptAgreementResponse {
+  google.protobuf.Timestamp accepted_at = 1;
+}
+
+message SetPrivacyContactRequest {
+  string company_id = 1;
+  string email = 2;
+  string dpo_contact = 3;
+}
+
+message SetPrivacyContactResponse {}
+
+message ListCompaniesRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListCompaniesResponse {
+  repeated Company companies = 1;
+  string next_page_token = 2;
+}
+
+message Industry {
+  string id = 1;
+  string slug = 2;
+  string name = 3;
+}
+
+message ListIndustriesRequest {}
+
+message ListIndustriesResponse {
+  repeated Industry industries = 1;
+}
+
+message ValidateIndustryRequest {
+  string slug = 1;
+}
+
+message ValidateIndustryResponse {
+  bool valid = 1;
+}
+
+message CompleteRegionOnboardingRequest {
+  string user_id = 1;
+  string country_id = 2;
+}
+
+message CompleteRegionOnboardingResponse {
+  string region = 1;
+  // Fresh tokens carrying the new region claim. Empty if the region did not change.
+  string access_token = 2;
+  string refresh_token = 3;
+  int32 access_expires_in_seconds = 4;
+}
+
+message SubmitKybRequest {
+  string registration_number = 1;
+  string country_code = 2;
+}
+
+message SubmitKybResponse {
+  KybStatus status = 1;
+}
+
+message GetKybStatusRequest {}
+
+message GetKybStatusResponse {
+  KybStatus status = 1;
+  string failure_reason = 2;
+}
+
+message DeleteCompanyRequest {
+  string company_id = 1;
+  string region = 2;
+  string admin_id = 3;
+  string reason = 4;
+}
+
+message DeleteCompanyResponse {
+  google.protobuf.Timestamp deleted_at = 1;
+  // True when the company was already deleted (nothing changed).
+  bool already_deleted = 2;
+}
+
+message ApplyKybDecisionRequest {
+  string company_id = 1;
+  string region = 2;
+  string reviewer_admin_id = 3;
+  bool approve = 4;
+  string reason = 5;
+}
+
+message ApplyKybDecisionResponse {
+  KybStatus status = 1;
+}
+
+message GetCompanyByOwnerRequest {
+  string owner_user_id = 1;
+}
+
+message GetCompanyByOwnerResponse {
+  Company company = 1;
+}

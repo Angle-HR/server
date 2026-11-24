@@ -11,7 +11,7 @@ import (
 
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/questions"
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 // Aliases keep the store's API in terms of the shared types.
@@ -358,7 +358,7 @@ func existingQuestionIDs(ctx context.Context, tx pgx.Tx, formID string) (map[str
 // insertQuestion writes one question. It keeps the id of a question that already belongs to this form;
 // anything else gets a new id, so an id copied from another job can never collide.
 func insertQuestion(
-	ctx context.Context, tx pgx.Tx, tenantID, formID string, position int, q *questions.FormQuestion,
+	ctx context.Context, tx pgx.Tx, tenantID, formID string, position int, q *formschema.FormQuestion,
 	existing map[string]bool,
 ) error {
 	qid := strings.ToLower(q.ID)
@@ -512,16 +512,16 @@ func loadSkills(ctx context.Context, tx pgx.Tx, id string) ([]jobs.Skill, error)
 	return out, rows.Err()
 }
 
-func loadForm(ctx context.Context, tx pgx.Tx, id string) ([]questions.FormQuestion, error) {
+func loadForm(ctx context.Context, tx pgx.Tx, id string) ([]formschema.FormQuestion, error) {
 	rows, err := tx.Query(ctx, loadFormSQL, id)
 	if err != nil {
 		return nil, fmt.Errorf("hiringstore: load form: %w", err)
 	}
 	defer rows.Close()
-	out := []questions.FormQuestion{}
+	out := []formschema.FormQuestion{}
 	for rows.Next() {
 		var (
-			q        questions.FormQuestion
+			q        formschema.FormQuestion
 			config   []byte
 			knockout []byte
 		)
@@ -538,15 +538,15 @@ func loadForm(ctx context.Context, tx pgx.Tx, id string) ([]questions.FormQuesti
 	return out, rows.Err()
 }
 
-func loadDeclarations(ctx context.Context, tx pgx.Tx, id string) ([]questions.Declaration, error) {
+func loadDeclarations(ctx context.Context, tx pgx.Tx, id string) ([]formschema.Declaration, error) {
 	rows, err := tx.Query(ctx, loadDeclarationsSQL, id)
 	if err != nil {
 		return nil, fmt.Errorf("hiringstore: load declarations: %w", err)
 	}
 	defer rows.Close()
-	out := []questions.Declaration{}
+	out := []formschema.Declaration{}
 	for rows.Next() {
-		var d questions.Declaration
+		var d formschema.Declaration
 		if err = rows.Scan(&d.Category, &d.LegalCondition, &d.Purpose); err != nil {
 			return nil, fmt.Errorf("hiringstore: scan declaration: %w", err)
 		}

@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package openhr.events.v1;
+
+import "openhr/notifications/v1/notifications.proto";
+
+// EmailRequested is published by any service from inside its own database
+// transaction (via the service's event outbox) and consumed by notifications. It
+// replaces today's transactional EnqueueTx into the shared River queue
+// (handler/auth_handlers.go:832 and siblings). The CloudEvent id is the idempotency
+// key. CloudEvent type: notifications.email.requested.
+message EmailRequested {
+  openhr.notifications.v1.EmailType type = 1;
+  string to = 2;
+  // Template variables as a JSON object. May contain one-time secrets; the transport
+  // must be internal-only and the payload must not be logged.
+  string data_json = 3;
+  string region = 4;
+}
+
+// EmailSent is emitted by notifications after delivery, so producers can mark
+// state (for example hiring email outbox rows) done. CloudEvent type:
+// notifications.email.sent.
+message EmailSent {
+  string request_event_id = 1;
+  openhr.notifications.v1.EmailType type = 2;
+  bool delivered = 3;
+  string failure_reason = 4;
+}

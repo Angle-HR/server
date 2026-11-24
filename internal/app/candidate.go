@@ -64,7 +64,7 @@ func newPublicHandler(
 		Limiter:   redislimit.New(rdb),
 		Logger:    log,
 		Sealer:    newKeyring(log),
-		NoticeURL: noticeURL(siteURL),
+		NoticeURL: noticeURL(config.NormalizePublicAPIURL(cfg.PublicAPIURL)),
 	}
 	if hasher.Enabled() {
 		app.EmailHash = hasher.Hash
@@ -155,8 +155,10 @@ func publicSiteURL(cfg config.Config) string {
 	return siteURL
 }
 
-func noticeURL(siteURL string) func(publicID string) string {
-	return func(publicID string) string { return siteURL + "/j/" + publicID + "/privacy" }
+// noticeURL points at the API origin: the applicant privacy notice is rendered by the server (versioned legal
+// text), not by the frontend.
+func noticeURL(apiURL string) func(publicID string) string {
+	return func(publicID string) string { return apiURL + "/j/" + publicID + "/privacy" }
 }
 
 // newApplicationsService serves the hiring team's applications routes: one service per region, over the region's
@@ -166,7 +168,6 @@ func newApplicationsService(
 	cfg config.Config, router *dbrouter.DBRouter, log *slog.Logger,
 ) hiringhttp.RegionalApplications {
 	hasher := newReapplyHasher(log)
-	siteURL := publicSiteURL(cfg)
 	return func(reg region.Region) (*applications.Service, error) {
 		p, err := router.DB(reg)
 		if err != nil {
@@ -177,7 +178,7 @@ func newApplicationsService(
 			Store:     &appstore.Store{DB: p, Jobs: jobs, Region: string(reg)},
 			Jobs:      jobs,
 			Hasher:    hasher,
-			NoticeURL: noticeURL(siteURL),
+			NoticeURL: noticeURL(config.NormalizePublicAPIURL(cfg.PublicAPIURL)),
 		}
 		if files, ferr := regionStorage(router, reg); ferr == nil {
 			svc.Files = files

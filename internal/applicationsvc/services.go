@@ -43,7 +43,6 @@ type ServicesDeps struct {
 
 // NewServices builds the services the way the monolith does (internal/app/candidate.go), over d.Jobs.
 func NewServices(d ServicesDeps) *Services {
-	siteURL := publicSiteURL(d.Config)
 	hasher := newReapplyHasher(d.Log)
 	pool := func(reg string) (appstore.DB, error) {
 		p, err := d.Router.DB(region.Region(reg))
@@ -58,7 +57,7 @@ func NewServices(d ServicesDeps) *Services {
 		Limiter:   redislimit.New(d.Redis),
 		Logger:    d.Log,
 		Sealer:    newKeyring(d.Log),
-		NoticeURL: noticeURL(siteURL),
+		NoticeURL: noticeURL(config.NormalizePublicAPIURL(d.Config.PublicAPIURL)),
 	}
 	if hasher.Enabled() {
 		apps.EmailHash = hasher.Hash
@@ -92,7 +91,7 @@ func NewServices(d ServicesDeps) *Services {
 			Store:     &appstore.Store{DB: p, Jobs: jobs, Region: string(reg)},
 			Jobs:      jobs,
 			Hasher:    hasher,
-			NoticeURL: noticeURL(siteURL),
+			NoticeURL: noticeURL(config.NormalizePublicAPIURL(d.Config.PublicAPIURL)),
 		}
 		if files, ferr := d.Router.Blob(reg); ferr == nil {
 			svc.Files = files
@@ -195,6 +194,8 @@ func publicSiteURL(cfg config.Config) string {
 	return siteURL
 }
 
-func noticeURL(siteURL string) func(publicID string) string {
-	return func(publicID string) string { return siteURL + "/j/" + publicID + "/privacy" }
+// noticeURL points at the API origin: the applicant privacy notice is rendered by the server (versioned legal
+// text), not by the frontend.
+func noticeURL(apiURL string) func(publicID string) string {
+	return func(publicID string) string { return apiURL + "/j/" + publicID + "/privacy" }
 }

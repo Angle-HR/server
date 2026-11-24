@@ -85,8 +85,9 @@ to hiring, `/organizations/invites` to identity. Set a `*_REMOTE` flag and its `
 
 ## Public job link (`PUBLIC_SITE_URL`)
 
-The publish dialog's share link, the careers page's Apply button and the candidate privacy-notice link are built
-from `PUBLIC_SITE_URL`, falling back to `PUBLIC_API_URL`. Set it to the frontend origin that serves the job page
+The publish dialog's share link and the careers page's Apply button are built from `PUBLIC_SITE_URL`, falling back to
+`PUBLIC_API_URL`. The candidate privacy-notice link (`/j/{public_id}/privacy`, versioned legal text rendered by the
+server) always uses `PUBLIC_API_URL`. Set it to the frontend origin that serves the job page
 `/j/{public_id}` and the apply page `/j/{public_id}/apply`:
 
 | Environment | `PUBLIC_SITE_URL` | `ALLOWED_ORIGINS` / `CORS_ALLOWED_ORIGINS` |

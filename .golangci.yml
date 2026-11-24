@@ -41,7 +41,9 @@ linters:
     - bodyclose
     - contextcheck
     - copyloopvar
+    - depguard
     - cyclop
+    - depguard
     - dupl
     - durationcheck
     - exhaustive
@@ -73,6 +75,209 @@ linters:
     - whitespace
 
   settings:
+    # Ports and adapters: cloud SDKs are imported only inside the adapter packages under pkg/platform. Everything
+    # else depends on the ports (pkg/platform/blob, pkg/platform/secrets, pkg/events) and stays cloud-neutral.
+    depguard:
+      rules:
+        cloud-sdks:
+          files:
+            - "$all"
+            - "!**/pkg/platform/**/s3compat/**"
+            - "!**/pkg/platform/**/azureblob/**"
+          deny:
+            - pkg: github.com/aws/aws-sdk-go
+              desc: "AWS SDK is only allowed in a pkg/platform/**/s3compat adapter package"
+            - pkg: github.com/aws/aws-sdk-go-v2
+              desc: "AWS SDK is only allowed in a pkg/platform/**/s3compat adapter package"
+            - pkg: github.com/minio/minio-go
+              desc: "the S3 client is only allowed in a pkg/platform/**/s3compat adapter package"
+            - pkg: github.com/Azure/azure-sdk-for-go
+              desc: "Azure SDK is only allowed in a pkg/platform/**/azureblob adapter package"
+            - pkg: cloud.google.com/go
+              desc: "GCP SDK is not allowed outside an adapter package"
+            - pkg: google.golang.org/api
+              desc: "GCP SDK is not allowed outside an adapter package"
+        # The event layer is cloud neutral: broker and cloud specifics live behind its ports, never in the SDKs.
+        events-no-cloud:
+          files:
+            - "**/pkg/events/**"
+          deny:
+            - pkg: "github.com/aws"
+              desc: "pkg/events must stay cloud neutral; use the ports"
+            - pkg: "github.com/Azure"
+              desc: "pkg/events must stay cloud neutral; use the ports"
+            - pkg: "cloud.google.com"
+              desc: "pkg/events must stay cloud neutral; use the ports"
+
+        # ---- Service boundaries (docs/microservices/BOUNDARIES.md, docs/microservices/hardening.md) ----
+        # Each rule denies imports that would couple a service (or the shared library) to another service's code.
+        # They describe the target architecture and hold on today's tree (checked with `go list`). The one known
+        # exception, internal/hiring/hiringhttp -> the applications packages, is not listed: enable a
+        # hiring-no-applications rule when hiring-svc has cut it. Prefix matching means internal/app (the
+        # composition root) cannot be denied without also matching internal/applicationsvc, so it is not listed.
+        # NOTE: golangci-lint panics on the Go toolchain used for this work, so these rules were validated against
+        # `go list` import data only. Run `golangci-lint run` on a supported toolchain in CI before relying on them.
+        shared-library-independent:
+          files:
+            - "**/pkg/**"
+          deny:
+            - pkg: github.com/Angle-HR/server/internal/hiring
+              desc: "pkg/* is the shared library: it must not depend on a service's code"
+            - pkg: github.com/Angle-HR/server/internal/kyb
+              desc: "pkg/* is the shared library: it must not depend on a service's code"
+            - pkg: github.com/Angle-HR/server/internal/handler
+              desc: "pkg/* is the shared library: it must not depend on a service's code"
+            - pkg: github.com/Angle-HR/server/internal/auth
+              desc: "pkg/* is the shared library: it must not depend on a service's code"
+            - pkg: github.com/Angle-HR/server/internal/admin
+              desc: "pkg/* is the shared library: it must not depend on a service's code"
+            - pkg: github.com/Angle-HR/server/internal/onboarding
+              desc: "pkg/* is the shared library: it must not depend on a service's code"
+            - pkg: github.com/Angle-HR/server/internal/org
+              desc: "pkg/* is the shared library: it must not depend on a service's code"
+            - pkg: github.com/Angle-HR/server/internal/query
+              desc: "pkg/* is the shared library: it must not depend on a service's code"
+            - pkg: github.com/Angle-HR/server/internal/bff
+              desc: "pkg/* is the shared library: it must not depend on a service's code"
+            - pkg: github.com/Angle-HR/server/internal/applicationsvc
+              desc: "pkg/* is the shared library: it must not depend on a service's code"
+            - pkg: github.com/Angle-HR/server/internal/notifications
+              desc: "pkg/* is the shared library: it must not depend on a service's code"
+        bff-no-domain:
+          files:
+            - "**/internal/bff/**"
+            - "**/cmd/web-bff/**"
+            - "**/cmd/admin-bff/**"
+          deny:
+            - pkg: github.com/Angle-HR/server/internal/hiring
+              desc: "a BFF proxies and composes; it must not import domain code"
+            - pkg: github.com/Angle-HR/server/internal/kyb
+              desc: "a BFF proxies and composes; it must not import domain code"
+            - pkg: github.com/Angle-HR/server/internal/handler
+              desc: "a BFF proxies and composes; it must not import domain code"
+            - pkg: github.com/Angle-HR/server/internal/auth
+              desc: "a BFF proxies and composes; it must not import domain code"
+            - pkg: github.com/Angle-HR/server/internal/admin
+              desc: "a BFF proxies and composes; it must not import domain code"
+            - pkg: github.com/Angle-HR/server/internal/onboarding
+              desc: "a BFF proxies and composes; it must not import domain code"
+            - pkg: github.com/Angle-HR/server/internal/org
+              desc: "a BFF proxies and composes; it must not import domain code"
+            - pkg: github.com/Angle-HR/server/internal/query
+              desc: "a BFF proxies and composes; it must not import domain code"
+            - pkg: github.com/Angle-HR/server/internal/applicationsvc
+              desc: "a BFF proxies and composes; it must not import domain code"
+            - pkg: github.com/Angle-HR/server/internal/notifications
+              desc: "a BFF proxies and composes; it must not import domain code"
+            - pkg: github.com/Angle-HR/server/internal/mailer
+              desc: "a BFF proxies and composes; it must not import domain code"
+        notifications-leaf:
+          files:
+            - "**/internal/notifications/**"
+            - "**/cmd/notifications/**"
+          deny:
+            - pkg: github.com/Angle-HR/server/internal/hiring
+              desc: "notifications is a leaf: it is depended on, it does not depend on other services"
+            - pkg: github.com/Angle-HR/server/internal/kyb
+              desc: "notifications is a leaf: it is depended on, it does not depend on other services"
+            - pkg: github.com/Angle-HR/server/internal/handler
+              desc: "notifications is a leaf: it is depended on, it does not depend on other services"
+            - pkg: github.com/Angle-HR/server/internal/auth
+              desc: "notifications is a leaf: it is depended on, it does not depend on other services"
+            - pkg: github.com/Angle-HR/server/internal/admin
+              desc: "notifications is a leaf: it is depended on, it does not depend on other services"
+            - pkg: github.com/Angle-HR/server/internal/onboarding
+              desc: "notifications is a leaf: it is depended on, it does not depend on other services"
+            - pkg: github.com/Angle-HR/server/internal/org
+              desc: "notifications is a leaf: it is depended on, it does not depend on other services"
+            - pkg: github.com/Angle-HR/server/internal/query
+              desc: "notifications is a leaf: it is depended on, it does not depend on other services"
+            - pkg: github.com/Angle-HR/server/internal/bff
+              desc: "notifications is a leaf: it is depended on, it does not depend on other services"
+            - pkg: github.com/Angle-HR/server/internal/applicationsvc
+              desc: "notifications is a leaf: it is depended on, it does not depend on other services"
+            - pkg: github.com/Angle-HR/server/internal/session
+              desc: "notifications is a leaf: it is depended on, it does not depend on other services"
+            - pkg: github.com/Angle-HR/server/internal/rbac
+              desc: "notifications is a leaf: it is depended on, it does not depend on other services"
+        applications-side-no-hiring:
+          files:
+            - "**/internal/hiring/apphttp/**"
+            - "**/internal/hiring/appevents/**"
+            - "**/internal/hiring/apply/**"
+            - "**/internal/hiring/applications/**"
+            - "**/internal/hiring/appjobs/**"
+            - "**/internal/hiring/appstore/**"
+            - "**/internal/hiring/reapply/**"
+            - "**/internal/hiring/retention/**"
+            - "**/internal/hiring/uploads/**"
+            - "**/internal/sensitive/**"
+          deny:
+            - pkg: github.com/Angle-HR/server/internal/hiring/draft
+              desc: "the applications side learns about jobs through appjobs.JobSource and pkg/formschema"
+            - pkg: github.com/Angle-HR/server/internal/hiring/drafttest
+              desc: "the applications side learns about jobs through appjobs.JobSource and pkg/formschema"
+            - pkg: github.com/Angle-HR/server/internal/hiring/jobs
+              desc: "the applications side learns about jobs through appjobs.JobSource and pkg/formschema"
+            - pkg: github.com/Angle-HR/server/internal/hiring/jobsource
+              desc: "the applications side learns about jobs through appjobs.JobSource and pkg/formschema"
+            - pkg: github.com/Angle-HR/server/internal/hiring/callerresolver
+              desc: "the applications side learns about jobs through appjobs.JobSource and pkg/formschema"
+            - pkg: github.com/Angle-HR/server/internal/hiring/jobevents
+              desc: "the applications side learns about jobs through appjobs.JobSource and pkg/formschema"
+            - pkg: github.com/Angle-HR/server/internal/hiring/public
+              desc: "the applications side learns about jobs through appjobs.JobSource and pkg/formschema"
+            - pkg: github.com/Angle-HR/server/internal/hiring/hiringtypes
+              desc: "the applications side learns about jobs through appjobs.JobSource and pkg/formschema"
+            - pkg: github.com/Angle-HR/server/internal/hiring/hiringhttp
+              desc: "the applications side learns about jobs through appjobs.JobSource and pkg/formschema"
+            - pkg: github.com/Angle-HR/server/internal/hiring/hiringstore
+              desc: "the applications side learns about jobs through appjobs.JobSource and pkg/formschema"
+            - pkg: github.com/Angle-HR/server/internal/hiring/lifecycle
+              desc: "the applications side learns about jobs through appjobs.JobSource and pkg/formschema"
+            - pkg: github.com/Angle-HR/server/internal/hiring/gates
+              desc: "the applications side learns about jobs through appjobs.JobSource and pkg/formschema"
+            - pkg: github.com/Angle-HR/server/internal/hiring/questions
+              desc: "the applications side learns about jobs through appjobs.JobSource and pkg/formschema"
+            - pkg: github.com/Angle-HR/server/internal/hiring/expiry
+              desc: "the applications side learns about jobs through appjobs.JobSource and pkg/formschema"
+        applications-service-no-monolith:
+          files:
+            - "**/internal/applicationsvc/**"
+            - "**/cmd/applications/**"
+          deny:
+            - pkg: github.com/Angle-HR/server/internal/handler
+              desc: "the applications service must not import identity or org handlers and stores"
+            - pkg: github.com/Angle-HR/server/internal/kyb
+              desc: "the applications service must not import identity or org handlers and stores"
+            - pkg: github.com/Angle-HR/server/internal/onboarding
+              desc: "the applications service must not import identity or org handlers and stores"
+            - pkg: github.com/Angle-HR/server/internal/admin
+              desc: "the applications service must not import identity or org handlers and stores"
+            - pkg: github.com/Angle-HR/server/internal/bff
+              desc: "the applications service must not import identity or org handlers and stores"
+        hiring-no-identity-org:
+          files:
+            - "**/internal/hiring/**"
+          deny:
+            - pkg: github.com/Angle-HR/server/internal/kyb
+              desc: "hiring reaches org and identity through gRPC or events, not their packages"
+            - pkg: github.com/Angle-HR/server/internal/onboarding
+              desc: "hiring reaches org and identity through gRPC or events, not their packages"
+            - pkg: github.com/Angle-HR/server/internal/admin
+              desc: "hiring reaches org and identity through gRPC or events, not their packages"
+            - pkg: github.com/Angle-HR/server/internal/handler
+              desc: "hiring reaches org and identity through gRPC or events, not their packages"
+        org-no-hiring:
+          files:
+            - "**/internal/kyb/**"
+            - "**/internal/onboarding/**"
+          deny:
+            - pkg: github.com/Angle-HR/server/internal/hiring
+              desc: "org must not import hiring or applications code"
+            - pkg: github.com/Angle-HR/server/internal/applicationsvc
+              desc: "org must not import hiring or applications code"
+
     errcheck:
       check-type-assertions: true
       check-blank: true

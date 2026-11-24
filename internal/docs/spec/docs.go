@@ -19,7 +19,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "produces": [
@@ -65,7 +65,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminAuditListEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminAuditListEnvelope"
                         }
                     }
                 }
@@ -73,7 +73,7 @@ const docTemplate = `{
         },
         "/admin/auth/accept-invite": {
             "post": {
-                "description": "Sets name and password for an invited admin and returns JWT tokens.",
+                "description": "Sets name and password for an invited admin and starts an admin cookie session.",
                 "consumes": [
                     "application/json"
                 ],
@@ -91,7 +91,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminAcceptInviteRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AdminAcceptInviteRequest"
                         }
                     }
                 ],
@@ -99,7 +99,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminTokenEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminTokenEnvelope"
                         }
                     },
                     "400": {
@@ -146,7 +146,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminInvitePreviewEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminInvitePreviewEnvelope"
                         }
                     },
                     "404": {
@@ -166,7 +166,7 @@ const docTemplate = `{
         },
         "/admin/auth/login": {
             "post": {
-                "description": "Authenticates an admin user and returns admin JWT tokens.",
+                "description": "Authenticates an admin user and starts an admin cookie session (separate from the product session) and returns the CSRF token. An admin with TOTP enabled gets no session: the response is {totp_required:true, expires_in:300} plus the single-use admin pre-auth cookie, and POST /admin/auth/login/totp completes the login. When ADMIN_TOTP_REQUIRED is on and the admin has not enrolled, the session is issued with totp_enrollment_required:true and every route except /admin/auth/{me,totp/enroll,totp/confirm} answers 403 TOTP_ENROLLMENT_REQUIRED until they enrol.",
                 "consumes": [
                     "application/json"
                 ],
@@ -184,7 +184,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminLoginRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AdminLoginRequest"
                         }
                     }
                 ],
@@ -192,7 +192,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminTokenEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminTokenEnvelope"
                         }
                     },
                     "400": {
@@ -216,11 +216,83 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/auth/login/totp": {
+            "post": {
+                "description": "Completes login for an admin who has TOTP enabled. Requires the single-use admin pre-auth cookie set by POST /admin/auth/login (valid 5 minutes, separate from the product pre-auth) plus a valid authenticator code, then starts the admin session (MFA satisfied) and returns the CSRF token. A wrong code keeps the pre-auth alive; five wrong codes in five minutes lock the admin's TOTP checks for fifteen (429 too_many_attempts).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin/auth"
+                ],
+                "summary": "Complete admin login with TOTP",
+                "parameters": [
+                    {
+                        "description": "Code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_identityhttp.AuthLoginTOTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_identityhttp.AdminTokenEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/auth/logout": {
+            "post": {
+                "description": "Revokes the admin session and clears the admin cookies. Idempotent.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin/auth"
+                ],
+                "summary": "Admin logout",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_identityhttp.AuthMessageEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/auth/me": {
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "description": "Returns the authenticated admin profile, roles, and permissions.",
@@ -235,7 +307,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminMeEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminMeEnvelope"
                         }
                     },
                     "401": {
@@ -249,7 +321,32 @@ const docTemplate = `{
         },
         "/admin/auth/refresh": {
             "post": {
-                "description": "Issues a new admin access/refresh pair from a valid admin refresh token.",
+                "description": "Removed: admin sessions are server-side with a sliding idle timeout. Always returns 410 SESSION_REFRESH_REMOVED.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin/auth"
+                ],
+                "summary": "Admin token refresh (removed)",
+                "responses": {
+                    "410": {
+                        "description": "Gone",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/auth/totp/confirm": {
+            "post": {
+                "security": [
+                    {
+                        "AdminSessionCookie": []
+                    }
+                ],
+                "description": "Validates a code from the authenticator app and enables TOTP. Every other session of the admin is revoked and the caller gets a fresh session (MFA satisfied) with a new CSRF token in the body.",
                 "consumes": [
                     "application/json"
                 ],
@@ -259,15 +356,15 @@ const docTemplate = `{
                 "tags": [
                     "admin/auth"
                 ],
-                "summary": "Admin token refresh",
+                "summary": "Confirm admin TOTP enrolment",
                 "parameters": [
                     {
-                        "description": "Refresh payload",
+                        "description": "Code",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminRefreshRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthTOTPConfirmRequest"
                         }
                     }
                 ],
@@ -275,7 +372,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminTokenEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminTokenEnvelope"
                         }
                     },
                     "400": {
@@ -289,6 +386,106 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/auth/totp/disable": {
+            "post": {
+                "security": [
+                    {
+                        "AdminSessionCookie": []
+                    }
+                ],
+                "description": "Disables TOTP for the signed-in admin after checking the password and a current authenticator code, and signs the admin out everywhere. Refused (403) while ADMIN_TOTP_REQUIRED is on: a superadmin can reset another admin instead.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin/auth"
+                ],
+                "summary": "Disable own admin TOTP",
+                "parameters": [
+                    {
+                        "description": "Password and code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_identityhttp.AuthTOTPDisableRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_identityhttp.AuthMessageEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/auth/totp/enroll": {
+            "post": {
+                "security": [
+                    {
+                        "AdminSessionCookie": []
+                    }
+                ],
+                "description": "Generates a new authenticator secret and otpauth URL for the signed-in admin (stored encrypted, not active until confirmed). Allowed for a session that still has to enrol when ADMIN_TOTP_REQUIRED is on. 409 when TOTP is already enabled.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin/auth"
+                ],
+                "summary": "Start admin TOTP enrolment",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_identityhttp.AuthTOTPEnrollEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
                     }
                 }
             }
@@ -297,7 +494,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "produces": [
@@ -328,7 +525,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "consumes": [
@@ -373,7 +570,7 @@ const docTemplate = `{
             "patch": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "consumes": [
@@ -421,11 +618,67 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/companies/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "AdminSessionCookie": []
+                    }
+                ],
+                "description": "Superadmin only. Org marks the company deleted and emits org.company.deleted.v1; applications and hiring remove their data when they consume it. Repeating it is harmless. Needs ORG_APPLY=grpc.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin/companies"
+                ],
+                "summary": "Delete a company",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Company ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Company region (uk, us, eu, africa, asia)",
+                        "name": "region",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_identityhttp.AdminDeleteCompanyEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/jobs": {
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "produces": [
@@ -481,7 +734,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "produces": [
@@ -514,7 +767,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "description": "Replays dead jobs, runs scheduled jobs now, or requeues failed jobs as pending.",
@@ -548,7 +801,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "produces": [
@@ -562,7 +815,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminPermissionsEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminPermissionsEnvelope"
                         }
                     }
                 }
@@ -572,7 +825,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "produces": [
@@ -586,7 +839,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminRolesEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminRolesEnvelope"
                         }
                     }
                 }
@@ -594,7 +847,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "consumes": [
@@ -614,7 +867,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminCreateRoleRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AdminCreateRoleRequest"
                         }
                     }
                 ],
@@ -622,7 +875,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminRoleEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminRoleEnvelope"
                         }
                     }
                 }
@@ -632,7 +885,7 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "produces": [
@@ -660,7 +913,7 @@ const docTemplate = `{
             "patch": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "consumes": [
@@ -687,7 +940,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminPatchRoleRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AdminPatchRoleRequest"
                         }
                     }
                 ],
@@ -695,7 +948,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminRoleEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminRoleEnvelope"
                         }
                     }
                 }
@@ -705,7 +958,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "produces": [
@@ -719,7 +972,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminStaffListEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminStaffListEnvelope"
                         }
                     }
                 }
@@ -727,7 +980,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "description": "Creates an inactive staff user and emails an invite token to set name and password.",
@@ -748,7 +1001,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminCreateStaffRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AdminCreateStaffRequest"
                         }
                     }
                 ],
@@ -756,7 +1009,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminStaffEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminStaffEnvelope"
                         }
                     }
                 }
@@ -766,7 +1019,7 @@ const docTemplate = `{
             "patch": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "consumes": [
@@ -793,7 +1046,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminPatchStaffRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AdminPatchStaffRequest"
                         }
                     }
                 ],
@@ -801,7 +1054,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminStaffEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminStaffEnvelope"
                         }
                     }
                 }
@@ -811,7 +1064,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "produces": [
@@ -834,7 +1087,53 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminStaffEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminStaffEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/staff/{id}/totp/reset": {
+            "post": {
+                "security": [
+                    {
+                        "AdminSessionCookie": []
+                    }
+                ],
+                "description": "Superadmin only (role superadmin plus admins:write). Clears the target admin's authenticator, revokes all their sessions and lifts their TOTP lockout, so they enrol again at next login (forced when ADMIN_TOTP_REQUIRED is on). Audited as admin.totp.reset. Resetting yourself is refused: use disable.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin/staff"
+                ],
+                "summary": "Reset an admin's TOTP",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Staff id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_identityhttp.AuthMessageEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     }
                 }
@@ -844,7 +1143,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "produces": [
@@ -884,7 +1183,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminUserListEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminUserListEnvelope"
                         }
                     }
                 }
@@ -894,7 +1193,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "produces": [
@@ -917,7 +1216,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminUserDetailEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminUserDetailEnvelope"
                         }
                     }
                 }
@@ -925,7 +1224,7 @@ const docTemplate = `{
             "patch": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "description": "Soft-delete or restore a regional account (` + "`" + `deleted: true|false` + "`" + `).",
@@ -953,7 +1252,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminUserPatchRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AdminUserPatchRequest"
                         }
                     }
                 ],
@@ -961,7 +1260,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminUserDetailEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminUserDetailEnvelope"
                         }
                     }
                 }
@@ -971,7 +1270,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "produces": [
@@ -999,7 +1298,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminVerificationListEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminVerificationListEnvelope"
                         }
                     },
                     "401": {
@@ -1021,7 +1320,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "description": "Returns the submitted details from the organization's region so the operator can compare them with the government portal.",
@@ -1045,7 +1344,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminVerificationDetailEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminVerificationDetailEnvelope"
                         }
                     },
                     "404": {
@@ -1061,7 +1360,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "AdminSessionCookie": []
                     }
                 ],
                 "description": "Records the operator's decision. A rejection needs a valid failure reason and emails the owner.",
@@ -1089,7 +1388,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminVerificationReviewRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AdminVerificationReviewRequest"
                         }
                     }
                 ],
@@ -1097,7 +1396,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminVerificationReviewEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminVerificationReviewEnvelope"
                         }
                     },
                     "400": {
@@ -1121,241 +1420,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/admin/waitlist": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "admin/waitlist"
-                ],
-                "summary": "List waitlist entries",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Region filter",
-                        "name": "region",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Search email or name",
-                        "name": "q",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "pending|complete",
-                        "name": "onboarding",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Include soft-deleted",
-                        "name": "include_deleted",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page size (max 100)",
-                        "name": "limit",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminWaitlistListEnvelope"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/waitlist/{uuid}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "admin/waitlist"
-                ],
-                "summary": "Get waitlist entry",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Waitlist UUID",
-                        "name": "uuid",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Region hint",
-                        "name": "region",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminWaitlistDetailEnvelope"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "tags": [
-                    "admin/waitlist"
-                ],
-                "summary": "Soft-delete waitlist entry",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Waitlist UUID",
-                        "name": "uuid",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Region hint",
-                        "name": "region",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    }
-                }
-            },
-            "patch": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "admin/waitlist"
-                ],
-                "summary": "Update waitlist entry",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Waitlist UUID",
-                        "name": "uuid",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Region hint",
-                        "name": "region",
-                        "in": "query"
-                    },
-                    {
-                        "description": "Patch payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminWaitlistPatchRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminWaitlistDetailEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/waitlist/{uuid}/restore": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "admin/waitlist"
-                ],
-                "summary": "Restore soft-deleted waitlist entry",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Waitlist UUID",
-                        "name": "uuid",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Region hint",
-                        "name": "region",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminWaitlistDetailEnvelope"
-                        }
-                    }
-                }
-            }
-        },
         "/auth/accept-invite": {
             "post": {
-                "description": "Creates or links a product user, joins the organization, marks onboarding complete, and returns JWTs.",
+                "description": "Creates or links a product user, joins the organization, marks onboarding complete, and starts a cookie session (response carries csrf_token).",
                 "consumes": [
                     "application/json"
                 ],
@@ -1373,7 +1440,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthAcceptInviteRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthAcceptInviteRequest"
                         }
                     }
                 ],
@@ -1381,7 +1448,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthTokenEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthSessionEnvelope"
                         }
                     },
                     "400": {
@@ -1437,7 +1504,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthForgotPasswordRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthForgotPasswordRequest"
                         }
                     }
                 ],
@@ -1445,7 +1512,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthMessageEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthMessageEnvelope"
                         }
                     },
                     "400": {
@@ -1465,7 +1532,7 @@ const docTemplate = `{
         },
         "/auth/invite/{token}": {
             "get": {
-                "description": "Returns invite preview for a raw invite token. Public; no JWT required.",
+                "description": "Returns invite preview for a raw invite token. Public; no session required.",
                 "produces": [
                     "application/json"
                 ],
@@ -1486,7 +1553,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthInviteEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthInviteEnvelope"
                         }
                     },
                     "404": {
@@ -1512,7 +1579,7 @@ const docTemplate = `{
         },
         "/auth/login": {
             "post": {
-                "description": "Authenticates a verified user and returns JWT tokens. When credentials are valid but email is unverified, returns 403 with a new verification session in error.details.",
+                "description": "Authenticates a verified user and starts a cookie session (or an MFA pre-auth session when TOTP is enabled). When credentials are valid but email is unverified, returns 403 with a new verification session in error.details.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1530,7 +1597,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthLoginRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthLoginRequest"
                         }
                     }
                 ],
@@ -1538,7 +1605,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthTokenEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthSessionEnvelope"
                         }
                     },
                     "400": {
@@ -1576,7 +1643,7 @@ const docTemplate = `{
         },
         "/auth/login/otp/request": {
             "post": {
-                "description": "Sends a 6-digit sign-in code. Separate from signup email verification.",
+                "description": "Sends a 6-digit sign-in code. Separate from signup email verification. Always answers 200 with a session, even for unknown or unverified emails (no code is sent for those and verification fails like a wrong code).",
                 "consumes": [
                     "application/json"
                 ],
@@ -1594,7 +1661,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthLoginOTPRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthLoginOTPRequest"
                         }
                     }
                 ],
@@ -1602,17 +1669,11 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthSignupEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthSignupEnvelope"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1634,7 +1695,7 @@ const docTemplate = `{
         },
         "/auth/login/otp/verify": {
             "post": {
-                "description": "Exchanges a login OTP for JWTs (or MFA challenge when TOTP is enabled).",
+                "description": "Exchanges a login OTP for a cookie session and csrf_token (or an MFA pre-auth cookie when TOTP is enabled).",
                 "consumes": [
                     "application/json"
                 ],
@@ -1652,7 +1713,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthLoginOTPVerifyRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthLoginOTPVerifyRequest"
                         }
                     }
                 ],
@@ -1660,7 +1721,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthTokenEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthSessionEnvelope"
                         }
                     },
                     "400": {
@@ -1686,7 +1747,7 @@ const docTemplate = `{
         },
         "/auth/login/totp": {
             "post": {
-                "description": "Exchanges an MFA challenge token and authenticator code for JWTs.",
+                "description": "Completes login for a TOTP-enabled user. Requires the single-use MFA pre-auth cookie set by login (valid 5 minutes) plus a valid authenticator code, then issues the full session cookie and returns the CSRF token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1704,7 +1765,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthLoginTOTPRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthLoginTOTPRequest"
                         }
                     }
                 ],
@@ -1712,7 +1773,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthTokenEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthSessionEnvelope"
                         }
                     },
                     "400": {
@@ -1738,10 +1799,7 @@ const docTemplate = `{
         },
         "/auth/logout": {
             "post": {
-                "description": "Revokes the provided refresh token. Idempotent.",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Revokes the caller's session and clears the session cookies. Idempotent: succeeds without a session.",
                 "produces": [
                     "application/json"
                 ],
@@ -1749,28 +1807,11 @@ const docTemplate = `{
                     "auth"
                 ],
                 "summary": "Logout",
-                "parameters": [
-                    {
-                        "description": "Logout payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthLogoutRequest"
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthMessageEnvelope"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthMessageEnvelope"
                         }
                     },
                     "500": {
@@ -1786,7 +1827,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Returns the authenticated product user, onboarding progress, and the caller's company roles and permissions (empty until they belong to a company).",
@@ -1801,7 +1842,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthMeEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthMeEnvelope"
                         }
                     },
                     "401": {
@@ -1821,49 +1862,17 @@ const docTemplate = `{
         },
         "/auth/refresh": {
             "post": {
-                "description": "Exchanges a valid refresh token for a new access token.",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Removed: sessions are server-side with a sliding idle timeout, so there is nothing to refresh. Always returns 410 SESSION_REFRESH_REMOVED. Call GET /auth/me to check the session.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "auth"
                 ],
-                "summary": "Refresh access token",
-                "parameters": [
-                    {
-                        "description": "Refresh payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthRefreshRequest"
-                        }
-                    }
-                ],
+                "summary": "Refresh (removed)",
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthRefreshEnvelope"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
+                    "410": {
+                        "description": "Gone",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -1891,7 +1900,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthResendVerificationRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthResendVerificationRequest"
                         }
                     }
                 ],
@@ -1899,7 +1908,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthSignupEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthSignupEnvelope"
                         }
                     },
                     "404": {
@@ -1925,7 +1934,7 @@ const docTemplate = `{
         },
         "/auth/reset-password": {
             "post": {
-                "description": "Sets a new password using a forgot-password token and revokes existing refresh sessions.",
+                "description": "Sets a new password using a forgot-password token and revokes all of the user's sessions.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1943,7 +1952,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthResetPasswordRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthResetPasswordRequest"
                         }
                     }
                 ],
@@ -1951,7 +1960,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthMessageEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthMessageEnvelope"
                         }
                     },
                     "400": {
@@ -1989,7 +1998,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthSignupRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthSignupRequest"
                         }
                     }
                 ],
@@ -1997,7 +2006,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthSignupEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthSignupEnvelope"
                         }
                     },
                     "400": {
@@ -2039,7 +2048,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthSignupPatchRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthSignupPatchRequest"
                         }
                     }
                 ],
@@ -2047,7 +2056,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthSignupEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthSignupEnvelope"
                         }
                     },
                     "400": {
@@ -2075,7 +2084,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Validates a code from the authenticator app and enables TOTP.",
@@ -2096,7 +2105,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthTOTPConfirmRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthTOTPConfirmRequest"
                         }
                     }
                 ],
@@ -2104,7 +2113,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthMessageEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthMessageEnvelope"
                         }
                     },
                     "400": {
@@ -2132,7 +2141,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Disables TOTP after validating password and current authenticator code.",
@@ -2153,7 +2162,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthTOTPDisableRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthTOTPDisableRequest"
                         }
                     }
                 ],
@@ -2161,7 +2170,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthMessageEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthMessageEnvelope"
                         }
                     },
                     "400": {
@@ -2189,7 +2198,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Generates a new TOTP secret and otpauth URI. Call confirm to enable.",
@@ -2204,7 +2213,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthTOTPEnrollEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthTOTPEnrollEnvelope"
                         }
                     },
                     "401": {
@@ -2230,7 +2239,7 @@ const docTemplate = `{
         },
         "/auth/verify-email": {
             "post": {
-                "description": "Validates the 6-digit OTP and returns JWT tokens with onboarding status.",
+                "description": "Validates the 6-digit OTP and starts a cookie session and returns onboarding status plus the CSRF token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2248,7 +2257,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthVerifyEmailRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthVerifyEmailRequest"
                         }
                     }
                 ],
@@ -2256,7 +2265,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthTokenEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthSessionEnvelope"
                         }
                     },
                     "400": {
@@ -2294,7 +2303,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.WaitlistBusinessTypeListEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.WaitlistBusinessTypeListEnvelope"
                         }
                     },
                     "500": {
@@ -2320,7 +2329,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.CountriesEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.CountriesEnvelope"
                         }
                     },
                     "500": {
@@ -2346,7 +2355,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.HiringFrustrationListEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.HiringFrustrationListEnvelope"
                         }
                     },
                     "500": {
@@ -2372,7 +2381,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.HiringToolListEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.HiringToolListEnvelope"
                         }
                     },
                     "500": {
@@ -2388,7 +2397,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Whether rejected candidates are blocked from reapplying (0 or 6 months) and whether candidates are emailed when rejected or hired.",
@@ -2403,7 +2412,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicantSettingsEnvelope"
+                            "$ref": "#/definitions/internal_hiring_apphttp.ApplicantSettingsEnvelope"
                         }
                     },
                     "403": {
@@ -2417,7 +2426,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Needs job.retention.set. Blocking reapplications (6 months) cannot be turned on while the server has no key for it.",
@@ -2438,7 +2447,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicantSettingsRequest"
+                            "$ref": "#/definitions/internal_hiring_apphttp.ApplicantSettingsRequest"
                         }
                     }
                 ],
@@ -2446,7 +2455,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicantSettingsEnvelope"
+                            "$ref": "#/definitions/internal_hiring_apphttp.ApplicantSettingsEnvelope"
                         }
                     },
                     "400": {
@@ -2468,7 +2477,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Fixed lists (employment type, pay, travel, visa, lawful basis, currencies, retention options), seniority, experience, industries and every market with its warnings and whether it is open.",
@@ -2493,7 +2502,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "produces": [
@@ -2521,7 +2530,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Names are unique per company ignoring case; adding an existing name returns the existing department.",
@@ -2572,7 +2581,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "The signed-in person's company roles and the permissions they add up to, such as job.export. Use it to show or hide actions; the server still checks every request.",
@@ -2609,7 +2618,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Members of the caller's company, with their roles, for the \"add people to this job\" picker. Search matches the name or email. Returns at most 50 people. Needs job.collaborator.add or job.collaborator.add_limited.",
@@ -2648,7 +2657,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Company-level switches. Automated screening (knockout questions) is off until the company's legal contact turns it on.",
@@ -2677,7 +2686,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Needs form.automated_screening.enable (Legal).",
@@ -2728,7 +2737,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "produces": [
@@ -2766,7 +2775,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Company templates plus the caller's own default setup.",
@@ -2807,7 +2816,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "The template is made from an existing job, so it always matches what the builders produce. Set as_my_default to keep the setup for the caller's future jobs (\"Keep this setup\"); otherwise name it to share it with the company. Titles and closing dates are never saved, and pay and retention only when the caller may set them.",
@@ -2858,7 +2867,7 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "produces": [
@@ -2904,7 +2913,7 @@ const docTemplate = `{
             "patch": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Send name, pinned or both. Only company templates can be changed; a personal default cannot. Pinned templates list first for the whole company.",
@@ -2968,7 +2977,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Copies a company template. Without a name the copy is called \"\u003cname\u003e (copy)\".",
@@ -3031,7 +3040,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Returns a company template's kind, name and payload in a portable form.",
@@ -3077,7 +3086,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Time zones with their current UTC offset, for jobs that are open to a time zone rather than a place.",
@@ -3112,7 +3121,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.IndustryListEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.IndustryListEnvelope"
                         }
                     },
                     "500": {
@@ -3128,7 +3137,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. applicant_count is the number of applications received and new_applicant_count the number nobody has opened yet.",
@@ -3255,7 +3264,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "All fields are optional, so the page can create a draft the first time the user saves. The draft starts from the caller's saved default setup and the standard application form unless template_id or form_template_id say otherwise.",
@@ -3305,7 +3314,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Pause, resume, close, reopen, archive or move to draft, for up to 100 jobs. Resume and reopen run the publish checks for each job; a job that fails them is skipped with the reasons. Not all-or-nothing: each job is changed on its own, and the ones that could not be are listed with the reason. The result carries each job's earlier status so the client can offer undo.",
@@ -3350,7 +3359,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "The numbers for the status tabs, in one call instead of loading every job. Takes the same filters as the jobs list (search, department, creator, assignee, employment and workplace type, location mode, market, created dates); status, cursor, limit and sort are ignored. Every status is present, zero when there are none, and all is the total. People who can only see assigned jobs are counted on those jobs only.",
@@ -3449,7 +3458,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Every job the caller may see, newest first, or only the jobs in ids. CSV is the default; format=json returns the same rows as on the jobs list. Needs job.export.",
@@ -3501,7 +3510,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Returns the job with warnings (market rules, pay advice, possible duplicates). The ETag header carries the revision to send back in If-Match.",
@@ -3539,7 +3548,7 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Only drafts can be deleted. Everything else is closed or archived instead.",
@@ -3593,7 +3602,7 @@ const docTemplate = `{
             "patch": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "\"Save as draft\": send only the fields that changed. Formats are checked, required fields are not. Pay needs job.salary_range.set and retention needs job.retention.set.",
@@ -3670,7 +3679,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "produces": [
@@ -3707,7 +3716,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Replaces the whole form. Full name and email are locked, the CV accepts PDF only, questions about current or past pay are refused, knockout rules need automated screening enabled for the company, and special category questions need a declaration and a lawful basis on the job. A knockout flags a candidate for a person to review; it never rejects anyone.",
@@ -3784,7 +3793,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Newest first, 25 per page by default (100 at most). Rows carry no answers. ` + "`" + `status` + "`" + ` can be repeated or comma separated; ` + "`" + `new=true` + "`" + ` lists applications nobody has opened. ` + "`" + `counts` + "`" + ` are for the whole job, whatever the filters. Seen by people who can see the job.",
@@ -3848,7 +3857,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationPageEnvelope"
+                            "$ref": "#/definitions/internal_hiring_apphttp.ApplicationPageEnvelope"
                         }
                     },
                     "400": {
@@ -3870,7 +3879,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Returns the answers (special category answers are never returned), the files, the flags and the review. Opening is recorded in the job's audit log; the first opening takes the application out of the job's new count. Whoever may decide a flagged application and opens it becomes its reviewer.",
@@ -3901,7 +3910,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationEnvelope"
+                            "$ref": "#/definitions/internal_hiring_apphttp.ApplicationEnvelope"
                         }
                     },
                     "404": {
@@ -3917,7 +3926,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Returns a link that works for 5 minutes and downloads the file under its original name. The request is recorded in the job's audit log. Ask again for a new link.",
@@ -3955,7 +3964,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.FileLinkEnvelope"
+                            "$ref": "#/definitions/internal_hiring_apphttp.FileLinkEnvelope"
                         }
                     },
                     "404": {
@@ -3971,7 +3980,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "` + "`" + `proceed` + "`" + ` moves it to in_review; ` + "`" + `reject` + "`" + ` rejects it. The person deciding must be the last to have opened the application (GET it first), so every flagged candidate is looked at by a person before they are decided. There is no bulk version.",
@@ -4006,7 +4015,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationReviewRequest"
+                            "$ref": "#/definitions/internal_hiring_apphttp.ApplicationReviewRequest"
                         }
                     }
                 ],
@@ -4014,7 +4023,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationResultEnvelope"
+                            "$ref": "#/definitions/internal_hiring_apphttp.ApplicationResultEnvelope"
                         }
                     },
                     "400": {
@@ -4048,7 +4057,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "received to in_review or withdrawn; in_review to rejected, hired or withdrawn; flagged to withdrawn only. A flagged application is decided through its review. rejected, hired and withdrawn are final and start the retention clock. A rejection or hire emails the candidate unless the company turned that off. Needs to be the job's creator, a hiring manager or recruiter on it, or job.manage_any.",
@@ -4083,7 +4092,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationStatusRequest"
+                            "$ref": "#/definitions/internal_hiring_apphttp.ApplicationStatusRequest"
                         }
                     }
                 ],
@@ -4091,7 +4100,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationResultEnvelope"
+                            "$ref": "#/definitions/internal_hiring_apphttp.ApplicationResultEnvelope"
                         }
                     },
                     "400": {
@@ -4125,7 +4134,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.",
@@ -4190,7 +4199,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.",
@@ -4255,7 +4264,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "The gates that apply to the job's markets, special categories and screening, with where each stands. Gates marked auto are answered from the job's own details.",
@@ -4295,7 +4304,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "The confirmation is the company's own and is written to the append-only compliance log against the caller. A confirmation stops counting when the gate's wording changes.",
@@ -4373,7 +4382,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Same body as PATCH, but the required fields (title, department, hiring option, travel, visa, employment type and, for people who can set pay, pay) must be present once applied. Moves the draft to the application form step.",
@@ -4450,7 +4459,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "produces": [
@@ -4487,7 +4496,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Replaces the rules. A rule flags a candidate for a person to review; it never rejects anyone. Rules count as automated screening, so they need Legal to have enabled screening for the company and, before publishing, the company DPIA and this job's DPIA scope confirmation.",
@@ -4558,7 +4567,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Copies the details and application form into a new draft owned by the caller. The copy has no team, no screening rules, no confirmations and no public id.",
@@ -4604,7 +4613,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Records in the audit log that the user saw the warning and kept going. The warning still shows if the job is opened again.",
@@ -4647,7 +4656,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Replaces the places a job is open to. Closed markets are rejected, an anywhere job takes no places, and the retention period is raised to the strictest minimum of the chosen markets. The response carries the market warnings.",
@@ -4718,7 +4727,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "produces": [
@@ -4761,7 +4770,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Replaces the team (the Permissions step). The creator already has access and is not listed. Team members see the job and its candidates but gain no edit rights. HR 2 can add and remove viewers on its own jobs only.",
@@ -4832,7 +4841,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.",
@@ -4897,7 +4906,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "The candidate-facing view, built the same way as the live page. It never contains knockout rules, the lawful basis, retention or the assessment link.",
@@ -4937,7 +4946,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Runs every publish check inside the same transaction as the status change: a verified company, an accepted DPA, a privacy contact, complete details, an open market, a lawful basis, the screening prerequisites and every required compliance gate. People who may not publish submit the job for approval instead. A blocked publish returns 422 with every issue.",
@@ -5002,7 +5011,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "The dry run of publishing: the same checks, nothing written. Blocking issues stop a publish; warnings do not. Also lists the compliance gates that apply and where each stands.",
@@ -5042,7 +5051,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.",
@@ -5107,7 +5116,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.",
@@ -5172,7 +5181,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "The job's public link and ready-made share links for WhatsApp, X, Facebook, LinkedIn, Telegram and email. Each link carries its channel as src, so applications show which link brought the candidate. Available once the job has been published.",
@@ -5218,7 +5227,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.",
@@ -5283,7 +5292,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.",
@@ -5348,7 +5357,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Saves business registry identification and workspace address. Business accounts only.",
@@ -5369,7 +5378,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.ProductAddressRequest"
+                            "$ref": "#/definitions/internal_orghttp.ProductAddressRequest"
                         }
                     }
                 ],
@@ -5377,7 +5386,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.ProductAddressEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.ProductAddressEnvelope"
                         }
                     },
                     "400": {
@@ -5405,7 +5414,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Returns address autocomplete suggestions for a partial query and country.",
@@ -5426,7 +5435,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AddressSearchRequest"
+                            "$ref": "#/definitions/internal_orghttp.AddressSearchRequest"
                         }
                     }
                 ],
@@ -5434,7 +5443,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AddressSearchEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.AddressSearchEnvelope"
                         }
                     },
                     "400": {
@@ -5468,7 +5477,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Verifies a search or manual address payload. Returns verification_status and optional failure_reason (not_verifiable shows manual entry).",
@@ -5489,7 +5498,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.VerifyAddressRequest"
+                            "$ref": "#/definitions/internal_orghttp.VerifyAddressRequest"
                         }
                     }
                 ],
@@ -5497,7 +5506,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.VerifyAddressEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.VerifyAddressEnvelope"
                         }
                     },
                     "400": {
@@ -5531,7 +5540,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Deprecated: use PUT /onboarding/compliance. Saves business type, industry, and employee count.",
@@ -5553,7 +5562,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.ProductBusinessRequest"
+                            "$ref": "#/definitions/internal_orghttp.ProductBusinessRequest"
                         }
                     }
                 ],
@@ -5561,7 +5570,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.ProductBusinessEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.ProductBusinessEnvelope"
                         }
                     },
                     "400": {
@@ -5587,7 +5596,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Deprecated: prefer stepped PUT /onboarding/profile → address → PUT /onboarding/business (type/industry/employees) → complete. This one-shot includes KYB-oriented fields (BIN, registered address) and does not advance onboarding progress.",
@@ -5609,7 +5618,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.BusinessRequest"
+                            "$ref": "#/definitions/internal_orghttp.BusinessRequest"
                         }
                     }
                 ],
@@ -5617,7 +5626,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.BusinessEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.BusinessEnvelope"
                         }
                     },
                     "400": {
@@ -5655,7 +5664,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.BusinessTypeListEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.BusinessTypeListEnvelope"
                         }
                     },
                     "500": {
@@ -5681,7 +5690,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.CompanyRoleListEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.CompanyRoleListEnvelope"
                         }
                     },
                     "500": {
@@ -5697,7 +5706,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Finalizes onboarding after all mandatory steps are done. Sets onboarding_completed_at and enqueues an onboarding_complete welcome email.",
@@ -5712,7 +5721,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.ProductOnboardingCompleteEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.ProductOnboardingCompleteEnvelope"
                         }
                     },
                     "400": {
@@ -5746,7 +5755,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Saves business type, industry, and employee count for individual or business accounts.",
@@ -5767,7 +5776,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.ProductComplianceRequest"
+                            "$ref": "#/definitions/internal_orghttp.ProductComplianceRequest"
                         }
                     }
                 ],
@@ -5775,7 +5784,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.ProductComplianceEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.ProductComplianceEnvelope"
                         }
                     },
                     "400": {
@@ -5822,7 +5831,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.IdentificationRequirementsEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.IdentificationRequirementsEnvelope"
                         }
                     },
                     "400": {
@@ -5850,7 +5859,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Deprecated: prefer the stepped flow PUT /onboarding/profile then address/complete. Saves first name, last name, country, business type, industry, and employee count on the user row only.",
@@ -5872,7 +5881,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.IndividualRequest"
+                            "$ref": "#/definitions/internal_orghttp.IndividualRequest"
                         }
                     }
                 ],
@@ -5880,7 +5889,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.IndividualEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.IndividualEnvelope"
                         }
                     },
                     "400": {
@@ -5918,7 +5927,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.OnboardingIndustryListEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.OnboardingIndustryListEnvelope"
                         }
                     },
                     "500": {
@@ -5934,7 +5943,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Saves account type and profile fields for individual or business accounts.",
@@ -5955,7 +5964,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.ProductProfileRequest"
+                            "$ref": "#/definitions/internal_orghttp.ProductProfileRequest"
                         }
                     }
                 ],
@@ -5963,7 +5972,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.ProductProfileEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.ProductProfileEnvelope"
                         }
                     },
                     "400": {
@@ -5991,7 +6000,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Returns current step, completed steps, and saved draft fields.",
@@ -6006,7 +6015,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.ProductOnboardingStatusEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.ProductOnboardingStatusEnvelope"
                         }
                     },
                     "401": {
@@ -6028,7 +6037,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Verification status, the DPA version to accept and whether it is accepted, the privacy contact and the DPIA.",
@@ -6036,14 +6045,14 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "jobs"
+                    "organization"
                 ],
                 "summary": "Show the company's publishing requirements",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.CompanySetupEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.CompanySetupEnvelope"
                         }
                     }
                 }
@@ -6051,7 +6060,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Only a Founder or Legal can. The version must be the current one shown by GET.",
@@ -6062,7 +6071,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "jobs"
+                    "organization"
                 ],
                 "summary": "Accept the terms and data processing agreement",
                 "parameters": [
@@ -6072,7 +6081,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.AcceptRequest"
+                            "$ref": "#/definitions/internal_orghttp.AcceptRequest"
                         }
                     }
                 ],
@@ -6080,7 +6089,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.CompanySetupEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.CompanySetupEnvelope"
                         }
                     },
                     "400": {
@@ -6102,7 +6111,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Legal records the data protection impact assessment before the first screening job publishes. Each call stores a new version.",
@@ -6153,7 +6162,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "The address applicants are told to write to, and an optional DPO contact. Needed before publishing.",
@@ -6164,7 +6173,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "jobs"
+                    "organization"
                 ],
                 "summary": "Set the privacy contact",
                 "parameters": [
@@ -6174,7 +6183,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.PrivacyContactInput"
+                            "$ref": "#/definitions/internal_orghttp.PrivacyContactInput"
                         }
                     }
                 ],
@@ -6182,7 +6191,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.CompanySetupEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.CompanySetupEnvelope"
                         }
                     },
                     "400": {
@@ -6204,7 +6213,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "produces": [
@@ -6218,7 +6227,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.KYBStatusEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.KYBStatusEnvelope"
                         }
                     },
                     "401": {
@@ -6238,7 +6247,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "First submission or a full resubmission after a failure. Tier 1 countries are checked immediately; others are queued for manual review (status pending).",
@@ -6259,7 +6268,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.KYBSubmitRequest"
+                            "$ref": "#/definitions/internal_orghttp.KYBSubmitRequest"
                         }
                     }
                 ],
@@ -6267,7 +6276,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.KYBStatusEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.KYBStatusEnvelope"
                         }
                     },
                     "400": {
@@ -6301,7 +6310,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Clears the registration number and country identifiers, keeps name and address, and returns the status to not_started.",
@@ -6322,7 +6331,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.KYBChangeCountryRequest"
+                            "$ref": "#/definitions/internal_orghttp.KYBChangeCountryRequest"
                         }
                     }
                 ],
@@ -6330,7 +6339,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.KYBStatusEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.KYBStatusEnvelope"
                         }
                     },
                     "400": {
@@ -6352,7 +6361,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Accepts an address_mismatch warning once the user says whether the address is registered or trading.",
@@ -6373,7 +6382,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.KYBConfirmAddressRequest"
+                            "$ref": "#/definitions/internal_orghttp.KYBConfirmAddressRequest"
                         }
                     }
                 ],
@@ -6381,7 +6390,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.KYBStatusEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.KYBStatusEnvelope"
                         }
                     },
                     "400": {
@@ -6403,7 +6412,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "One-click fix for a name_mismatch: the registry's legal name replaces what was typed and the check runs again.",
@@ -6418,7 +6427,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.KYBStatusEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.KYBStatusEnvelope"
                         }
                     },
                     "409": {
@@ -6440,7 +6449,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Light retry for number_not_found and name_mismatch failures. Country and address are reused.",
@@ -6461,7 +6470,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.KYBRetryRequest"
+                            "$ref": "#/definitions/internal_orghttp.KYBRetryRequest"
                         }
                     }
                 ],
@@ -6469,7 +6478,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.KYBStatusEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.KYBStatusEnvelope"
                         }
                     },
                     "400": {
@@ -6503,7 +6512,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "SessionCookie": []
                     }
                 ],
                 "description": "Organization owners invite a member by email. Sends an invite email with a token.",
@@ -6524,7 +6533,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthCreateOrgInviteRequest"
+                            "$ref": "#/definitions/internal_identityhttp.AuthCreateOrgInviteRequest"
                         }
                     }
                 ],
@@ -6532,7 +6541,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AuthCreateOrgInviteEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AuthCreateOrgInviteEnvelope"
                         }
                     },
                     "400": {
@@ -6636,7 +6645,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationRequest"
+                            "$ref": "#/definitions/internal_hiring_apphttp.ApplicationRequest"
                         }
                     }
                 ],
@@ -6644,7 +6653,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationReceiptEnvelope"
+                            "$ref": "#/definitions/internal_hiring_apphttp.ApplicationReceiptEnvelope"
                         }
                     },
                     "400": {
@@ -6713,7 +6722,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.UploadRequest"
+                            "$ref": "#/definitions/internal_hiring_apphttp.UploadRequest"
                         }
                     }
                 ],
@@ -6721,7 +6730,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/internal_hiring_hiringhttp.UploadTargetEnvelope"
+                            "$ref": "#/definitions/internal_hiring_apphttp.UploadTargetEnvelope"
                         }
                     },
                     "400": {
@@ -6777,7 +6786,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.RoleListEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.RoleListEnvelope"
                         }
                     },
                     "500": {
@@ -6803,59 +6812,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.TeamSizeListEnvelope"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/waitlist": {
-            "post": {
-                "description": "Collects an email for the waitlist and writes regional plus global registry rows.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "waitlist/signup"
-                ],
-                "summary": "Join waitlist",
-                "parameters": [
-                    {
-                        "description": "Signup payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.SignupRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.SignupEnvelope"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                            "$ref": "#/definitions/internal_orghttp.TeamSizeListEnvelope"
                         }
                     },
                     "500": {
@@ -6978,6 +6935,9 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "totp_enabled": {
+                    "type": "boolean"
                 },
                 "updated_at": {
                     "type": "string"
@@ -7531,13 +7491,13 @@ const docTemplate = `{
                 "declarations": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_questions.Declaration"
+                        "$ref": "#/definitions/github_com_Angle-HR_server_pkg_formschema.Declaration"
                     }
                 },
                 "questions": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_questions.FormQuestion"
+                        "$ref": "#/definitions/github_com_Angle-HR_server_pkg_formschema.FormQuestion"
                     }
                 }
             }
@@ -7551,7 +7511,7 @@ const docTemplate = `{
                 "declarations": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_questions.Declaration"
+                        "$ref": "#/definitions/github_com_Angle-HR_server_pkg_formschema.Declaration"
                     }
                 },
                 "job_id": {
@@ -7563,7 +7523,7 @@ const docTemplate = `{
                 "questions": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_questions.FormQuestion"
+                        "$ref": "#/definitions/github_com_Angle-HR_server_pkg_formschema.FormQuestion"
                     }
                 },
                 "warnings": {
@@ -7799,7 +7759,7 @@ const docTemplate = `{
                 "rules": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_screening.Rule"
+                        "$ref": "#/definitions/github_com_Angle-HR_server_pkg_formschema_screening.Rule"
                     }
                 }
             }
@@ -7816,7 +7776,7 @@ const docTemplate = `{
                 "rules": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_screening.Rule"
+                        "$ref": "#/definitions/github_com_Angle-HR_server_pkg_formschema_screening.Rule"
                     }
                 }
             }
@@ -8628,7 +8588,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_Angle-HR_server_internal_hiring_questions.Declaration": {
+        "github_com_Angle-HR_server_pkg_formschema.Declaration": {
             "type": "object",
             "properties": {
                 "category": {
@@ -8642,7 +8602,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_Angle-HR_server_internal_hiring_questions.FormQuestion": {
+        "github_com_Angle-HR_server_pkg_formschema.FormQuestion": {
             "type": "object",
             "properties": {
                 "config": {
@@ -8693,7 +8653,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_Angle-HR_server_internal_hiring_screening.Rule": {
+        "github_com_Angle-HR_server_pkg_formschema_screening.Rule": {
             "type": "object",
             "properties": {
                 "id": {
@@ -8713,105 +8673,6 @@ const docTemplate = `{
                     "items": {
                         "type": "integer"
                     }
-                }
-            }
-        },
-        "internal_handler.AddressSearchData": {
-            "type": "object",
-            "properties": {
-                "suggestions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.AddressSuggestion"
-                    }
-                }
-            }
-        },
-        "internal_handler.AddressSearchEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.AddressSearchData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AddressSearchRequest": {
-            "type": "object",
-            "properties": {
-                "country_id": {
-                    "type": "string",
-                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-                },
-                "query": {
-                    "type": "string",
-                    "example": "10 Downing"
-                }
-            }
-        },
-        "internal_handler.AddressSuggestion": {
-            "type": "object",
-            "properties": {
-                "city": {
-                    "type": "string",
-                    "example": "London"
-                },
-                "description": {
-                    "type": "string",
-                    "example": "10 Downing Street, London, UK"
-                },
-                "formatted_address": {
-                    "type": "string",
-                    "example": "10 Downing Street, London SW1A 2AA, UK"
-                },
-                "line_1": {
-                    "type": "string",
-                    "example": "10 Downing Street"
-                },
-                "line_2": {
-                    "type": "string"
-                },
-                "place_id": {
-                    "type": "string",
-                    "example": "ChIJ..."
-                },
-                "post_code": {
-                    "type": "string",
-                    "example": "SW1A 2AA"
-                },
-                "state_or_county": {
-                    "type": "string",
-                    "example": "Greater London"
-                }
-            }
-        },
-        "internal_handler.AdminAcceptInviteRequest": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.AdminAuditListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.AuditLog"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
                 }
             }
         },
@@ -8887,51 +8748,6 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_handler.AdminCreateRoleRequest": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "permissions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.AdminCreateStaffRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "roles": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "internal_handler.AdminInvitePreviewEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.InvitePreview"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
         "internal_handler.AdminJobEnvelope": {
             "type": "object",
             "properties": {
@@ -8954,2188 +8770,6 @@ const docTemplate = `{
                 },
                 "meta": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminLoginRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "admin@anglehr.local"
-                },
-                "password": {
-                    "type": "string",
-                    "example": "changeme123"
-                }
-            }
-        },
-        "internal_handler.AdminMeEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "object",
-                    "additionalProperties": {}
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminPatchRoleRequest": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "permissions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "internal_handler.AdminPatchStaffRequest": {
-            "type": "object",
-            "properties": {
-                "is_active": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "roles": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "internal_handler.AdminPermissionsEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.Permission"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminRefreshRequest": {
-            "type": "object",
-            "properties": {
-                "refresh_token": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.AdminRoleEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.RoleWithPermissions"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminRolesEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.RoleWithPermissions"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminStaffEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.StaffMember"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminStaffListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.StaffMember"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminTokenData": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "type": "string"
-                },
-                "expires_in": {
-                    "type": "integer"
-                },
-                "refresh_token": {
-                    "type": "string"
-                },
-                "token_type": {
-                    "type": "string",
-                    "example": "Bearer"
-                }
-            }
-        },
-        "internal_handler.AdminTokenEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.AdminTokenData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminUserDetailEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.adminUserDetail"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminUserListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.adminUserListItem"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminUserPatchRequest": {
-            "type": "object",
-            "properties": {
-                "deleted": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "internal_handler.AdminVerificationDetail": {
-            "type": "object",
-            "properties": {
-                "address": {
-                    "$ref": "#/definitions/internal_handler.KYBAddress"
-                },
-                "address_type": {
-                    "type": "string"
-                },
-                "attempts": {
-                    "type": "integer"
-                },
-                "country_code": {
-                    "type": "string"
-                },
-                "identifiers": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "legal_name": {
-                    "type": "string"
-                },
-                "organization_id": {
-                    "type": "string"
-                },
-                "region": {
-                    "type": "string"
-                },
-                "registration_number": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "submitted_at": {
-                    "type": "string"
-                },
-                "tier": {
-                    "type": "integer"
-                }
-            }
-        },
-        "internal_handler.AdminVerificationDetailEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.AdminVerificationDetail"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminVerificationItem": {
-            "type": "object",
-            "properties": {
-                "country_code": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "organization_id": {
-                    "type": "string"
-                },
-                "region": {
-                    "type": "string"
-                },
-                "submitted_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.AdminVerificationListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.AdminVerificationItem"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminVerificationReviewData": {
-            "type": "object",
-            "properties": {
-                "failure_reason": {
-                    "type": "string"
-                },
-                "organization_id": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "verified",
-                        "failed"
-                    ]
-                }
-            }
-        },
-        "internal_handler.AdminVerificationReviewEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.AdminVerificationReviewData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminVerificationReviewRequest": {
-            "type": "object",
-            "properties": {
-                "decision": {
-                    "type": "string",
-                    "enum": [
-                        "approve",
-                        "reject"
-                    ]
-                },
-                "reason": {
-                    "type": "string",
-                    "enum": [
-                        "number_not_found",
-                        "name_mismatch",
-                        "address_mismatch",
-                        "inactive_entity",
-                        "wrong_country"
-                    ]
-                }
-            }
-        },
-        "internal_handler.AdminWaitlistDetailEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.adminWaitlistDetail"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminWaitlistListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.adminWaitlistItem"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminWaitlistPatchRequest": {
-            "type": "object",
-            "properties": {
-                "metadata": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "wants_early_access": {
-                    "type": "boolean"
-                },
-                "wants_user_testing": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "internal_handler.AuthAcceptInviteRequest": {
-            "type": "object",
-            "properties": {
-                "first_name": {
-                    "type": "string",
-                    "example": "Jerry"
-                },
-                "last_name": {
-                    "type": "string",
-                    "example": "Oluwasegun"
-                },
-                "password": {
-                    "type": "string",
-                    "example": "secure-password-here"
-                },
-                "token": {
-                    "type": "string",
-                    "example": "opaque-invite-token"
-                }
-            }
-        },
-        "internal_handler.AuthCreateOrgInviteData": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "member@example.com"
-                },
-                "expires_at": {
-                    "type": "string",
-                    "example": "2026-08-24T12:00:00Z"
-                }
-            }
-        },
-        "internal_handler.AuthCreateOrgInviteEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.AuthCreateOrgInviteData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AuthCreateOrgInviteRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "member@example.com"
-                }
-            }
-        },
-        "internal_handler.AuthForgotPasswordRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "jerry@example.com"
-                }
-            }
-        },
-        "internal_handler.AuthInviteData": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "member@example.com"
-                },
-                "expires_at": {
-                    "type": "string",
-                    "example": "2026-08-24T12:00:00Z"
-                },
-                "organization_name": {
-                    "type": "string",
-                    "example": "ANGLE"
-                }
-            }
-        },
-        "internal_handler.AuthInviteEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.AuthInviteData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AuthLoginOTPRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "jerry@example.com"
-                }
-            }
-        },
-        "internal_handler.AuthLoginOTPVerifyRequest": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string",
-                    "example": "224879"
-                },
-                "verification_session_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                }
-            }
-        },
-        "internal_handler.AuthLoginRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "jerry@example.com"
-                },
-                "password": {
-                    "type": "string",
-                    "example": "secure-password-here"
-                }
-            }
-        },
-        "internal_handler.AuthLoginTOTPRequest": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string",
-                    "example": "123456"
-                },
-                "mfa_token": {
-                    "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiIs..."
-                }
-            }
-        },
-        "internal_handler.AuthLogoutRequest": {
-            "type": "object",
-            "properties": {
-                "refresh_token": {
-                    "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiIs..."
-                }
-            }
-        },
-        "internal_handler.AuthMeData": {
-            "type": "object",
-            "properties": {
-                "account_type": {
-                    "type": "string",
-                    "example": "business"
-                },
-                "country_id": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string",
-                    "example": "jerry@example.com"
-                },
-                "email_verified": {
-                    "type": "boolean",
-                    "example": true
-                },
-                "first_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "last_name": {
-                    "type": "string"
-                },
-                "legal_full_name": {
-                    "type": "string"
-                },
-                "onboarding": {
-                    "$ref": "#/definitions/internal_handler.OnboardingProgressSummary"
-                },
-                "permissions": {
-                    "description": "Permissions are everything those roles allow, so a client can show only the actions the caller may take.",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "region": {
-                    "type": "string",
-                    "example": "uk"
-                },
-                "roles": {
-                    "description": "Roles are the caller's company roles; empty until they belong to a company.",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "totp_enabled": {
-                    "type": "boolean",
-                    "example": false
-                }
-            }
-        },
-        "internal_handler.AuthMeEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.AuthMeData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AuthMessageData": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "example": "logged out"
-                }
-            }
-        },
-        "internal_handler.AuthMessageEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.AuthMessageData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AuthRefreshData": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiIs..."
-                },
-                "expires_in": {
-                    "type": "integer",
-                    "example": 3600
-                }
-            }
-        },
-        "internal_handler.AuthRefreshEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.AuthRefreshData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AuthRefreshRequest": {
-            "type": "object",
-            "properties": {
-                "refresh_token": {
-                    "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiIs..."
-                }
-            }
-        },
-        "internal_handler.AuthResendVerificationRequest": {
-            "type": "object",
-            "properties": {
-                "verification_session_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                }
-            }
-        },
-        "internal_handler.AuthResetPasswordRequest": {
-            "type": "object",
-            "properties": {
-                "password": {
-                    "type": "string",
-                    "example": "new-secure-password"
-                },
-                "token": {
-                    "type": "string",
-                    "example": "opaque-reset-token"
-                }
-            }
-        },
-        "internal_handler.AuthSignupData": {
-            "type": "object",
-            "properties": {
-                "code_expires_in_seconds": {
-                    "type": "integer",
-                    "example": 300
-                },
-                "email": {
-                    "type": "string",
-                    "example": "jerry@example.com"
-                },
-                "resend_available_in_seconds": {
-                    "type": "integer",
-                    "example": 30
-                },
-                "verification_session_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                }
-            }
-        },
-        "internal_handler.AuthSignupEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.AuthSignupData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AuthSignupPatchRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "newemail@example.com"
-                },
-                "verification_session_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                }
-            }
-        },
-        "internal_handler.AuthSignupRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "jerry@example.com"
-                },
-                "password": {
-                    "type": "string",
-                    "example": "secure-password-here"
-                }
-            }
-        },
-        "internal_handler.AuthTOTPConfirmRequest": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string",
-                    "example": "123456"
-                }
-            }
-        },
-        "internal_handler.AuthTOTPDisableRequest": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string",
-                    "example": "123456"
-                },
-                "password": {
-                    "type": "string",
-                    "example": "secure-password-here"
-                }
-            }
-        },
-        "internal_handler.AuthTOTPEnrollData": {
-            "type": "object",
-            "properties": {
-                "otpauth_url": {
-                    "type": "string",
-                    "example": "otpauth://totp/OpenHR:jerry@example.com?secret=..."
-                },
-                "secret": {
-                    "type": "string",
-                    "example": "JBSWY3DPEHPK3PXP"
-                }
-            }
-        },
-        "internal_handler.AuthTOTPEnrollEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.AuthTOTPEnrollData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AuthTokenData": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiIs..."
-                },
-                "expires_in": {
-                    "type": "integer",
-                    "example": 3600
-                },
-                "onboarding": {
-                    "$ref": "#/definitions/internal_handler.OnboardingProgressSummary"
-                },
-                "refresh_token": {
-                    "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiIs..."
-                }
-            }
-        },
-        "internal_handler.AuthTokenEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.AuthTokenData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AuthVerifyEmailRequest": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string",
-                    "example": "224879"
-                },
-                "verification_session_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                }
-            }
-        },
-        "internal_handler.BusinessEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.BusinessResponse"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.BusinessRequest": {
-            "type": "object",
-            "properties": {
-                "bin_number": {
-                    "type": "string",
-                    "example": "BIN-123456789"
-                },
-                "business_registered_address": {
-                    "type": "string",
-                    "example": "1 High Street, London, UK"
-                },
-                "business_type_id": {
-                    "type": "string",
-                    "example": "61000000-0000-4000-8000-000000000001"
-                },
-                "company_role_id": {
-                    "type": "string",
-                    "example": "60000000-0000-4000-8000-000000000001"
-                },
-                "country_id": {
-                    "type": "string",
-                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-                },
-                "industry_id": {
-                    "type": "string",
-                    "example": "62000000-0000-4000-8000-000000000001"
-                },
-                "legal_business_name": {
-                    "type": "string",
-                    "example": "Oped Technologies Ltd"
-                },
-                "legal_full_name": {
-                    "type": "string",
-                    "example": "Oped Oped"
-                }
-            }
-        },
-        "internal_handler.BusinessResponse": {
-            "type": "object",
-            "properties": {
-                "bin_number": {
-                    "type": "string"
-                },
-                "business_registered_address": {
-                    "type": "string"
-                },
-                "business_type_id": {
-                    "type": "string"
-                },
-                "company_role_id": {
-                    "type": "string"
-                },
-                "country_id": {
-                    "type": "string"
-                },
-                "industry_id": {
-                    "type": "string"
-                },
-                "legal_business_name": {
-                    "type": "string"
-                },
-                "legal_full_name": {
-                    "type": "string"
-                },
-                "tokens": {
-                    "$ref": "#/definitions/internal_handler.RegionReissue"
-                },
-                "user_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.BusinessType": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string",
-                    "example": "61000000-0000-4000-8000-000000000001"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Early-stage startup"
-                },
-                "slug": {
-                    "type": "string",
-                    "example": "early-stage-startup"
-                }
-            }
-        },
-        "internal_handler.BusinessTypeListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.BusinessType"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.CompanyRole": {
-            "type": "object",
-            "properties": {
-                "icon_key": {
-                    "type": "string",
-                    "example": "building"
-                },
-                "id": {
-                    "type": "string",
-                    "example": "60000000-0000-4000-8000-000000000001"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Founder / CEO"
-                },
-                "slug": {
-                    "type": "string",
-                    "example": "founder-ceo"
-                }
-            }
-        },
-        "internal_handler.CompanyRoleListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.CompanyRole"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.CountriesEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.CountryResponse"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.CountryResponse": {
-            "type": "object",
-            "properties": {
-                "icon_key": {
-                    "type": "string",
-                    "example": "flag-uk"
-                },
-                "id": {
-                    "type": "string",
-                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "United Kingdom"
-                },
-                "region": {
-                    "type": "string",
-                    "enum": [
-                        "uk",
-                        "us",
-                        "africa",
-                        "eu",
-                        "asia"
-                    ],
-                    "example": "uk"
-                },
-                "slug": {
-                    "type": "string",
-                    "example": "united-kingdom"
-                }
-            }
-        },
-        "internal_handler.HiringFrustration": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "emoji": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.HiringFrustrationListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.HiringFrustration"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.HiringTool": {
-            "type": "object",
-            "properties": {
-                "icon_url": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.HiringToolListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.HiringTool"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.IdentificationRequirementField": {
-            "type": "object",
-            "properties": {
-                "format_hint": {
-                    "type": "string",
-                    "example": "8 digits, or SC/NI prefix + 6 digits"
-                },
-                "key": {
-                    "type": "string",
-                    "example": "registration_number"
-                },
-                "label": {
-                    "type": "string",
-                    "example": "Company Registration Number (CRN)"
-                },
-                "pattern": {
-                    "type": "string",
-                    "example": "^(\\d{8}|(SC|NI)\\d{6})$"
-                },
-                "placeholder": {
-                    "type": "string",
-                    "example": "12345678"
-                },
-                "required": {
-                    "type": "boolean",
-                    "example": true
-                }
-            }
-        },
-        "internal_handler.IdentificationRequirementsData": {
-            "type": "object",
-            "properties": {
-                "country_id": {
-                    "type": "string",
-                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-                },
-                "country_slug": {
-                    "type": "string",
-                    "example": "united-kingdom"
-                },
-                "fields": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.IdentificationRequirementField"
-                    }
-                }
-            }
-        },
-        "internal_handler.IdentificationRequirementsEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.IdentificationRequirementsData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.IndividualEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.IndividualResponse"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.IndividualRequest": {
-            "type": "object",
-            "properties": {
-                "business_type_id": {
-                    "type": "string",
-                    "example": "61000000-0000-4000-8000-000000000001"
-                },
-                "country_id": {
-                    "type": "string",
-                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-                },
-                "first_name": {
-                    "type": "string",
-                    "example": "Jerry"
-                },
-                "industry_id": {
-                    "type": "string",
-                    "example": "62000000-0000-4000-8000-000000000001"
-                },
-                "last_name": {
-                    "type": "string",
-                    "example": "Oluwasegun"
-                },
-                "no_of_employees": {
-                    "type": "integer",
-                    "example": 10
-                }
-            }
-        },
-        "internal_handler.IndividualResponse": {
-            "type": "object",
-            "properties": {
-                "business_type_id": {
-                    "type": "string"
-                },
-                "country_id": {
-                    "type": "string"
-                },
-                "first_name": {
-                    "type": "string"
-                },
-                "industry_id": {
-                    "type": "string"
-                },
-                "last_name": {
-                    "type": "string"
-                },
-                "no_of_employees": {
-                    "type": "integer"
-                },
-                "tokens": {
-                    "$ref": "#/definitions/internal_handler.RegionReissue"
-                },
-                "user_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.Industry": {
-            "type": "object",
-            "properties": {
-                "emoji": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.IndustryListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.Industry"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.KYBAddress": {
-            "type": "object",
-            "properties": {
-                "city": {
-                    "type": "string"
-                },
-                "country": {
-                    "type": "string"
-                },
-                "line1": {
-                    "type": "string"
-                },
-                "line2": {
-                    "type": "string"
-                },
-                "post_code": {
-                    "type": "string"
-                },
-                "region": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.KYBChangeCountryRequest": {
-            "type": "object",
-            "properties": {
-                "country_code": {
-                    "type": "string",
-                    "example": "KE"
-                }
-            }
-        },
-        "internal_handler.KYBConfirmAddressRequest": {
-            "type": "object",
-            "properties": {
-                "address_type": {
-                    "type": "string",
-                    "enum": [
-                        "registered",
-                        "trading"
-                    ]
-                }
-            }
-        },
-        "internal_handler.KYBRetryRequest": {
-            "type": "object",
-            "properties": {
-                "legal_name": {
-                    "type": "string"
-                },
-                "registration_number": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.KYBStatusData": {
-            "type": "object",
-            "properties": {
-                "address_confirmable": {
-                    "type": "boolean"
-                },
-                "can_publish": {
-                    "type": "boolean"
-                },
-                "can_retry": {
-                    "type": "boolean"
-                },
-                "checked_at": {
-                    "type": "string"
-                },
-                "country_code": {
-                    "type": "string"
-                },
-                "display": {
-                    "type": "string",
-                    "enum": [
-                        "verified",
-                        "pending_review",
-                        "action_required",
-                        "failed",
-                        "not_started"
-                    ]
-                },
-                "failure_reason": {
-                    "type": "string"
-                },
-                "light_retry": {
-                    "type": "boolean"
-                },
-                "name_confirmable": {
-                    "type": "boolean"
-                },
-                "registered_address": {
-                    "type": "string"
-                },
-                "registry_name": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "not_started",
-                        "pending",
-                        "verified",
-                        "failed"
-                    ]
-                },
-                "tier": {
-                    "type": "integer"
-                },
-                "verified_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.KYBStatusEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.KYBStatusData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.KYBSubmitRequest": {
-            "type": "object",
-            "properties": {
-                "address": {
-                    "$ref": "#/definitions/internal_handler.KYBAddress"
-                },
-                "address_type": {
-                    "type": "string",
-                    "enum": [
-                        "registered",
-                        "trading"
-                    ]
-                },
-                "country_code": {
-                    "type": "string",
-                    "example": "GB"
-                },
-                "identifiers": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "legal_name": {
-                    "type": "string",
-                    "example": "Acme Ltd"
-                },
-                "registration_number": {
-                    "type": "string",
-                    "example": "01234567"
-                }
-            }
-        },
-        "internal_handler.OnboardingIndustry": {
-            "type": "object",
-            "properties": {
-                "emoji": {
-                    "type": "string",
-                    "example": "💻"
-                },
-                "id": {
-                    "type": "string",
-                    "example": "62000000-0000-4000-8000-000000000001"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Tech / Software"
-                },
-                "slug": {
-                    "type": "string",
-                    "example": "tech-software"
-                }
-            }
-        },
-        "internal_handler.OnboardingIndustryListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.OnboardingIndustry"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.OnboardingProgressSummary": {
-            "type": "object",
-            "properties": {
-                "completed_steps": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "verify_email",
-                        "profile"
-                    ]
-                },
-                "current_step": {
-                    "type": "string",
-                    "example": "profile"
-                },
-                "next_step": {
-                    "type": "string",
-                    "example": "compliance"
-                },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "in_progress",
-                        "completed"
-                    ],
-                    "example": "in_progress"
-                }
-            }
-        },
-        "internal_handler.ProductAddressData": {
-            "type": "object",
-            "properties": {
-                "city": {
-                    "type": "string"
-                },
-                "country_id": {
-                    "type": "string"
-                },
-                "entry_mode": {
-                    "type": "string"
-                },
-                "formatted_address": {
-                    "type": "string"
-                },
-                "identification": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "line_1": {
-                    "type": "string"
-                },
-                "line_2": {
-                    "type": "string"
-                },
-                "onboarding": {
-                    "$ref": "#/definitions/internal_handler.OnboardingProgressSummary"
-                },
-                "post_code": {
-                    "type": "string"
-                },
-                "state_or_county": {
-                    "type": "string"
-                },
-                "tokens": {
-                    "$ref": "#/definitions/internal_handler.RegionReissue"
-                },
-                "verification_status": {
-                    "type": "string",
-                    "enum": [
-                        "unverified",
-                        "verified",
-                        "failed"
-                    ],
-                    "example": "unverified"
-                }
-            }
-        },
-        "internal_handler.ProductAddressEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.ProductAddressData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.ProductAddressRequest": {
-            "type": "object",
-            "properties": {
-                "city": {
-                    "type": "string",
-                    "example": "London"
-                },
-                "country_id": {
-                    "type": "string",
-                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-                },
-                "entry_mode": {
-                    "type": "string",
-                    "enum": [
-                        "search",
-                        "manual"
-                    ],
-                    "example": "manual"
-                },
-                "formatted_address": {
-                    "type": "string"
-                },
-                "identification": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "line_1": {
-                    "type": "string",
-                    "example": "10 Downing Street"
-                },
-                "line_2": {
-                    "type": "string"
-                },
-                "post_code": {
-                    "type": "string",
-                    "example": "SW1A 2AA"
-                },
-                "state_or_county": {
-                    "type": "string",
-                    "example": "Greater London"
-                }
-            }
-        },
-        "internal_handler.ProductAddressState": {
-            "type": "object",
-            "properties": {
-                "city": {
-                    "type": "string"
-                },
-                "country_id": {
-                    "type": "string"
-                },
-                "entry_mode": {
-                    "type": "string"
-                },
-                "formatted_address": {
-                    "type": "string"
-                },
-                "identification": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "line_1": {
-                    "type": "string"
-                },
-                "line_2": {
-                    "type": "string"
-                },
-                "post_code": {
-                    "type": "string"
-                },
-                "state_or_county": {
-                    "type": "string"
-                },
-                "verification_status": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.ProductBusinessData": {
-            "type": "object",
-            "properties": {
-                "business_type_id": {
-                    "type": "string"
-                },
-                "employee_count": {
-                    "type": "integer"
-                },
-                "industry_id": {
-                    "type": "string"
-                },
-                "onboarding": {
-                    "$ref": "#/definitions/internal_handler.OnboardingProgressSummary"
-                }
-            }
-        },
-        "internal_handler.ProductBusinessEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.ProductBusinessData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.ProductBusinessRequest": {
-            "type": "object",
-            "properties": {
-                "business_type_id": {
-                    "type": "string",
-                    "example": "61000000-0000-4000-8000-000000000001"
-                },
-                "employee_count": {
-                    "type": "integer",
-                    "example": 25
-                },
-                "industry_id": {
-                    "type": "string",
-                    "example": "62000000-0000-4000-8000-000000000001"
-                }
-            }
-        },
-        "internal_handler.ProductBusinessState": {
-            "type": "object",
-            "properties": {
-                "business_type_id": {
-                    "type": "string"
-                },
-                "employee_count": {
-                    "type": "integer"
-                },
-                "industry_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.ProductComplianceData": {
-            "type": "object",
-            "properties": {
-                "business_type_id": {
-                    "type": "string"
-                },
-                "employee_count": {
-                    "type": "integer"
-                },
-                "industry_id": {
-                    "type": "string"
-                },
-                "onboarding": {
-                    "$ref": "#/definitions/internal_handler.OnboardingProgressSummary"
-                }
-            }
-        },
-        "internal_handler.ProductComplianceEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.ProductComplianceData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.ProductComplianceRequest": {
-            "type": "object",
-            "properties": {
-                "business_type_id": {
-                    "type": "string",
-                    "example": "61000000-0000-4000-8000-000000000001"
-                },
-                "employee_count": {
-                    "type": "integer",
-                    "example": 25
-                },
-                "industry_id": {
-                    "type": "string",
-                    "example": "62000000-0000-4000-8000-000000000001"
-                }
-            }
-        },
-        "internal_handler.ProductComplianceState": {
-            "type": "object",
-            "properties": {
-                "business_type_id": {
-                    "type": "string"
-                },
-                "employee_count": {
-                    "type": "integer"
-                },
-                "industry_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.ProductOnboardingCompleteData": {
-            "type": "object",
-            "properties": {
-                "redirect_url": {
-                    "type": "string",
-                    "example": "/dashboard"
-                },
-                "status": {
-                    "type": "string",
-                    "example": "completed"
-                },
-                "workspace": {
-                    "$ref": "#/definitions/internal_handler.ProductWorkspaceStub"
-                }
-            }
-        },
-        "internal_handler.ProductOnboardingCompleteEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.ProductOnboardingCompleteData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.ProductOnboardingStatusData": {
-            "type": "object",
-            "properties": {
-                "account_type": {
-                    "type": "string",
-                    "example": "business"
-                },
-                "address": {
-                    "$ref": "#/definitions/internal_handler.ProductAddressState"
-                },
-                "business": {
-                    "description": "deprecated: use compliance",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/internal_handler.ProductBusinessState"
-                        }
-                    ]
-                },
-                "completed_steps": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "compliance": {
-                    "$ref": "#/definitions/internal_handler.ProductComplianceState"
-                },
-                "current_step": {
-                    "type": "string",
-                    "example": "identification_address"
-                },
-                "next_step": {
-                    "type": "string",
-                    "example": "compliance"
-                },
-                "profile": {
-                    "$ref": "#/definitions/internal_handler.ProductProfileState"
-                },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "in_progress",
-                        "completed"
-                    ],
-                    "example": "in_progress"
-                }
-            }
-        },
-        "internal_handler.ProductOnboardingStatusEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.ProductOnboardingStatusData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.ProductProfileData": {
-            "type": "object",
-            "properties": {
-                "account_type": {
-                    "type": "string",
-                    "example": "business"
-                },
-                "company_role_id": {
-                    "type": "string"
-                },
-                "country_id": {
-                    "type": "string"
-                },
-                "first_name": {
-                    "type": "string"
-                },
-                "last_name": {
-                    "type": "string"
-                },
-                "legal_business_name": {
-                    "type": "string"
-                },
-                "legal_full_name": {
-                    "type": "string"
-                },
-                "onboarding": {
-                    "$ref": "#/definitions/internal_handler.OnboardingProgressSummary"
-                },
-                "region": {
-                    "type": "string",
-                    "example": "uk"
-                },
-                "tokens": {
-                    "$ref": "#/definitions/internal_handler.RegionReissue"
-                }
-            }
-        },
-        "internal_handler.ProductProfileEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.ProductProfileData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.ProductProfileRequest": {
-            "type": "object",
-            "properties": {
-                "account_type": {
-                    "type": "string",
-                    "enum": [
-                        "individual",
-                        "business"
-                    ],
-                    "example": "business"
-                },
-                "company_role_id": {
-                    "type": "string",
-                    "example": "60000000-0000-4000-8000-000000000001"
-                },
-                "country_id": {
-                    "type": "string",
-                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-                },
-                "first_name": {
-                    "type": "string",
-                    "example": "Jerry"
-                },
-                "last_name": {
-                    "type": "string",
-                    "example": "Oluwasegun"
-                },
-                "legal_business_name": {
-                    "type": "string",
-                    "example": "ANGLE"
-                },
-                "legal_full_name": {
-                    "type": "string",
-                    "example": "Jerry Oluwasegun"
-                }
-            }
-        },
-        "internal_handler.ProductProfileState": {
-            "type": "object",
-            "properties": {
-                "account_type": {
-                    "type": "string"
-                },
-                "company_role_id": {
-                    "type": "string"
-                },
-                "country_id": {
-                    "type": "string"
-                },
-                "first_name": {
-                    "type": "string"
-                },
-                "last_name": {
-                    "type": "string"
-                },
-                "legal_business_name": {
-                    "type": "string"
-                },
-                "legal_full_name": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.ProductWorkspaceStub": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string",
-                    "example": "770e8400-e29b-41d4-a716-446655440000"
-                },
-                "slug": {
-                    "type": "string",
-                    "example": "angle"
-                }
-            }
-        },
-        "internal_handler.RegionReissue": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiIs..."
-                },
-                "expires_in": {
-                    "type": "integer",
-                    "example": 3600
-                },
-                "refresh_token": {
-                    "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiIs..."
-                }
-            }
-        },
-        "internal_handler.Role": {
-            "type": "object",
-            "properties": {
-                "emoji": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.RoleListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.Role"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.SignupData": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "example": "You're on the list!"
-                },
-                "region": {
-                    "type": "string",
-                    "example": "uk"
-                }
-            }
-        },
-        "internal_handler.SignupEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.SignupData"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.SignupRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "jerry@example.com"
-                }
-            }
-        },
-        "internal_handler.TeamSize": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "label": {
-                    "type": "string"
-                },
-                "max_size": {
-                    "type": "integer"
-                },
-                "min_size": {
-                    "type": "integer"
-                }
-            }
-        },
-        "internal_handler.TeamSizeListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.TeamSize"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.VerifyAddressEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.VerifyAddressResponse"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.VerifyAddressRequest": {
-            "type": "object",
-            "properties": {
-                "city": {
-                    "type": "string",
-                    "example": "London"
-                },
-                "country_id": {
-                    "type": "string",
-                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-                },
-                "entry_mode": {
-                    "type": "string",
-                    "enum": [
-                        "search",
-                        "manual"
-                    ],
-                    "example": "search"
-                },
-                "formatted_address": {
-                    "type": "string"
-                },
-                "line_1": {
-                    "type": "string",
-                    "example": "10 Downing Street"
-                },
-                "line_2": {
-                    "type": "string"
-                },
-                "place_id": {
-                    "type": "string",
-                    "example": "ChIJ..."
-                },
-                "post_code": {
-                    "type": "string",
-                    "example": "SW1A 2AA"
-                },
-                "state_or_county": {
-                    "type": "string",
-                    "example": "Greater London"
-                }
-            }
-        },
-        "internal_handler.VerifyAddressResponse": {
-            "type": "object",
-            "properties": {
-                "city": {
-                    "type": "string",
-                    "example": "London"
-                },
-                "country_id": {
-                    "type": "string",
-                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-                },
-                "entry_mode": {
-                    "type": "string",
-                    "enum": [
-                        "search",
-                        "manual"
-                    ],
-                    "example": "search"
-                },
-                "failure_reason": {
-                    "type": "string",
-                    "enum": [
-                        "not_verifiable",
-                        "invalid_address"
-                    ],
-                    "example": "not_verifiable"
-                },
-                "formatted_address": {
-                    "type": "string"
-                },
-                "line_1": {
-                    "type": "string",
-                    "example": "10 Downing Street"
-                },
-                "line_2": {
-                    "type": "string"
-                },
-                "post_code": {
-                    "type": "string",
-                    "example": "SW1A 2AA"
-                },
-                "state_or_county": {
-                    "type": "string",
-                    "example": "Greater London"
-                },
-                "verification_status": {
-                    "type": "string",
-                    "enum": [
-                        "verified",
-                        "failed",
-                        "unverified"
-                    ],
-                    "example": "verified"
-                }
-            }
-        },
-        "internal_handler.WaitlistBusinessType": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.WaitlistBusinessTypeListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.WaitlistBusinessType"
-                    }
-                },
-                "has_more": {
-                    "type": "boolean"
-                },
-                "next_cursor": {
-                    "type": "string"
-                },
-                "request_id": {
-                    "type": "string",
-                    "example": "abc123"
                 }
             }
         },
@@ -11210,224 +8844,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_handler.adminUserDetail": {
-            "type": "object",
-            "properties": {
-                "account_type": {
-                    "type": "string"
-                },
-                "completed_steps": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "country_id": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "deleted_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "email_verified_at": {
-                    "type": "string"
-                },
-                "first_name": {
-                    "type": "string"
-                },
-                "last_name": {
-                    "type": "string"
-                },
-                "legal_full_name": {
-                    "type": "string"
-                },
-                "onboarding_completed_at": {
-                    "type": "string"
-                },
-                "onboarding_step": {
-                    "type": "string"
-                },
-                "organization_legal_name": {
-                    "type": "string"
-                },
-                "region": {
-                    "type": "string"
-                },
-                "region_source": {
-                    "type": "string"
-                },
-                "registry_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.adminUserListItem": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "region": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.adminWaitlistDetail": {
-            "type": "object",
-            "properties": {
-                "country_id": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "deleted_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "frustration_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "full_name": {
-                    "type": "string"
-                },
-                "hiring_tool_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "industry_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "metadata": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "onboarding_submitted_at": {
-                    "type": "string"
-                },
-                "region": {
-                    "type": "string"
-                },
-                "region_source": {
-                    "type": "string"
-                },
-                "role_id": {
-                    "type": "string"
-                },
-                "team_size_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "uuid": {
-                    "type": "string"
-                },
-                "wants_early_access": {
-                    "type": "boolean"
-                },
-                "wants_user_testing": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "internal_handler.adminWaitlistItem": {
-            "type": "object",
-            "properties": {
-                "country_id": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "deleted_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "full_name": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "onboarding_submitted_at": {
-                    "type": "string"
-                },
-                "region": {
-                    "type": "string"
-                },
-                "region_source": {
-                    "type": "string"
-                },
-                "role_id": {
-                    "type": "string"
-                },
-                "team_size_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "uuid": {
-                    "type": "string"
-                },
-                "wants_early_access": {
-                    "type": "boolean"
-                },
-                "wants_user_testing": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "internal_hiring_hiringhttp.AcceptRequest": {
-            "type": "object",
-            "properties": {
-                "version": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_hiring_hiringhttp.ApplicantSettingsEnvelope": {
+        "internal_hiring_apphttp.ApplicantSettingsEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
@@ -11435,7 +8852,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_hiring_hiringhttp.ApplicantSettingsRequest": {
+        "internal_hiring_apphttp.ApplicantSettingsRequest": {
             "type": "object",
             "properties": {
                 "reapply_block_months": {
@@ -11446,7 +8863,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_hiring_hiringhttp.ApplicationEnvelope": {
+        "internal_hiring_apphttp.ApplicationEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
@@ -11454,7 +8871,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_hiring_hiringhttp.ApplicationPageEnvelope": {
+        "internal_hiring_apphttp.ApplicationPageEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
@@ -11462,7 +8879,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_hiring_hiringhttp.ApplicationReceipt": {
+        "internal_hiring_apphttp.ApplicationReceipt": {
             "type": "object",
             "properties": {
                 "received": {
@@ -11470,18 +8887,18 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_hiring_hiringhttp.ApplicationReceiptEnvelope": {
+        "internal_hiring_apphttp.ApplicationReceiptEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_hiring_hiringhttp.ApplicationReceipt"
+                    "$ref": "#/definitions/internal_hiring_apphttp.ApplicationReceipt"
                 },
                 "meta": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
                 }
             }
         },
-        "internal_hiring_hiringhttp.ApplicationRequest": {
+        "internal_hiring_apphttp.ApplicationRequest": {
             "type": "object",
             "properties": {
                 "answers": {
@@ -11511,7 +8928,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_hiring_hiringhttp.ApplicationResultEnvelope": {
+        "internal_hiring_apphttp.ApplicationResultEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
@@ -11519,7 +8936,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_hiring_hiringhttp.ApplicationReviewRequest": {
+        "internal_hiring_apphttp.ApplicationReviewRequest": {
             "type": "object",
             "properties": {
                 "decision": {
@@ -11530,13 +8947,85 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_hiring_hiringhttp.ApplicationStatusRequest": {
+        "internal_hiring_apphttp.ApplicationStatusRequest": {
             "type": "object",
             "properties": {
                 "note": {
                     "type": "string"
                 },
                 "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_hiring_apphttp.FileLinkEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.FileLink"
+                }
+            }
+        },
+        "internal_hiring_apphttp.UploadRequest": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "description": "ContentType must be one the question accepts, e.g. application/pdf for a CV.",
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string"
+                },
+                "question_id": {
+                    "description": "QuestionID is the file question the upload answers.",
+                    "type": "string"
+                },
+                "size_bytes": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_hiring_apphttp.UploadTarget": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "max_bytes": {
+                    "type": "integer"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_hiring_apphttp.UploadTargetEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_hiring_apphttp.UploadTarget"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.AcceptRequest": {
+            "type": "object",
+            "properties": {
+                "version": {
                     "type": "string"
                 }
             }
@@ -11621,14 +9110,6 @@ const docTemplate = `{
                 },
                 "meta": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_hiring_hiringhttp.FileLinkEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.FileLink"
                 }
             }
         },
@@ -11951,68 +9432,2510 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_hiring_hiringhttp.UploadRequest": {
+        "internal_identityhttp.AdminAcceptInviteRequest": {
             "type": "object",
             "properties": {
-                "content_type": {
-                    "description": "ContentType must be one the question accepts, e.g. application/pdf for a CV.",
+                "name": {
                     "type": "string"
                 },
-                "filename": {
-                    "type": "string"
-                },
-                "question_id": {
-                    "description": "QuestionID is the file question the upload answers.",
-                    "type": "string"
-                },
-                "size_bytes": {
-                    "type": "integer"
-                }
-            }
-        },
-        "internal_hiring_hiringhttp.UploadTarget": {
-            "type": "object",
-            "properties": {
-                "expires_at": {
-                    "type": "string"
-                },
-                "headers": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "max_bytes": {
-                    "type": "integer"
-                },
-                "method": {
+                "password": {
                     "type": "string"
                 },
                 "token": {
                     "type": "string"
-                },
-                "url": {
-                    "type": "string"
                 }
             }
         },
-        "internal_hiring_hiringhttp.UploadTargetEnvelope": {
+        "internal_identityhttp.AdminAuditListEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/internal_hiring_hiringhttp.UploadTarget"
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.AuditLog"
+                    }
                 },
                 "meta": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
                 }
             }
+        },
+        "internal_identityhttp.AdminCreateRoleRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_identityhttp.AdminCreateStaffRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "internal_identityhttp.AdminDeleteCompanyData": {
+            "type": "object",
+            "properties": {
+                "already_deleted": {
+                    "type": "boolean"
+                },
+                "company_id": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_identityhttp.AdminDeleteCompanyEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_identityhttp.AdminDeleteCompanyData"
+                }
+            }
+        },
+        "internal_identityhttp.AdminInvitePreviewEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.InvitePreview"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AdminLoginRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "admin@anglehr.local"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "changeme123"
+                }
+            }
+        },
+        "internal_identityhttp.AdminMeEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AdminPatchRoleRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "internal_identityhttp.AdminPatchStaffRequest": {
+            "type": "object",
+            "properties": {
+                "is_active": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "internal_identityhttp.AdminPermissionsEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.Permission"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AdminRoleEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.RoleWithPermissions"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AdminRolesEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.RoleWithPermissions"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AdminSessionData": {
+            "type": "object",
+            "properties": {
+                "csrf_token": {
+                    "type": "string"
+                },
+                "user": {
+                    "type": "object",
+                    "additionalProperties": {}
+                }
+            }
+        },
+        "internal_identityhttp.AdminStaffEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.StaffMember"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AdminStaffListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_admin.StaffMember"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AdminTokenEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_identityhttp.AdminSessionData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AdminUserDetailEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_identityhttp.adminUserDetail"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AdminUserListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_identityhttp.adminUserListItem"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AdminUserPatchRequest": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "internal_identityhttp.AdminVerificationDetail": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "$ref": "#/definitions/internal_identityhttp.KYBAddress"
+                },
+                "address_type": {
+                    "type": "string"
+                },
+                "attempts": {
+                    "type": "integer"
+                },
+                "case_type": {
+                    "type": "string",
+                    "enum": [
+                        "business",
+                        "individual"
+                    ]
+                },
+                "country_code": {
+                    "type": "string"
+                },
+                "identifiers": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "legal_name": {
+                    "type": "string"
+                },
+                "organization_id": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "registration_number": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "submitted_at": {
+                    "type": "string"
+                },
+                "tier": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_identityhttp.AdminVerificationDetailEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_identityhttp.AdminVerificationDetail"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AdminVerificationItem": {
+            "type": "object",
+            "properties": {
+                "case_type": {
+                    "description": "CaseType is \"business\" (company verification) or \"individual\" (identity review of a personal organization;\nlabel it in the console).",
+                    "type": "string",
+                    "enum": [
+                        "business",
+                        "individual"
+                    ]
+                },
+                "country_code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "organization_id": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "submitted_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_identityhttp.AdminVerificationListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_identityhttp.AdminVerificationItem"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AdminVerificationReviewData": {
+            "type": "object",
+            "properties": {
+                "failure_reason": {
+                    "type": "string"
+                },
+                "organization_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "verified",
+                        "failed"
+                    ]
+                }
+            }
+        },
+        "internal_identityhttp.AdminVerificationReviewEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_identityhttp.AdminVerificationReviewData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AdminVerificationReviewRequest": {
+            "type": "object",
+            "properties": {
+                "decision": {
+                    "type": "string",
+                    "enum": [
+                        "approve",
+                        "reject"
+                    ]
+                },
+                "reason": {
+                    "type": "string",
+                    "enum": [
+                        "number_not_found",
+                        "name_mismatch",
+                        "address_mismatch",
+                        "inactive_entity",
+                        "wrong_country"
+                    ]
+                }
+            }
+        },
+        "internal_identityhttp.AuthAcceptInviteRequest": {
+            "type": "object",
+            "properties": {
+                "first_name": {
+                    "type": "string",
+                    "example": "Jerry"
+                },
+                "last_name": {
+                    "type": "string",
+                    "example": "Oluwasegun"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "secure-password-1"
+                },
+                "token": {
+                    "type": "string",
+                    "example": "opaque-invite-token"
+                }
+            }
+        },
+        "internal_identityhttp.AuthCreateOrgInviteData": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "member@example.com"
+                },
+                "expires_at": {
+                    "type": "string",
+                    "example": "2026-08-24T12:00:00Z"
+                }
+            }
+        },
+        "internal_identityhttp.AuthCreateOrgInviteEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_identityhttp.AuthCreateOrgInviteData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AuthCreateOrgInviteRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "member@example.com"
+                }
+            }
+        },
+        "internal_identityhttp.AuthForgotPasswordRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "jerry@example.com"
+                }
+            }
+        },
+        "internal_identityhttp.AuthInviteData": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "member@example.com"
+                },
+                "expires_at": {
+                    "type": "string",
+                    "example": "2026-08-24T12:00:00Z"
+                },
+                "organization_name": {
+                    "type": "string",
+                    "example": "ANGLE"
+                }
+            }
+        },
+        "internal_identityhttp.AuthInviteEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_identityhttp.AuthInviteData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AuthLoginOTPRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "jerry@example.com"
+                }
+            }
+        },
+        "internal_identityhttp.AuthLoginOTPVerifyRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "224879"
+                },
+                "verification_session_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "internal_identityhttp.AuthLoginRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "jerry@example.com"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "secure-password-1"
+                }
+            }
+        },
+        "internal_identityhttp.AuthLoginTOTPRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "123456"
+                }
+            }
+        },
+        "internal_identityhttp.AuthMeData": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string",
+                    "example": "business"
+                },
+                "country_id": {
+                    "type": "string"
+                },
+                "csrf_token": {
+                    "description": "CSRFToken is the session's synchronizer token; clients call /auth/me on page load to obtain it.",
+                    "type": "string",
+                    "example": "2Yb7vZk0n1l3o9Qm5r8s4tA6uC1dE3fGhIjKlMnOpQw"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "jerry@example.com"
+                },
+                "email_verified": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "legal_full_name": {
+                    "type": "string"
+                },
+                "onboarding": {
+                    "$ref": "#/definitions/internal_identityhttp.OnboardingProgressSummary"
+                },
+                "permissions": {
+                    "description": "Permissions are everything those roles allow, so a client can show only the actions the caller may take.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "region": {
+                    "type": "string",
+                    "example": "uk"
+                },
+                "roles": {
+                    "description": "Roles are the caller's company roles; empty until they belong to a company.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "totp_enabled": {
+                    "type": "boolean",
+                    "example": false
+                }
+            }
+        },
+        "internal_identityhttp.AuthMeEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_identityhttp.AuthMeData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AuthMessageData": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "example": "logged out"
+                }
+            }
+        },
+        "internal_identityhttp.AuthMessageEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_identityhttp.AuthMessageData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AuthResendVerificationRequest": {
+            "type": "object",
+            "properties": {
+                "verification_session_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "internal_identityhttp.AuthResetPasswordRequest": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string",
+                    "example": "new-secure-password"
+                },
+                "token": {
+                    "type": "string",
+                    "example": "opaque-reset-token"
+                }
+            }
+        },
+        "internal_identityhttp.AuthSessionData": {
+            "type": "object",
+            "properties": {
+                "csrf_token": {
+                    "description": "CSRFToken must be sent as X-CSRF-Token on every POST/PUT/PATCH/DELETE to an authenticated route.",
+                    "type": "string",
+                    "example": "2Yb7vZk0n1l3o9Qm5r8s4tA6uC1dE3fGhIjKlMnOpQw"
+                },
+                "onboarding": {
+                    "$ref": "#/definitions/internal_identityhttp.OnboardingProgressSummary"
+                },
+                "user": {
+                    "$ref": "#/definitions/internal_identityhttp.AuthSessionUser"
+                }
+            }
+        },
+        "internal_identityhttp.AuthSessionEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_identityhttp.AuthSessionData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AuthSessionUser": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string",
+                    "example": "business"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "jerry@example.com"
+                },
+                "email_verified": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "region": {
+                    "type": "string",
+                    "example": "uk"
+                }
+            }
+        },
+        "internal_identityhttp.AuthSignupData": {
+            "type": "object",
+            "properties": {
+                "code_expires_in_seconds": {
+                    "type": "integer",
+                    "example": 300
+                },
+                "email": {
+                    "type": "string",
+                    "example": "jerry@example.com"
+                },
+                "resend_available_in_seconds": {
+                    "type": "integer",
+                    "example": 30
+                },
+                "verification_session_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "internal_identityhttp.AuthSignupEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_identityhttp.AuthSignupData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AuthSignupPatchRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "newemail@example.com"
+                },
+                "verification_session_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "internal_identityhttp.AuthSignupRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "jerry@example.com"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "secure-password-1"
+                }
+            }
+        },
+        "internal_identityhttp.AuthTOTPConfirmRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "123456"
+                }
+            }
+        },
+        "internal_identityhttp.AuthTOTPDisableRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "123456"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "secure-password-1"
+                }
+            }
+        },
+        "internal_identityhttp.AuthTOTPEnrollData": {
+            "type": "object",
+            "properties": {
+                "otpauth_url": {
+                    "type": "string",
+                    "example": "otpauth://totp/OpenHR:jerry@example.com?secret=..."
+                },
+                "secret": {
+                    "type": "string",
+                    "example": "JBSWY3DPEHPK3PXP"
+                }
+            }
+        },
+        "internal_identityhttp.AuthTOTPEnrollEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_identityhttp.AuthTOTPEnrollData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AuthVerifyEmailRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "224879"
+                },
+                "verification_session_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "internal_identityhttp.KYBAddress": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string"
+                },
+                "country": {
+                    "type": "string"
+                },
+                "line1": {
+                    "type": "string"
+                },
+                "line2": {
+                    "type": "string"
+                },
+                "post_code": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_identityhttp.OnboardingProgressSummary": {
+            "type": "object",
+            "properties": {
+                "completed_steps": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "verify_email",
+                        "profile"
+                    ]
+                },
+                "current_step": {
+                    "type": "string",
+                    "example": "profile"
+                },
+                "next_step": {
+                    "type": "string",
+                    "example": "compliance"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "in_progress",
+                        "completed"
+                    ],
+                    "example": "in_progress"
+                }
+            }
+        },
+        "internal_identityhttp.adminUserDetail": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string"
+                },
+                "completed_steps": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "country_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "email_verified_at": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "legal_full_name": {
+                    "type": "string"
+                },
+                "onboarding_completed_at": {
+                    "type": "string"
+                },
+                "onboarding_step": {
+                    "type": "string"
+                },
+                "organization_legal_name": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "region_source": {
+                    "type": "string"
+                },
+                "registry_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_identityhttp.adminUserListItem": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.AcceptRequest": {
+            "type": "object",
+            "properties": {
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.AddressSearchData": {
+            "type": "object",
+            "properties": {
+                "suggestions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_orghttp.AddressSuggestion"
+                    }
+                }
+            }
+        },
+        "internal_orghttp.AddressSearchEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.AddressSearchData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.AddressSearchRequest": {
+            "type": "object",
+            "properties": {
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "query": {
+                    "type": "string",
+                    "example": "10 Downing"
+                }
+            }
+        },
+        "internal_orghttp.AddressSuggestion": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "example": "London"
+                },
+                "description": {
+                    "type": "string",
+                    "example": "10 Downing Street, London, UK"
+                },
+                "formatted_address": {
+                    "type": "string",
+                    "example": "10 Downing Street, London SW1A 2AA, UK"
+                },
+                "line_1": {
+                    "type": "string",
+                    "example": "10 Downing Street"
+                },
+                "line_2": {
+                    "type": "string"
+                },
+                "place_id": {
+                    "type": "string",
+                    "example": "ChIJ..."
+                },
+                "post_code": {
+                    "type": "string",
+                    "example": "SW1A 2AA"
+                },
+                "state_or_county": {
+                    "type": "string",
+                    "example": "Greater London"
+                }
+            }
+        },
+        "internal_orghttp.BusinessEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.BusinessResponse"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.BusinessRequest": {
+            "type": "object",
+            "properties": {
+                "bin_number": {
+                    "type": "string",
+                    "example": "BIN-123456789"
+                },
+                "business_registered_address": {
+                    "type": "string",
+                    "example": "1 High Street, London, UK"
+                },
+                "business_type_id": {
+                    "type": "string",
+                    "example": "61000000-0000-4000-8000-000000000001"
+                },
+                "company_role_id": {
+                    "type": "string",
+                    "example": "60000000-0000-4000-8000-000000000001"
+                },
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "industry_id": {
+                    "type": "string",
+                    "example": "62000000-0000-4000-8000-000000000001"
+                },
+                "legal_business_name": {
+                    "type": "string",
+                    "example": "Oped Technologies Ltd"
+                },
+                "legal_full_name": {
+                    "type": "string",
+                    "example": "Oped Oped"
+                }
+            }
+        },
+        "internal_orghttp.BusinessResponse": {
+            "type": "object",
+            "properties": {
+                "bin_number": {
+                    "type": "string"
+                },
+                "business_registered_address": {
+                    "type": "string"
+                },
+                "business_type_id": {
+                    "type": "string"
+                },
+                "company_role_id": {
+                    "type": "string"
+                },
+                "country_id": {
+                    "type": "string"
+                },
+                "industry_id": {
+                    "type": "string"
+                },
+                "legal_business_name": {
+                    "type": "string"
+                },
+                "legal_full_name": {
+                    "type": "string"
+                },
+                "session": {
+                    "$ref": "#/definitions/internal_orghttp.RegionReissue"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.BusinessType": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "example": "61000000-0000-4000-8000-000000000001"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Early-stage startup"
+                },
+                "slug": {
+                    "type": "string",
+                    "example": "early-stage-startup"
+                }
+            }
+        },
+        "internal_orghttp.BusinessTypeListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_orghttp.BusinessType"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.CompanyRole": {
+            "type": "object",
+            "properties": {
+                "icon_key": {
+                    "type": "string",
+                    "example": "building"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "60000000-0000-4000-8000-000000000001"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Founder / CEO"
+                },
+                "slug": {
+                    "type": "string",
+                    "example": "founder-ceo"
+                }
+            }
+        },
+        "internal_orghttp.CompanyRoleListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_orghttp.CompanyRole"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.CompanySetup": {
+            "type": "object",
+            "properties": {
+                "automated_screening_enabled": {
+                    "type": "boolean"
+                },
+                "dpa_accepted": {
+                    "type": "boolean"
+                },
+                "dpa_accepted_at": {
+                    "type": "string"
+                },
+                "dpa_version": {
+                    "type": "string"
+                },
+                "dpia_recorded_at": {
+                    "type": "string"
+                },
+                "dpia_version": {
+                    "type": "integer"
+                },
+                "dpo_contact": {
+                    "type": "string"
+                },
+                "kyb_status": {
+                    "type": "string"
+                },
+                "privacy_contact_email": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.CompanySetupEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.CompanySetup"
+                }
+            }
+        },
+        "internal_orghttp.CountriesEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_orghttp.CountryResponse"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.CountryResponse": {
+            "type": "object",
+            "properties": {
+                "icon_key": {
+                    "type": "string",
+                    "example": "flag-uk"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "United Kingdom"
+                },
+                "region": {
+                    "type": "string",
+                    "enum": [
+                        "uk",
+                        "us",
+                        "africa",
+                        "eu",
+                        "asia"
+                    ],
+                    "example": "uk"
+                },
+                "slug": {
+                    "type": "string",
+                    "example": "united-kingdom"
+                }
+            }
+        },
+        "internal_orghttp.HiringFrustration": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "emoji": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.HiringFrustrationListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_orghttp.HiringFrustration"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.HiringTool": {
+            "type": "object",
+            "properties": {
+                "icon_url": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.HiringToolListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_orghttp.HiringTool"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.IdentificationRequirementField": {
+            "type": "object",
+            "properties": {
+                "format_hint": {
+                    "type": "string",
+                    "example": "8 digits, or SC/NI prefix + 6 digits"
+                },
+                "key": {
+                    "type": "string",
+                    "example": "registration_number"
+                },
+                "label": {
+                    "type": "string",
+                    "example": "Company Registration Number (CRN)"
+                },
+                "pattern": {
+                    "type": "string",
+                    "example": "^(\\d{8}|(SC|NI)\\d{6})$"
+                },
+                "placeholder": {
+                    "type": "string",
+                    "example": "12345678"
+                },
+                "required": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "internal_orghttp.IdentificationRequirementsData": {
+            "type": "object",
+            "properties": {
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "country_slug": {
+                    "type": "string",
+                    "example": "united-kingdom"
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_orghttp.IdentificationRequirementField"
+                    }
+                }
+            }
+        },
+        "internal_orghttp.IdentificationRequirementsEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.IdentificationRequirementsData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.IndividualEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.IndividualResponse"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.IndividualRequest": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "type": "string",
+                    "example": "61000000-0000-4000-8000-000000000001"
+                },
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "first_name": {
+                    "type": "string",
+                    "example": "Jerry"
+                },
+                "industry_id": {
+                    "type": "string",
+                    "example": "62000000-0000-4000-8000-000000000001"
+                },
+                "last_name": {
+                    "type": "string",
+                    "example": "Oluwasegun"
+                },
+                "no_of_employees": {
+                    "type": "integer",
+                    "example": 10
+                }
+            }
+        },
+        "internal_orghttp.IndividualResponse": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "type": "string"
+                },
+                "country_id": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "industry_id": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "no_of_employees": {
+                    "type": "integer"
+                },
+                "session": {
+                    "$ref": "#/definitions/internal_orghttp.RegionReissue"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.Industry": {
+            "type": "object",
+            "properties": {
+                "emoji": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.IndustryListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_orghttp.Industry"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.KYBAddress": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string"
+                },
+                "country": {
+                    "type": "string"
+                },
+                "line1": {
+                    "type": "string"
+                },
+                "line2": {
+                    "type": "string"
+                },
+                "post_code": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.KYBChangeCountryRequest": {
+            "type": "object",
+            "properties": {
+                "country_code": {
+                    "type": "string",
+                    "example": "KE"
+                }
+            }
+        },
+        "internal_orghttp.KYBConfirmAddressRequest": {
+            "type": "object",
+            "properties": {
+                "address_type": {
+                    "type": "string",
+                    "enum": [
+                        "registered",
+                        "trading"
+                    ]
+                }
+            }
+        },
+        "internal_orghttp.KYBRetryRequest": {
+            "type": "object",
+            "properties": {
+                "legal_name": {
+                    "type": "string"
+                },
+                "registration_number": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.KYBStatusData": {
+            "type": "object",
+            "properties": {
+                "address_confirmable": {
+                    "type": "boolean"
+                },
+                "can_publish": {
+                    "type": "boolean"
+                },
+                "can_retry": {
+                    "type": "boolean"
+                },
+                "checked_at": {
+                    "type": "string"
+                },
+                "country_code": {
+                    "type": "string"
+                },
+                "display": {
+                    "type": "string",
+                    "enum": [
+                        "verified",
+                        "pending_review",
+                        "action_required",
+                        "failed",
+                        "not_started"
+                    ]
+                },
+                "failure_reason": {
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "Kind is \"business\" (company verification) or \"individual\" (manual identity review of a personal organization).",
+                    "type": "string",
+                    "enum": [
+                        "business",
+                        "individual"
+                    ]
+                },
+                "light_retry": {
+                    "type": "boolean"
+                },
+                "name_confirmable": {
+                    "type": "boolean"
+                },
+                "registered_address": {
+                    "type": "string"
+                },
+                "registry_name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "not_started",
+                        "pending",
+                        "verified",
+                        "failed"
+                    ]
+                },
+                "tier": {
+                    "type": "integer"
+                },
+                "verified_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.KYBStatusEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.KYBStatusData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.KYBSubmitRequest": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "$ref": "#/definitions/internal_orghttp.KYBAddress"
+                },
+                "address_type": {
+                    "type": "string",
+                    "enum": [
+                        "registered",
+                        "trading"
+                    ]
+                },
+                "country_code": {
+                    "type": "string",
+                    "example": "GB"
+                },
+                "identifiers": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "legal_name": {
+                    "type": "string",
+                    "example": "Acme Ltd"
+                },
+                "registration_number": {
+                    "type": "string",
+                    "example": "01234567"
+                }
+            }
+        },
+        "internal_orghttp.OnboardingIndustry": {
+            "type": "object",
+            "properties": {
+                "emoji": {
+                    "type": "string",
+                    "example": "💻"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "62000000-0000-4000-8000-000000000001"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Tech / Software"
+                },
+                "slug": {
+                    "type": "string",
+                    "example": "tech-software"
+                }
+            }
+        },
+        "internal_orghttp.OnboardingIndustryListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_orghttp.OnboardingIndustry"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.OnboardingProgressSummary": {
+            "type": "object",
+            "properties": {
+                "completed_steps": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "verify_email",
+                        "profile"
+                    ]
+                },
+                "current_step": {
+                    "type": "string",
+                    "example": "profile"
+                },
+                "next_step": {
+                    "type": "string",
+                    "example": "compliance"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "in_progress",
+                        "completed"
+                    ],
+                    "example": "in_progress"
+                }
+            }
+        },
+        "internal_orghttp.PrivacyContactInput": {
+            "type": "object",
+            "properties": {
+                "dpo_contact": {
+                    "type": "string"
+                },
+                "privacy_contact_email": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.ProductAddressData": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string"
+                },
+                "country_id": {
+                    "type": "string"
+                },
+                "entry_mode": {
+                    "type": "string"
+                },
+                "formatted_address": {
+                    "type": "string"
+                },
+                "identification": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "line_1": {
+                    "type": "string"
+                },
+                "line_2": {
+                    "type": "string"
+                },
+                "onboarding": {
+                    "$ref": "#/definitions/internal_orghttp.OnboardingProgressSummary"
+                },
+                "post_code": {
+                    "type": "string"
+                },
+                "session": {
+                    "$ref": "#/definitions/internal_orghttp.RegionReissue"
+                },
+                "state_or_county": {
+                    "type": "string"
+                },
+                "verification_status": {
+                    "type": "string",
+                    "enum": [
+                        "unverified",
+                        "verified",
+                        "failed"
+                    ],
+                    "example": "unverified"
+                }
+            }
+        },
+        "internal_orghttp.ProductAddressEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.ProductAddressData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.ProductAddressRequest": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "example": "London"
+                },
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "entry_mode": {
+                    "type": "string",
+                    "enum": [
+                        "search",
+                        "manual"
+                    ],
+                    "example": "manual"
+                },
+                "formatted_address": {
+                    "type": "string"
+                },
+                "identification": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "line_1": {
+                    "type": "string",
+                    "example": "10 Downing Street"
+                },
+                "line_2": {
+                    "type": "string"
+                },
+                "post_code": {
+                    "type": "string",
+                    "example": "SW1A 2AA"
+                },
+                "state_or_county": {
+                    "type": "string",
+                    "example": "Greater London"
+                }
+            }
+        },
+        "internal_orghttp.ProductAddressState": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string"
+                },
+                "country_id": {
+                    "type": "string"
+                },
+                "entry_mode": {
+                    "type": "string"
+                },
+                "formatted_address": {
+                    "type": "string"
+                },
+                "identification": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "line_1": {
+                    "type": "string"
+                },
+                "line_2": {
+                    "type": "string"
+                },
+                "post_code": {
+                    "type": "string"
+                },
+                "state_or_county": {
+                    "type": "string"
+                },
+                "verification_status": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.ProductBusinessData": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "description": "BusinessTypeID is empty (omitted) for an individual that did not send one.",
+                    "type": "string"
+                },
+                "employee_count": {
+                    "type": "integer"
+                },
+                "industry_id": {
+                    "type": "string"
+                },
+                "onboarding": {
+                    "$ref": "#/definitions/internal_orghttp.OnboardingProgressSummary"
+                }
+            }
+        },
+        "internal_orghttp.ProductBusinessEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.ProductBusinessData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.ProductBusinessRequest": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "type": "string",
+                    "example": "61000000-0000-4000-8000-000000000001"
+                },
+                "employee_count": {
+                    "type": "integer",
+                    "example": 25
+                },
+                "industry_id": {
+                    "type": "string",
+                    "example": "62000000-0000-4000-8000-000000000001"
+                }
+            }
+        },
+        "internal_orghttp.ProductBusinessState": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "type": "string"
+                },
+                "employee_count": {
+                    "type": "integer"
+                },
+                "industry_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.ProductComplianceData": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "description": "BusinessTypeID is empty (omitted) for an individual that did not send one.",
+                    "type": "string"
+                },
+                "employee_count": {
+                    "type": "integer"
+                },
+                "industry_id": {
+                    "type": "string"
+                },
+                "onboarding": {
+                    "$ref": "#/definitions/internal_orghttp.OnboardingProgressSummary"
+                }
+            }
+        },
+        "internal_orghttp.ProductComplianceEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.ProductComplianceData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.ProductComplianceRequest": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "type": "string",
+                    "example": "61000000-0000-4000-8000-000000000001"
+                },
+                "employee_count": {
+                    "type": "integer",
+                    "example": 25
+                },
+                "industry_id": {
+                    "type": "string",
+                    "example": "62000000-0000-4000-8000-000000000001"
+                }
+            }
+        },
+        "internal_orghttp.ProductComplianceState": {
+            "type": "object",
+            "properties": {
+                "business_type_id": {
+                    "type": "string"
+                },
+                "employee_count": {
+                    "type": "integer"
+                },
+                "industry_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.ProductOnboardingCompleteData": {
+            "type": "object",
+            "properties": {
+                "organization": {
+                    "description": "Organization is the personal organization an individual account got (absent for business accounts).",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/internal_orghttp.ProductOrganizationStub"
+                        }
+                    ]
+                },
+                "redirect_url": {
+                    "type": "string",
+                    "example": "/dashboard"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "completed"
+                },
+                "workspace": {
+                    "$ref": "#/definitions/internal_orghttp.ProductWorkspaceStub"
+                }
+            }
+        },
+        "internal_orghttp.ProductOnboardingCompleteEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.ProductOnboardingCompleteData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.ProductOnboardingStatusData": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string",
+                    "example": "business"
+                },
+                "address": {
+                    "$ref": "#/definitions/internal_orghttp.ProductAddressState"
+                },
+                "business": {
+                    "description": "deprecated: use compliance",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/internal_orghttp.ProductBusinessState"
+                        }
+                    ]
+                },
+                "completed_steps": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "compliance": {
+                    "$ref": "#/definitions/internal_orghttp.ProductComplianceState"
+                },
+                "current_step": {
+                    "type": "string",
+                    "example": "identification_address"
+                },
+                "next_step": {
+                    "type": "string",
+                    "example": "compliance"
+                },
+                "profile": {
+                    "$ref": "#/definitions/internal_orghttp.ProductProfileState"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "in_progress",
+                        "completed"
+                    ],
+                    "example": "in_progress"
+                }
+            }
+        },
+        "internal_orghttp.ProductOnboardingStatusEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.ProductOnboardingStatusData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.ProductOrganizationStub": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": [
+                        "individual",
+                        "business"
+                    ],
+                    "example": "individual"
+                },
+                "verification_status": {
+                    "type": "string",
+                    "enum": [
+                        "not_started",
+                        "pending",
+                        "verified",
+                        "failed"
+                    ],
+                    "example": "pending"
+                }
+            }
+        },
+        "internal_orghttp.ProductProfileData": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string",
+                    "example": "business"
+                },
+                "company_role_id": {
+                    "type": "string"
+                },
+                "country_id": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "legal_business_name": {
+                    "type": "string"
+                },
+                "legal_full_name": {
+                    "type": "string"
+                },
+                "onboarding": {
+                    "$ref": "#/definitions/internal_orghttp.OnboardingProgressSummary"
+                },
+                "region": {
+                    "type": "string",
+                    "example": "uk"
+                },
+                "session": {
+                    "$ref": "#/definitions/internal_orghttp.RegionReissue"
+                }
+            }
+        },
+        "internal_orghttp.ProductProfileEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.ProductProfileData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.ProductProfileRequest": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string",
+                    "enum": [
+                        "individual",
+                        "business"
+                    ],
+                    "example": "business"
+                },
+                "company_role_id": {
+                    "type": "string",
+                    "example": "60000000-0000-4000-8000-000000000001"
+                },
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "first_name": {
+                    "type": "string",
+                    "example": "Jerry"
+                },
+                "last_name": {
+                    "type": "string",
+                    "example": "Oluwasegun"
+                },
+                "legal_business_name": {
+                    "type": "string",
+                    "example": "ANGLE"
+                },
+                "legal_full_name": {
+                    "type": "string",
+                    "example": "Jerry Oluwasegun"
+                }
+            }
+        },
+        "internal_orghttp.ProductProfileState": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string"
+                },
+                "company_role_id": {
+                    "type": "string"
+                },
+                "country_id": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "legal_business_name": {
+                    "type": "string"
+                },
+                "legal_full_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.ProductWorkspaceStub": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "example": "770e8400-e29b-41d4-a716-446655440000"
+                },
+                "slug": {
+                    "type": "string",
+                    "example": "angle"
+                }
+            }
+        },
+        "internal_orghttp.RegionReissue": {
+            "type": "object",
+            "properties": {
+                "csrf_token": {
+                    "type": "string",
+                    "example": "2Yb7vZk0n1l3o9Qm5r8s4tA6uC1dE3fGhIjKlMnOpQw"
+                },
+                "region": {
+                    "type": "string",
+                    "example": "uk"
+                }
+            }
+        },
+        "internal_orghttp.Role": {
+            "type": "object",
+            "properties": {
+                "emoji": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.RoleListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_orghttp.Role"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.TeamSize": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "max_size": {
+                    "type": "integer"
+                },
+                "min_size": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_orghttp.TeamSizeListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_orghttp.TeamSize"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.VerifyAddressEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.VerifyAddressResponse"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.VerifyAddressRequest": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "example": "London"
+                },
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "entry_mode": {
+                    "type": "string",
+                    "enum": [
+                        "search",
+                        "manual"
+                    ],
+                    "example": "search"
+                },
+                "formatted_address": {
+                    "type": "string"
+                },
+                "line_1": {
+                    "type": "string",
+                    "example": "10 Downing Street"
+                },
+                "line_2": {
+                    "type": "string"
+                },
+                "place_id": {
+                    "type": "string",
+                    "example": "ChIJ..."
+                },
+                "post_code": {
+                    "type": "string",
+                    "example": "SW1A 2AA"
+                },
+                "state_or_county": {
+                    "type": "string",
+                    "example": "Greater London"
+                }
+            }
+        },
+        "internal_orghttp.VerifyAddressResponse": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "example": "London"
+                },
+                "country_id": {
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+                },
+                "entry_mode": {
+                    "type": "string",
+                    "enum": [
+                        "search",
+                        "manual"
+                    ],
+                    "example": "search"
+                },
+                "failure_reason": {
+                    "type": "string",
+                    "enum": [
+                        "not_verifiable",
+                        "invalid_address"
+                    ],
+                    "example": "not_verifiable"
+                },
+                "formatted_address": {
+                    "type": "string"
+                },
+                "line_1": {
+                    "type": "string",
+                    "example": "10 Downing Street"
+                },
+                "line_2": {
+                    "type": "string"
+                },
+                "post_code": {
+                    "type": "string",
+                    "example": "SW1A 2AA"
+                },
+                "state_or_county": {
+                    "type": "string",
+                    "example": "Greater London"
+                },
+                "verification_status": {
+                    "type": "string",
+                    "enum": [
+                        "verified",
+                        "failed",
+                        "unverified"
+                    ],
+                    "example": "verified"
+                }
+            }
+        },
+        "internal_orghttp.WaitlistBusinessType": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.WaitlistBusinessTypeListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_orghttp.WaitlistBusinessType"
+                    }
+                },
+                "has_more": {
+                    "type": "boolean"
+                },
+                "next_cursor": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string",
+                    "example": "abc123"
+                }
+            }
         }
     },
     "securityDefinitions": {
-        "BearerAuth": {
-            "description": "JWT access token. Send the raw token, or optionally prefix with \"Bearer \".",
+        "AdminSessionCookie": {
+            "description": "Admin session cookie (` + "`" + `__Host-openhr_admin_session` + "`" + `). Unsafe methods also need the ` + "`" + `X-CSRF-Token` + "`" + ` header.",
             "type": "apiKey",
-            "name": "Authorization",
+            "name": "Cookie",
+            "in": "header"
+        },
+        "SessionCookie": {
+            "description": "Product session cookie (` + "`" + `__Host-openhr_session` + "`" + `). Set by the server on login; sent automatically by browsers. Unsafe methods also need the ` + "`" + `X-CSRF-Token` + "`" + ` header.",
+            "type": "apiKey",
+            "name": "Cookie",
             "in": "header"
         }
     }
@@ -12025,7 +11948,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
 	Title:            "Angle HR API",
-	Description:      "Waitlist and product onboarding API for Open HR.\nInteractive docs (Scalar) are served at `/` in non-production environments.\nProduct flow: signup → verify email (6-digit OTP, 5 min expiry) → profile → address → [business] → complete.\nOnboarding step endpoints require `Authorization: Bearer <access_token>` after email verification.\nAdmin ops console APIs live under `/api/v1/admin` and require a separate admin JWT (`token_use=admin`).",
+	Description:      "Waitlist and product onboarding API for Open HR.\nInteractive docs (Scalar) are served at `/` in non-production environments.\nProduct flow: signup → verify email (6-digit OTP, 5 min expiry) → profile → address → [business] → complete.\nAuthentication is a server-side session in an HttpOnly cookie (`__Host-openhr_session`, or `openhr_session` when COOKIE_SECURE=false); there are no bearer tokens.\nLogin, verify-email, login/otp/verify, login/totp and accept-invite return `csrf_token` in the body; `GET /auth/me` returns it again on page load. Every POST/PUT/PATCH/DELETE on an authenticated route must send it as `X-CSRF-Token` (403 `CSRF_INVALID` otherwise). Browsers must call with credentials included.\nAdmin ops console APIs live under `/api/v1/admin` and use a separate cookie (`__Host-openhr_admin_session`) and CSRF token.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

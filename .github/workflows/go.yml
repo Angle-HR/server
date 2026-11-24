@@ -1,0 +1,163 @@
+# Continuous integration for the Go backend: build, vet, tests (with Postgres and NATS so the integration tests run
+# instead of skipping), architecture boundary tests, protobuf lint and a stale-generated-code check.
+#
+# This workflow only reads the repository. It is separate from the deploy workflows (container-images.yml,
+# migrate.yml), which run on pushes to staging/production and workflow_dispatch; nothing here pushes images or
+# touches AWS. Lint runs non-blocking (see the lint job and docs/microservices/hardening.md).
+name: Go
+
+on:
+  pull_request:
+  push:
+    branches:
+      - staging
+      - production
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: go-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The Go version comes from go.mod (`go 1.26.0`), so CI and the module cannot drift apart.
+  BUF_VERSION: 1.75.0
+
+jobs:
+  test:
+    name: Build, vet, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          # The tests create throwaway databases/schemas, so the user needs CREATE DATABASE.
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      EVENTS_PG_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      JOBMODEL_PG_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      EVENTS_NATS_URL: nats://localhost:4222
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Service containers cannot take command arguments, and JetStream needs `-js`.
+      - name: Start NATS (JetStream)
+        run: |
+          docker run -d --name nats -p 4222:4222 -p 8222:8222 nats:2-alpine -js -m 8222
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8222/healthz >/dev/null 2>&1; then exit 0; fi
+            sleep 1
+          done
+          docker logs nats
+          echo "NATS did not become healthy" >&2
+          exit 1
+
+      - name: go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      # Architecture boundaries. They also run in the full suite below; running them first (uncached, verbose) makes a
+      # boundary break the first thing a reviewer sees, and fails the job if the tests ever disappear.
+      - name: Import boundary tests
+        run: |
+          go test -count=1 -v -run 'TestNoCloudSDKs' ./pkg/events/ | tee boundary.log
+          go test -count=1 -v ./internal/hiring/appjobs/ | tee -a boundary.log
+          grep -q -- '--- PASS: TestNoCloudSDKs' boundary.log
+          grep -q -- '^ok' boundary.log
+
+      - name: Test
+        run: go test -race -count=1 -timeout 10m ./...
+
+      - name: Postgres and NATS tests ran (were not skipped)
+        run: |
+          go test -count=1 -v ./pkg/events/outbox/ ./pkg/events/nats/ ./internal/applicationsvc/jobmodel/ | tee pg.log
+          if grep -E -- '--- SKIP' pg.log; then
+            echo "integration tests were skipped: EVENTS_PG_URL / EVENTS_NATS_URL / JOBMODEL_PG_URL not honoured" >&2
+            exit 1
+          fi
+
+  proto:
+    name: Protobuf lint and generated code
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          version: ${{ env.BUF_VERSION }}
+          github_token: ${{ github.token }}
+
+      - name: buf lint
+        run: buf lint
+
+      # `make proto` runs buf lint then buf generate; the plugins are pinned by `tool` directives in go.mod.
+      - name: Generated code is up to date
+        run: |
+          make proto
+          if [ -n "$(git status --porcelain -- gen)" ]; then
+            git status --porcelain -- gen
+            git diff -- gen | head -200
+            echo "gen/ is stale: run 'make proto' and commit the result" >&2
+            exit 1
+          fi
+
+  # golangci-lint is installed with `go install` so it is compiled by the Go version in go.mod. The prebuilt release
+  # binaries are built with an older Go and panic when the module needs a newer toolchain. Non-blocking until the
+  # existing findings are triaged: the job always passes and prints the finding count. Drop continue-on-error (and
+  # the `|| true`) to make it a gate.
+  lint:
+    name: Lint (golangci-lint, non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install golangci-lint built with the module's Go
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0
+          golangci-lint version
+
+      - name: golangci-lint
+        continue-on-error: true
+        run: |
+          golangci-lint run --timeout=10m --output.json.path=lint.json || true
+          count=$(jq '.Issues // [] | length' lint.json)
+          echo "golangci-lint findings: ${count}"
+          echo "### golangci-lint findings: ${count}" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '(.Issues // []) | group_by(.FromLinter) | map("\(.[0].FromLinter): \(length)") | .[]' lint.json | tee -a "$GITHUB_STEP_SUMMARY"

@@ -1,4 +1,4 @@
-.PHONY: fmt lint test cover security check tidy pr-description migrate migrate-up migrate-down migrate-all migrate-global migrate-global-up migrate-global-down swagger swagger-check
+.PHONY: email-queue-depth totp-rekey-dry-run fmt lint test cover security check tidy pr-description migrate migrate-up migrate-down migrate-all migrate-global migrate-global-up migrate-global-down swagger swagger-check
 
 PR_TEMPLATE := .github/pull_request_template.md
 PR_OUT_DIR := pr_template
@@ -206,3 +206,11 @@ pr-description:
 	echo "✅ Wrote $$out"
 # Protobuf/gRPC contracts (proto, proto-lint, proto-breaking)
 include make/proto.mk
+
+# Legacy Fluvio email queue depth: exit 0 when empty, so email-worker can be retired. See docs/microservices/hardening.md.
+email-queue-depth: ## Report jobs left in the Fluvio email queue (DB_URL_GLOBAL, or LOCAL=1 for the docker stack)
+	@./scripts/email-queue-depth.sh
+
+# Shows how many stored TOTP secrets a key rotation would re-encrypt (writes nothing).
+totp-rekey-dry-run: ## Dry run of cmd/totp-rekey
+	@go run ./cmd/totp-rekey -dry-run

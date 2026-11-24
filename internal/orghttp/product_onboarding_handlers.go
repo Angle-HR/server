@@ -83,6 +83,10 @@ func (h *ProductOnboardingHandler) reissueIfMigrated(
 	return &RegionReissue{Region: string(reg)}, nil
 }
 
+// defaultCountryID is the United Kingdom (seed row in global_registry/000001): the country of a business account that
+// never gave one.
+var defaultCountryID = uuid.MustParse("a1b2c3d4-e5f6-4789-a012-3456789abcde")
+
 type productProfileBody struct {
 	AccountType       string  `json:"account_type" validate:"required,oneof=individual business"`
 	FirstName         *string `json:"first_name"`
@@ -489,14 +493,14 @@ func (h *ProductOnboardingHandler) saveAddress(
 		return ProductAddressData{}, fmt.Errorf("save address: resolve database: %w", err)
 	}
 
-	// The country saved on the profile step wins; accounts that predate that (still global, no country) send it here.
+	// The country saved on the profile step wins; accounts that predate that send it here, else they default to the UK.
 	var countryID uuid.UUID
 	if saved, serr := loadStatusUser(ctx, pool, reg, userID); serr == nil && saved.countryID != nil {
 		countryID = *saved.countryID
 	} else if isUUID(req.CountryID) {
 		countryID = uuid.MustParse(req.CountryID)
 	} else {
-		return ProductAddressData{}, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidCountryID)
+		countryID = defaultCountryID
 	}
 	req.CountryID = countryID.String()
 	if err = h.ensureActiveCountry(ctx, countryID); err != nil {
@@ -1396,6 +1400,9 @@ func loadProfileState(
 	}
 	if user.countryID != nil {
 		s := user.countryID.String()
+		profile.CountryID = &s
+	} else if *user.accountType == onboarding.AccountBusiness {
+		s := defaultCountryID.String() // accounts from before the country moved to the profile step
 		profile.CountryID = &s
 	}
 	if *user.accountType != onboarding.AccountBusiness {

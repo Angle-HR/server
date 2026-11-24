@@ -19,6 +19,9 @@ const randomTokenBytes = 32
 const (
 	resetKeyPrefix = "auth:reset:"
 	resetTTL       = time.Hour
+
+	forgotCooldownPrefix = "auth:forgot:cooldown:"
+	forgotCooldown       = 60 * time.Second
 )
 
 // ResetStore persists password-reset tokens in Redis.
@@ -112,4 +115,18 @@ func newOpaqueToken() (string, error) {
 		return "", fmt.Errorf("generate reset token: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+// AllowForgotRequest reserves the per-email forgot-password cooldown. It
+// returns false when a request for the same (normalized) email was already
+// accepted within the cooldown, whether or not that email has an account.
+func (s *ResetStore) AllowForgotRequest(ctx context.Context, email string) (bool, error) {
+	if s == nil || s.client == nil {
+		return false, errors.New("reset store unavailable")
+	}
+	ok, err := s.client.SetNX(ctx, forgotCooldownPrefix+email, "1", forgotCooldown).Result()
+	if err != nil {
+		return false, fmt.Errorf("forgot-password cooldown: %w", err)
+	}
+	return ok, nil
 }

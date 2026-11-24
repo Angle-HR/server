@@ -1,0 +1,227 @@
+package identityhttp
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"strings"
+
+	"github.com/jackc/pgx/v5"
+
+	"github.com/Angle-HR/server/internal/apidoc"
+	"github.com/Angle-HR/server/internal/auth"
+	"github.com/Angle-HR/server/internal/mailer"
+	"github.com/Angle-HR/server/internal/query"
+	"github.com/Angle-HR/server/internal/queue"
+	"github.com/Angle-HR/server/internal/region"
+	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
+	"github.com/Angle-HR/server/pkg/response"
+)
+
+var _ = apidoc.ErrorEnvelope{}
+
+// forgotPassword godoc
+//
+//	@Summary		Request password reset
+//	@Description	Always returns 200. When the email exists, enqueues a reset link (token TTL 1 hour).
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		identityhttp.AuthForgotPasswordRequest	true	"Forgot password payload"
+//	@Success		200		{object}	identityhttp.AuthMessageEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		500		{object}	apidoc.ErrorEnvelope
+//	@Router			/auth/forgot-password [post]
+func (h *AuthHandler) forgotPassword(w http.ResponseWriter, r *http.Request) {
+	var req authForgotPasswordBody
+	if err := decodeJSON(r, &req); err != nil {
+		response.Error(w, r, apperror.InvalidBody(err))
+		return
+	}
+	if err := h.validate.Struct(req); err != nil {
+		response.Error(w, r, validationError(err))
+		return
+	}
+
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	ctx := r.Context()
+	msg := AuthMessageData{Message: "If an account exists for that email, a reset link has been sent."}
+
+	// Per-email cooldown, applied before any lookup and answered with the same
+	// generic 200, so it neither limits abuse visibly nor reveals the account.
+	if h.Resetter != nil {
+		allowed, cooldownErr := h.Resetter.AllowForgotRequest(ctx, email)
+		if cooldownErr != nil {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
+		if !allowed {
+			response.Success(w, r, http.StatusOK, msg)
+			return
+		}
+	}
+
+	reg, userID, err := h.resolveUserRegion(ctx, email)
+	if err != nil {
+		response.Success(w, r, http.StatusOK, msg)
+		return
+	}
+
+	user, err := h.loadUserByID(ctx, reg, userID)
+	if err != nil || user.EmailVerifiedAt == nil {
+		response.Success(w, r, http.StatusOK, msg)
+		return
+	}
+
+	if h.Resetter == nil {
+		response.Success(w, r, http.StatusOK, msg)
+		return
+	}
+
+	token, err := h.Resetter.CreateToken(ctx, auth.ResetSession{
+		UserID: user.ID,
+		Email:  user.Email,
+		Region: string(reg),
+	})
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
+	h.enqueuePasswordResetEmail(ctx, user.Email, token)
+	response.Success(w, r, http.StatusOK, msg)
+}
+
+// resetPassword godoc
+//
+//	@Summary		Reset password
+//	@Description	Sets a new password using a forgot-password token and revokes all of the user's sessions.
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		identityhttp.AuthResetPasswordRequest	true	"Reset password payload"
+//	@Success		200		{object}	identityhttp.AuthMessageEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		500		{object}	apidoc.ErrorEnvelope
+//	@Router			/auth/reset-password [post]
+func (h *AuthHandler) resetPassword(w http.ResponseWriter, r *http.Request) {
+	var req authResetPasswordBody
+	if err := decodeJSON(r, &req); err != nil {
+		response.Error(w, r, apperror.InvalidBody(err))
+		return
+	}
+	if err := h.validate.Struct(req); err != nil {
+		response.Error(w, r, validationError(err))
+		return
+	}
+
+	if err := auth.ValidatePassword(req.Password); err != nil {
+		response.Error(w, r, passwordPolicyError("password"))
+		return
+	}
+
+	ctx := r.Context()
+	if h.Resetter == nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
+	session, err := h.Resetter.LoadToken(ctx, req.Token)
+	if err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeVerificationExpired, "reset token invalid or expired"))
+		return
+	}
+
+	reg := region.Region(session.Region)
+	if !region.Valid(reg) {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
+	pool, err := h.Router.DB(reg)
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
+	user, err := h.loadUserByID(ctx, reg, session.UserID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			response.Error(w, r, apperror.ErrNotFound)
+			return
+		}
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+	if auth.CheckPassword(user.PasswordHash, req.Password) {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, "New password can’t be the same as your current one."))
+		return
+	}
+
+	passwordHash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
+	// Consume only after validation so the user can retry with a different password.
+	if _, err := h.Resetter.ConsumeToken(ctx, req.Token); err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeVerificationExpired, "reset token invalid or expired"))
+		return
+	}
+
+	sql, args, err := query.UpdateAccountUserPassword(session.UserID, passwordHash)
+	if err != nil {
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+	if err := pool.QueryRow(ctx, sql, args...).Scan(&session.UserID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			response.Error(w, r, apperror.ErrNotFound)
+			return
+		}
+		response.Error(w, r, apperror.ErrInternal)
+		return
+	}
+
+	// A reset ends every session of the user (cookie sessions and pending MFA pre-auth).
+	if h.Sessions != nil {
+		if revokeErr := h.Sessions.RevokeAll(ctx, session.UserID); revokeErr != nil {
+			response.Error(w, r, apperror.ErrInternal)
+			return
+		}
+	}
+
+	response.Success(w, r, http.StatusOK, AuthMessageData{Message: "password updated"})
+}
+
+func (h *AuthHandler) enqueuePasswordResetEmail(ctx context.Context, email, token string) {
+	if h.Enqueuer == nil {
+		return
+	}
+	tx, err := h.GlobalDB.Begin(ctx)
+	if err != nil {
+		return
+	}
+	defer rollbackOnError(ctx, tx)
+
+	_, enqueueErr := h.Enqueuer.EnqueueTx(ctx, tx, mailer.EmailArgs{
+		Type:             mailer.TypePasswordReset,
+		Recipient:        email,
+		Token:            token,
+		ExpiresInSeconds: auth.ResetTTLSeconds(),
+	}, queue.EmailEnqueueOptions()...)
+	besteffort.Log(ctx, "Enqueuer.EnqueueTx", enqueueErr)
+	besteffort.Log(ctx, "tx.Commit", tx.Commit(ctx))
+}
+
+// passwordPolicyError is the VALIDATION_ERROR returned when a new password
+// breaks auth.ValidatePassword; path names the offending request field.
+func passwordPolicyError(path string) error {
+	return apperror.NewWithDetails(
+		apperror.CodeValidationError,
+		apperror.MsgInvalidRequest,
+		map[string]any{"fields": []fieldError{{Path: path, Message: auth.PasswordPolicyMessage}}},
+	)
+}

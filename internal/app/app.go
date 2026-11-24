@@ -25,11 +25,13 @@ import (
 	"github.com/Angle-HR/server/internal/handler"
 	"github.com/Angle-HR/server/internal/hiring/hiringhttp"
 	"github.com/Angle-HR/server/internal/hiring/hiringstore"
+	"github.com/Angle-HR/server/internal/identityhttp"
 	"github.com/Angle-HR/server/internal/kyb"
 	"github.com/Angle-HR/server/internal/kyb/kybnotify"
-	"github.com/Angle-HR/server/internal/onboarding"
+	"github.com/Angle-HR/server/internal/orghttp"
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/region"
+	"github.com/Angle-HR/server/internal/session"
 	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/config"
 	"github.com/Angle-HR/server/pkg/db"
@@ -88,8 +90,8 @@ func useCommonMiddleware(router chi.Router, cfg config.Config, log *slog.Logger)
 		router.Use(cors.Handler(cors.Options{
 			AllowedOrigins:   allowedOrigins,
 			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "If-Match"},
-			AllowCredentials: false,
+			AllowedHeaders:   []string{"Accept", "Content-Type", "If-Match", "Idempotency-Key", session.CSRFHeader},
+			AllowCredentials: true, // session cookies; origins are an explicit allow-list, never "*"
 			MaxAge:           corsMaxAgeSeconds,
 		}))
 	}
@@ -137,48 +139,75 @@ func Run() error {
 		return fmt.Errorf("create Fluvio client: %w", err)
 	}
 
-	tokenService, err := auth.NewTokenService(cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
-	if err != nil {
-		return fmt.Errorf("create token service: %w", err)
+	emailQueue := fluvioClient
+
+	sessionCfg := session.ManagerConfig{
+		IdleTTL: cfg.SessionIdleTTL, AbsoluteTTL: cfg.SessionAbsoluteTTL, Secure: cfg.CookieSecure,
 	}
-	totpCrypto, err := auth.NewTOTPCrypto(cfg.TOTPEncryptionKey)
+	sessionCfg.Kind = session.KindProduct
+	productSessions := session.NewManager(redisClient, sessionCfg)
+	sessionCfg.Kind = session.KindAdmin
+	adminSessions := session.NewManager(redisClient, sessionCfg)
+	totpCrypto, err := auth.NewTOTPCryptoKeys(cfg.TOTPEncryptionKey, cfg.TOTPEncryptionKeyPrevious)
 	if err != nil {
 		return fmt.Errorf("create totp crypto: %w", err)
 	}
-	authMiddleware := auth.NewMiddleware(tokenService)
+	authMiddleware := auth.NewMiddleware(productSessions)
 
 	adminStore := admin.NewStore(globalPool)
 	if bootstrapErr := bootstrapAdmin(ctx, cfg, adminStore); bootstrapErr != nil {
 		return bootstrapErr
 	}
-	adminMiddleware := auth.NewAdminMiddleware(tokenService, adminStore)
+	adminMiddleware := auth.NewAdminMiddleware(adminSessions, adminStore)
+	adminMiddleware.RequireMFA = cfg.AdminTOTPRequired
 
-	countriesHandler := handler.NewCountriesHandler(globalPool)
-	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, totpCrypto)
-	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient, tokenService)
-	wireAddressProviders(productOnboardingHandler, cfg)
-	individualOnboardingHandler := handler.NewIndividualOnboardingHandler(dbRouter, globalPool, tokenService)
-	businessOnboardingHandler := handler.NewBusinessOnboardingHandler(dbRouter, globalPool, tokenService)
-	kybHandler := handler.NewKYBHandler(dbRouter, globalPool, newKYBRegistry(cfg))
-	kybNotifierFor := newKYBNotifierFactory(dbRouter, globalPool, fluvioClient)
-	kybHandler.NotifierFor = kybNotifierFor
-	kybHandler.Formats = onboarding.RegistrationNumberFormatOK
+	var identityDeps identityhttp.Deps
+	var authHandler *identityhttp.AuthHandler
+	var identityAdmin *identityhttp.AdminHandler
+	if !identityhttp.Remote() {
+		authHandler = identityhttp.NewAuthHandler(dbRouter, globalPool, redisClient, productSessions, emailQueue, totpCrypto)
+	}
+	// The org routes (countries, onboarding, company verification) live in internal/orghttp so cmd/org serves the
+	// same handlers. ORG_REMOTE=on stops this process serving them (and hiring's agreements routes).
+	var orgHandlers *orghttp.Handlers
+	if !orghttp.Remote() {
+		orgHandlers = orghttp.New(orghttp.Deps{
+			Router: dbRouter, Global: globalPool, Sessions: productSessions, Enqueuer: emailQueue, Config: cfg,
+		})
+	}
+	kybNotifierFor := newKYBNotifierFactory(dbRouter, globalPool, emailQueue)
 	hiringHandler := newHiringHandler(dbRouter, globalPool)
 	publicHandler := newPublicHandler(cfg, dbRouter, globalPool, redisClient, log)
 	hiringHandler.Public = publicHandler.Public
 	hiringHandler.Applications = newApplicationsService(cfg, dbRouter, log)
-	authHandler.MeAccess = hiringHandler.Access
+	if authHandler != nil {
+		authHandler.MeAccess = hiringHandler.Access
+	}
 	adminHandler := handler.NewAdminHandler(
 		adminStore,
 		dbRouter,
 		globalPool,
 		redisClient,
-		tokenService,
+		adminSessions,
 		fluvioClient,
-		fluvioClient,
+		emailQueue,
 	)
 
 	adminHandler.KYBNotifierFor = kybNotifierFor
+	if !identityhttp.Remote() {
+		review, closeReview, reviewErr := identityhttp.OrgReviewFromEnv(dbRouter, identityhttp.KYBNotifierFactory(kybNotifierFor))
+		if reviewErr != nil {
+			return reviewErr
+		}
+		defer closeReview()
+		identityAdmin = identityhttp.NewAdminHandler(adminStore, dbRouter, globalPool, redisClient, adminSessions,
+			emailQueue, review)
+		identityAdmin.UseTOTP(totpCrypto, cfg.AdminTOTPRequired)
+	}
+	identityDeps = identityhttp.Deps{
+		Auth: authHandler, Admin: identityAdmin, RequireAuth: authMiddleware.RequireAuth, AdminMW: adminMiddleware,
+		AdminExtra: func(r chi.Router) { adminHandler.RegisterProtectedRoutes(r, adminMiddleware) },
+	}
 
 	router := chi.NewRouter()
 	useCommonMiddleware(router, cfg, log)
@@ -194,27 +223,23 @@ func Run() error {
 	publicHandler.RegisterPages(router)
 
 	router.Route("/api/v1", func(r chi.Router) {
-		countriesHandler.RegisterRoutes(r)
-		r.Route("/auth", authHandler.RegisterRoutes)
-		productOnboardingHandler.RegisterRoutes(r)
+		// Browsers must come from an allowed origin on unsafe methods (CSRF defence in depth).
+		r.Use(session.OriginGuard(cfg.AllowedOrigins))
+		if orgHandlers != nil {
+			orgHandlers.RegisterPublicRoutes(r)
+		}
 		publicHandler.RegisterRoutes(r)
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.RequireAuth)
-			authHandler.RegisterProtectedRoutes(r)
-			productOnboardingHandler.RegisterProtectedRoutes(r)
-			individualOnboardingHandler.RegisterProtectedRoutes(r)
-			businessOnboardingHandler.RegisterProtectedRoutes(r)
-			kybHandler.RegisterProtectedRoutes(r)
+			if orgHandlers != nil {
+				orgHandlers.RegisterProtectedRoutes(r)
+			}
 			hiringHandler.RegisterProtectedRoutes(r)
 		})
 
-		r.Route("/admin", func(r chi.Router) {
-			adminHandler.RegisterPublicRoutes(r)
-			r.Group(func(r chi.Router) {
-				r.Use(adminMiddleware.RequireAdmin)
-				adminHandler.RegisterProtectedRoutes(r, adminMiddleware)
-			})
-		})
+		// Identity routes (/auth/*, /organizations/invites, the identity half of /admin). With IDENTITY_REMOTE=on they
+		// are left to cmd/identity and only the admin catalogs and jobs stay here.
+		identityhttp.Mount(r, identityDeps)
 	})
 
 	server := &http.Server{
@@ -284,21 +309,6 @@ func newHiringHandler(router *dbrouter.DBRouter, global *pgxpool.Pool) *hiringht
 	return hiringhttp.NewHiringHandler(dir, identify)
 }
 
-// newKYBRegistry installs the automated company verifiers that are configured.
-// A country without one is verified by a person (Tier 2), so the UK stays a
-// manual review until COMPANIES_HOUSE_API_KEY is set. Czechia (ARES) and Finland
-// (PRH) need no key and are always installed.
-func newKYBRegistry(cfg config.Config) *kyb.Registry {
-	reg := kyb.NewRegistry()
-	if cfg.CompaniesHouseAPIKey != "" {
-		reg.Register("GB", &kyb.CompaniesHouse{APIKey: cfg.CompaniesHouseAPIKey})
-	}
-	// Keyless open registries: always on.
-	reg.Register("CZ", &kyb.ARES{})
-	reg.Register("FI", &kyb.PRH{})
-	return reg
-}
-
 // newKYBNotifierFactory returns the factory that builds a region's KYB email notifier.
 // A region with no database yields no notifier, so verification still works without emails.
 func newKYBNotifierFactory(
@@ -310,22 +320,5 @@ func newKYBNotifierFactory(
 			return nil
 		}
 		return &kybnotify.Notifier{Regional: pool, Global: global, Enqueuer: enqueuer}
-	}
-}
-
-// wireAddressProviders picks the address search and verification providers from config.
-func wireAddressProviders(h *handler.ProductOnboardingHandler, cfg config.Config) {
-	google := onboarding.NewGoogleAddressProvider(cfg.GoogleMapsAPIKey)
-	switch cfg.AddressVerifyMode {
-	case "passthrough":
-		h.AddressProvider = onboarding.PassthroughAddressVerifier{}
-	case "google":
-		h.AddressProvider = google
-	}
-	switch cfg.AddressSearchMode {
-	case "passthrough":
-		h.AddressSearcher = onboarding.PassthroughAddressSearcher{}
-	case "google":
-		h.AddressSearcher = google
 	}
 }

@@ -12,7 +12,7 @@ const dueSQL = `
 SELECT v.organization_id::text
 FROM accounts.organization_verifications v
 JOIN accounts.organizations o ON o.id = v.organization_id
-WHERE o.kyb_status = 'failed' AND v.checked_at IS NOT NULL AND v.checked_at <= $1
+WHERE o.kyb_status = 'failed' AND o.kind = 'business' AND v.checked_at IS NOT NULL AND v.checked_at <= $1
 ORDER BY v.checked_at`
 
 // DueOrganizations lists organizations whose verification failed at or before the

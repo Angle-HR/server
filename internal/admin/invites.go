@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Angle-HR/server/internal/identityevents"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/besteffort"
 )
@@ -89,6 +90,13 @@ func (s *Store) InviteStaff(
 	`, u.ID))
 	if err != nil {
 		return InviteResult{}, err
+	}
+
+	// identity.staff.invited.v1: ids only, in the same transaction (no-op unless IDENTITY_EVENTS=on).
+	if err := identityevents.EnqueueStaffInvited(ctx, tx, identityevents.StaffInvited{
+		StaffID: u.ID.String(), InvitedBy: uuidString(inviter), InvitedAt: time.Now(),
+	}); err != nil {
+		return InviteResult{}, fmt.Errorf("enqueue staff invited event: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -252,7 +260,7 @@ func (s *Store) AcceptInvite(ctx context.Context, rawToken, name, passwordHash s
 	}
 
 	u, err := scanUser(tx.QueryRow(ctx, `
-		SELECT id, email, name, is_active, created_at, updated_at, password_hash
+		SELECT id, email, name, is_active, created_at, updated_at, password_hash, totp_secret, totp_enabled_at
 		FROM admin.users WHERE id = $1
 	`, userID))
 	if err != nil {
@@ -263,4 +271,11 @@ func (s *Store) AcceptInvite(ctx context.Context, rawToken, name, passwordHash s
 		return AcceptInviteResult{}, err
 	}
 	return AcceptInviteResult{User: u}, nil
+}
+
+func uuidString(id *uuid.UUID) string {
+	if id == nil {
+		return ""
+	}
+	return id.String()
 }

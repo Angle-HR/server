@@ -63,7 +63,7 @@ var catalogDefs = map[string]catalogDef{
 //	@Summary		List catalog entries
 //	@Tags			admin/catalogs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		AdminSessionCookie
 //	@Param			type	path		string	true	"Catalog type"
 //	@Success		200		{object}	handler.AdminCatalogListEnvelope
 //	@Router			/admin/catalogs/{type} [get]
@@ -118,7 +118,7 @@ type catalogCreateBody struct {
 //	@Tags			admin/catalogs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		AdminSessionCookie
 //	@Param			type	path		string							true	"Catalog type"
 //	@Param			body	body		handler.AdminCatalogUpsertRequest	true	"Create payload"
 //	@Success		201		{object}	handler.AdminCatalogItemEnvelope
@@ -159,7 +159,7 @@ func (h *AdminHandler) createCatalog(w http.ResponseWriter, r *http.Request) {
 //	@Tags			admin/catalogs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		AdminSessionCookie
 //	@Param			type	path		string							true	"Catalog type"
 //	@Param			id		path		string							true	"Entry UUID"
 //	@Param			body	body		handler.AdminCatalogUpsertRequest	true	"Patch payload"

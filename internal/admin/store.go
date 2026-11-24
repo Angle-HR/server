@@ -54,6 +54,15 @@ type User struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	PasswordHash *string   `json:"-"`
+	// TOTPSecret is the encrypted authenticator secret (auth.TOTPCrypto); TOTPEnabledAt is set once the first code
+	// was confirmed. A secret without TOTPEnabledAt is an enrolment in progress and does not gate login.
+	TOTPSecret    *string    `json:"-"`
+	TOTPEnabledAt *time.Time `json:"-"`
+}
+
+// TOTPEnabled reports whether the user must present an authenticator code to sign in.
+func (u User) TOTPEnabled() bool {
+	return u.TOTPEnabledAt != nil && u.TOTPSecret != nil && *u.TOTPSecret != ""
 }
 
 // Role is an RBAC role.
@@ -84,6 +93,7 @@ type StaffMember struct {
 	Name          string    `json:"name"`
 	IsActive      bool      `json:"is_active"`
 	InvitePending bool      `json:"invite_pending"`
+	TOTPEnabled   bool      `json:"totp_enabled"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 	Roles         []string  `json:"roles"`
@@ -185,14 +195,15 @@ func (s *Store) AssignRoleBySlug(ctx context.Context, userID uuid.UUID, roleSlug
 
 func scanUser(row pgx.Row) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.PasswordHash)
+	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.PasswordHash,
+		&u.TOTPSecret, &u.TOTPEnabledAt)
 	return u, err
 }
 
 // GetUserByEmail loads an admin user by email.
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (User, error) {
 	u, err := scanUser(s.DB.QueryRow(ctx, `
-		SELECT id, email, name, is_active, created_at, updated_at, password_hash
+		SELECT id, email, name, is_active, created_at, updated_at, password_hash, totp_secret, totp_enabled_at
 		FROM admin.users WHERE email = $1
 	`, email))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -207,7 +218,7 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (User, error) 
 // GetUserByID loads an admin user by id.
 func (s *Store) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	u, err := scanUser(s.DB.QueryRow(ctx, `
-		SELECT id, email, name, is_active, created_at, updated_at, password_hash
+		SELECT id, email, name, is_active, created_at, updated_at, password_hash, totp_secret, totp_enabled_at
 		FROM admin.users WHERE id = $1
 	`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -279,6 +290,7 @@ func (s *Store) ListRolesForUser(ctx context.Context, userID uuid.UUID) ([]strin
 const staffSelectSQL = `
 	SELECT u.id, u.email, u.name, u.is_active,
 		(u.password_hash IS NULL) AS invite_pending,
+		(u.totp_enabled_at IS NOT NULL) AS totp_enabled,
 		u.created_at, u.updated_at,
 		COALESCE(array_agg(r.slug ORDER BY r.slug) FILTER (WHERE r.slug IS NOT NULL), '{}')
 	FROM admin.users u
@@ -288,7 +300,7 @@ const staffSelectSQL = `
 
 func scanStaffMember(row pgx.Row) (StaffMember, error) {
 	var m StaffMember
-	err := row.Scan(&m.ID, &m.Email, &m.Name, &m.IsActive, &m.InvitePending, &m.CreatedAt, &m.UpdatedAt, &m.Roles)
+	err := row.Scan(&m.ID, &m.Email, &m.Name, &m.IsActive, &m.InvitePending, &m.TOTPEnabled, &m.CreatedAt, &m.UpdatedAt, &m.Roles)
 	return m, err
 }
 
@@ -312,6 +324,7 @@ func (s *Store) ListStaff(ctx context.Context) ([]StaffMember, error) {
 			&m.Name,
 			&m.IsActive,
 			&m.InvitePending,
+			&m.TOTPEnabled,
 			&m.CreatedAt,
 			&m.UpdatedAt,
 			&m.Roles,
@@ -497,7 +510,7 @@ func (s *Store) WriteAudit(
 		rid = &resourceID
 	}
 	var ipPtr *string
-	if ip != "" {
+	if ip = NormalizeIP(ip); ip != "" {
 		ipPtr = &ip
 	}
 	_, err = s.DB.Exec(ctx, `

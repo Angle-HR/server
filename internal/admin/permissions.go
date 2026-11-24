@@ -15,6 +15,9 @@ const (
 
 	// PermVerificationReview covers the company verification (KYB) review queue.
 	PermVerificationReview = "verification:review"
+
+	// PermCompaniesDelete covers deleting a company (superadmin only).
+	PermCompaniesDelete = "companies:delete"
 )
 
 // RoleSuperadmin is the bootstrap role slug.

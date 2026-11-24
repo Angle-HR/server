@@ -1,85 +1,55 @@
 package auth
 
 import (
-	"log/slog"
+	"errors"
 	"net/http"
-	"strings"
 
+	"github.com/Angle-HR/server/internal/region"
+	"github.com/Angle-HR/server/internal/session"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
 )
 
-// Middleware validates Bearer JWT access tokens.
+// Middleware authenticates product requests from the server-side session cookie.
 type Middleware struct {
-	Tokens *TokenService
+	Sessions *session.Manager
 }
 
-// NewMiddleware returns JWT auth middleware.
-func NewMiddleware(tokens *TokenService) *Middleware {
-	return &Middleware{Tokens: tokens}
+// NewMiddleware returns session auth middleware.
+func NewMiddleware(sessions *session.Manager) *Middleware {
+	return &Middleware{Sessions: sessions}
 }
 
-// RequireAuth rejects requests without a valid access token.
+// RequireAuth rejects requests without a valid session. Unsafe methods must also carry a matching X-CSRF-Token.
 func (m *Middleware) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// #nosec G706 -- slog TextHandler and JSONHandler escape structured attribute values
-		slog.Info("auth check", "method", r.Method, "url", r.URL.Path)
-		if m == nil || m.Tokens == nil {
+		if m == nil || m.Sessions == nil {
 			response.Error(w, r, apperror.ErrUnauthorized)
 			return
 		}
 
-		token := bearerToken(r.Header.Get("Authorization"))
-		if token == "" {
-			response.Error(w, r, apperror.ErrUnauthorized)
-			return
-		}
-
-		claims, err := m.Tokens.ParseAccess(token)
+		ident, err := m.Sessions.Authenticate(r)
 		if err != nil {
+			if errors.Is(err, session.ErrUnavailable) {
+				response.Error(w, r, apperror.ErrInternal)
+				return
+			}
 			response.Error(w, r, apperror.ErrUnauthorized)
 			return
 		}
 
-		if !claims.EmailVerified {
-			response.Error(w, r, apperror.ErrForbidden)
-			return
-		}
-
-		userID, err := UserIDFromAccess(claims)
-		if err != nil {
+		reg := region.Region(ident.Region)
+		if !region.Valid(reg) {
 			response.Error(w, r, apperror.ErrUnauthorized)
 			return
 		}
 
-		reg, err := RegionFromAccess(claims)
-		if err != nil {
-			response.Error(w, r, apperror.ErrUnauthorized)
+		if session.IsUnsafeMethod(r.Method) && !session.CheckCSRF(r, ident) {
+			response.Error(w, r, apperror.New(apperror.CodeCSRFInvalid, "missing or invalid CSRF token"))
 			return
 		}
 
-		ctx := WithUser(r.Context(), userID, reg)
+		ctx := WithSession(WithUser(r.Context(), ident.UserID, reg), ident)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-// bearerToken extracts a JWT from Authorization.
-// Accepts "Bearer <token>" or a bare token value.
-func bearerToken(header string) string {
-	header = strings.TrimSpace(header)
-	if header == "" || strings.EqualFold(header, "Bearer") {
-		return ""
-	}
-
-	parts := strings.SplitN(header, " ", 2)
-	if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
-		return strings.TrimSpace(parts[1])
-	}
-
-	// Bare JWT (no scheme prefix).
-	if !strings.Contains(header, " ") {
-		return header
-	}
-
-	return ""
 }

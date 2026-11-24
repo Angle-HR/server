@@ -115,7 +115,9 @@ func TestQueue_enqueueAndResolve(t *testing.T) {
 	}
 	q := &Queue{DB: mock, Region: "africa"}
 	mock.ExpectExec("INSERT INTO admin.verification_queue").
-		WithArgs(testOrgID, "africa", "KE").WillReturnResult(pgxmock.NewResult("INSERT", 1))
+		WithArgs(testOrgID, "africa", "KE", "business").WillReturnResult(pgxmock.NewResult("INSERT", 1))
+	mock.ExpectExec("INSERT INTO admin.verification_queue").
+		WithArgs(testOrgID, "africa", "Kenya", "individual").WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mock.ExpectExec("UPDATE admin.verification_queue").
 		WithArgs(testOrgID, "approved", "rev-1").WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 	mock.ExpectExec("UPDATE admin.verification_queue").
@@ -124,6 +126,12 @@ func TestQueue_enqueueAndResolve(t *testing.T) {
 	ctx := context.Background()
 	if err := q.Enqueue(ctx, testOrgID, "KE"); err != nil {
 		t.Fatal(err)
+	}
+	if err := q.EnqueueCase(ctx, testOrgID, "Kenya", "individual"); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.EnqueueCase(ctx, testOrgID, "Kenya", "bogus"); err == nil {
+		t.Fatal("unknown case type must be refused")
 	}
 	if err := q.Resolve(ctx, testOrgID, "rev-1", true); err != nil {
 		t.Fatal(err)

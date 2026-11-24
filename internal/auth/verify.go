@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ const (
 	verifyResendPrefix      = "verify:resend:"
 	verifyResendEmailPrefix = "verify:resend:email:"
 	verifyLatestPrefix      = "verify:latest:"
+	verifyAttemptsPrefix    = "verify:attempts:"
 	codeTTL                 = 300
 	resendCooldownSeconds   = 30
 	maxVerifyAttempts       = 5
@@ -47,6 +49,10 @@ type VerificationSession struct {
 	Code      string    `json:"code"`
 	Attempts  int       `json:"attempts"`
 	Purpose   string    `json:"purpose,omitempty"`
+	// Decoy marks a session issued for an email that has no deliverable
+	// account. No code was sent, and validation always fails (while still
+	// counting attempts) so it is indistinguishable from a wrong code.
+	Decoy bool `json:"decoy,omitempty"`
 }
 
 // CreateSession stores a new verification session and returns its public ID.
@@ -87,6 +93,10 @@ func (s *VerificationStore) ReplaceSession(ctx context.Context, session Verifica
 	if err := s.client.Set(ctx, key, payload, time.Duration(codeTTL)*time.Second).Err(); err != nil {
 		return fmt.Errorf("replace verification session: %w", err)
 	}
+	// A replaced session carries a fresh code, so it gets a fresh attempt budget.
+	if err := s.client.Del(ctx, verifyAttemptsPrefix+session.SessionID).Err(); err != nil {
+		return fmt.Errorf("reset verification attempts: %w", err)
+	}
 
 	return nil
 }
@@ -120,7 +130,7 @@ func (s *VerificationStore) DeleteSession(ctx context.Context, sessionID string)
 		return nil
 	}
 
-	return s.client.Del(ctx, verifyKeyPrefix+sessionID).Err()
+	return s.client.Del(ctx, verifyKeyPrefix+sessionID, verifyAttemptsPrefix+sessionID).Err()
 }
 
 // ValidateCode checks the OTP and increments attempts on failure.
@@ -150,22 +160,47 @@ func (s *VerificationStore) ValidateCodeForPurpose(
 		return VerificationSession{}, ErrInvalidVerificationCode
 	}
 
-	if session.Attempts >= maxVerifyAttempts {
-		besteffort.Log(ctx, "s.DeleteSession", s.DeleteSession(ctx, sessionID))
-		return VerificationSession{}, ErrInvalidVerificationCode
+	// Count the attempt atomically before comparing. INCR is a single Redis
+	// operation, so concurrent guesses can never share an attempt slot: at
+	// most maxVerifyAttempts comparisons happen per session.
+	attemptsKey := verifyAttemptsPrefix + sessionID
+	n, err := s.client.Incr(ctx, attemptsKey).Result()
+	if err != nil {
+		return VerificationSession{}, fmt.Errorf("count verification attempt: %w", err)
+	}
+	if n == 1 {
+		besteffort.Log(ctx, "client.Expire", s.client.Expire(ctx, attemptsKey, time.Duration(codeTTL)*time.Second).Err())
+	}
+	if n > maxVerifyAttempts {
+		return VerificationSession{}, &VerifyAttemptsError{Locked: true, RetryAfter: s.lockRetryAfter(ctx, attemptsKey)}
 	}
 
-	if session.Code != code {
-		session.Attempts++
-		besteffort.Log(ctx, "s.ReplaceSession", s.ReplaceSession(ctx, session))
-		return VerificationSession{}, ErrInvalidVerificationCode
+	if session.Decoy || subtle.ConstantTimeCompare([]byte(session.Code), []byte(code)) != 1 {
+		return VerificationSession{}, &VerifyAttemptsError{Remaining: maxVerifyAttempts - int(n)}
 	}
 
-	if err := s.DeleteSession(ctx, sessionID); err != nil {
+	// Deleting is the single-use gate: only the caller whose DEL removes the
+	// session wins, so two parallel correct submissions cannot both succeed.
+	removed, err := s.client.Del(ctx, verifyKeyPrefix+sessionID).Result()
+	if err != nil {
 		return VerificationSession{}, err
 	}
+	if removed == 0 {
+		return VerificationSession{}, ErrVerificationExpired
+	}
+	besteffort.Log(ctx, "client.Del", s.client.Del(ctx, attemptsKey).Err())
 
 	return session, nil
+}
+
+// lockRetryAfter is how long the attempt budget stays spent: the counter lives as long as the code does, so a
+// fresh code (resend) is the way out sooner.
+func (s *VerificationStore) lockRetryAfter(ctx context.Context, attemptsKey string) int {
+	secs, err := s.retryAfter(ctx, attemptsKey)
+	if err != nil || secs < 1 {
+		return codeTTL
+	}
+	return secs
 }
 
 // CanResend reports whether resend cooldown has elapsed.

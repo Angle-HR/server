@@ -1,0 +1,322 @@
+package identityhttp
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/alicebob/miniredis/v2"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/pashagolub/pgxmock/v4"
+	goredis "github.com/redis/go-redis/v9"
+
+	"github.com/Angle-HR/server/internal/auth"
+	"github.com/Angle-HR/server/internal/dbrouter"
+	"github.com/Angle-HR/server/internal/query"
+	"github.com/Angle-HR/server/internal/region"
+	"github.com/Angle-HR/server/internal/session"
+	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/response"
+)
+
+const (
+	testLoginEmail    = "jerry@example.com"
+	testLoginPassword = "secure-password-here1"
+)
+
+var testLoginUserID = uuid.MustParse("11111111-1111-4111-8111-111111111111")
+
+func TestAuthLogin_wrongPassword(t *testing.T) {
+	globalMock, regionalMock := expectUnverifiedLoginMocks(t, nil)
+	router := testAuthRouter(t, regionalMock, globalMock, testRedisClient(t))
+
+	rec := postAuthLogin(t, router, testLoginEmail, "wrong-password")
+	assertStatus(t, rec, http.StatusUnauthorized)
+
+	errBody := decodeError(t, rec)
+	if errBody.Code != apperror.CodeUnauthorized {
+		t.Fatalf("code: got %q want %q", errBody.Code, apperror.CodeUnauthorized)
+	}
+
+	if errBody.Message != "wrong email or password" {
+		t.Fatalf("message: got %q want %q", errBody.Message, "wrong email or password")
+	}
+
+	assertMocksMet(t, globalMock, regionalMock)
+}
+
+func TestAuthLogin_unverifiedEmail(t *testing.T) {
+	globalMock, regionalMock := expectUnverifiedLoginMocks(t, nil)
+	router := testAuthRouter(t, regionalMock, globalMock, testRedisClient(t))
+
+	rec := postAuthLogin(t, router, testLoginEmail, testLoginPassword)
+	assertStatus(t, rec, http.StatusForbidden)
+
+	errBody := decodeError(t, rec)
+	if errBody.Code != apperror.CodeEmailNotVerified {
+		t.Fatalf("code: got %q want %q", errBody.Code, apperror.CodeEmailNotVerified)
+	}
+	if errBody.Message != apperror.MsgEmailNotVerified {
+		t.Fatalf("message: got %q", errBody.Message)
+	}
+	if errBody.Details["verification_session_id"] == "" {
+		t.Fatal("expected verification_session_id in details")
+	}
+	if errBody.Details["email"] != testLoginEmail {
+		t.Fatalf("email detail: got %v", errBody.Details["email"])
+	}
+
+	assertMocksMet(t, globalMock, regionalMock)
+}
+
+func TestAuthLogin_verifiedUser(t *testing.T) {
+	verifiedAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	globalMock, regionalMock := expectVerifiedLoginMocks(t, &verifiedAt)
+
+	progressSQL, progressArgs, err := query.LookupOnboardingProgress(testLoginUserID)
+	if err != nil {
+		t.Fatalf("LookupOnboardingProgress: %v", err)
+	}
+	regionalMock.ExpectQuery(progressSQL).WithArgs(progressArgs...).WillReturnError(pgx.ErrNoRows)
+
+	router := testAuthRouter(t, regionalMock, globalMock, testRedisClient(t))
+	rec := postAuthLogin(t, router, testLoginEmail, testLoginPassword)
+	assertStatus(t, rec, http.StatusOK)
+
+	var envelope response.Envelope
+	if decodeErr := json.NewDecoder(rec.Body).Decode(&envelope); decodeErr != nil {
+		t.Fatalf("decode envelope: %v", decodeErr)
+	}
+	raw, err := json.Marshal(envelope.Data)
+	if err != nil {
+		t.Fatalf("marshal data: %v", err)
+	}
+	if bytes.Contains(raw, []byte("access_token")) || bytes.Contains(raw, []byte("refresh_token")) {
+		t.Fatalf("body must not carry tokens: %s", raw)
+	}
+	var data AuthSessionData
+	if err := json.Unmarshal(raw, &data); err != nil {
+		t.Fatalf("unmarshal session data: %v", err)
+	}
+	if data.CSRFToken == "" {
+		t.Fatal("expected csrf_token")
+	}
+	var sessionCookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "openhr_session" {
+			sessionCookie = c
+		}
+	}
+	if sessionCookie == nil || sessionCookie.Value == "" || !sessionCookie.HttpOnly ||
+		sessionCookie.SameSite != http.SameSiteLaxMode || sessionCookie.Path != "/" || sessionCookie.Domain != "" {
+		t.Fatalf("session cookie missing or weak: %+v", sessionCookie)
+	}
+
+	assertMocksMet(t, globalMock, regionalMock)
+}
+
+func TestAuthLogin_unverifiedRateLimited(t *testing.T) {
+	globalMock, regionalMock := expectUnverifiedLoginMocks(t, nil)
+	redisClient := testRedisClient(t)
+	store := auth.NewVerificationStore(redisClient)
+	if err := store.MarkResentByEmail(t.Context(), testLoginEmail); err != nil {
+		t.Fatalf("MarkResentByEmail: %v", err)
+	}
+
+	router := testAuthRouter(t, regionalMock, globalMock, redisClient)
+	rec := postAuthLogin(t, router, testLoginEmail, testLoginPassword)
+	assertStatus(t, rec, http.StatusTooManyRequests)
+
+	errBody := decodeError(t, rec)
+	if errBody.Code != apperror.CodeVerificationRateLimited {
+		t.Fatalf("code: got %q want %q", errBody.Code, apperror.CodeVerificationRateLimited)
+	}
+	secs, ok := errBody.Details["retry_after_seconds"].(float64)
+	if !ok || secs < 1 || secs > float64(auth.ResendAvailableInSeconds()) {
+		t.Fatalf("retry_after_seconds: got %v", errBody.Details["retry_after_seconds"])
+	}
+	if got := rec.Header().Get("Retry-After"); got == "" {
+		t.Fatal("expected Retry-After header")
+	}
+
+	assertMocksMet(t, globalMock, regionalMock)
+}
+
+func expectUnverifiedLoginMocks(t *testing.T, emailVerifiedAt *time.Time) (pgxmock.PgxPoolIface, pgxmock.PgxPoolIface) {
+	t.Helper()
+
+	passwordHash, err := auth.HashPassword(testLoginPassword)
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	globalMock, err := pgxmock.NewPool(pgxmock.QueryMatcherOption(pgxmock.QueryMatcherEqual))
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool global: %v", err)
+	}
+	t.Cleanup(func() { globalMock.Close() })
+
+	// Unverified signups have no registry row and sit in the global holding
+	// area (pending_users) until onboarding assigns a region.
+	registrySQL, registryArgs, err := query.LookupUsersRegistryByEmail(testLoginEmail)
+	if err != nil {
+		t.Fatalf("LookupUsersRegistryByEmail: %v", err)
+	}
+	globalMock.ExpectQuery(registrySQL).WithArgs(registryArgs...).WillReturnError(pgx.ErrNoRows)
+
+	emailSQL, emailArgs, err := query.LookupPendingUserByEmail(testLoginEmail)
+	if err != nil {
+		t.Fatalf("LookupPendingUserByEmail: %v", err)
+	}
+	globalMock.ExpectQuery(emailSQL).WithArgs(emailArgs...).WillReturnRows(
+		userAccountRows(passwordHash, emailVerifiedAt),
+	)
+
+	idSQL, idArgs, err := query.LookupPendingUserByID(testLoginUserID)
+	if err != nil {
+		t.Fatalf("LookupPendingUserByID: %v", err)
+	}
+	globalMock.ExpectQuery(idSQL).WithArgs(idArgs...).WillReturnRows(
+		userAccountRows(passwordHash, emailVerifiedAt),
+	)
+
+	// Unverified accounts stay on the global holding pool. The router still
+	// needs a regional pool registered, and login does not query it.
+	regionalMock, err := pgxmock.NewPool(pgxmock.QueryMatcherOption(pgxmock.QueryMatcherEqual))
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool regional: %v", err)
+	}
+	t.Cleanup(func() { regionalMock.Close() })
+
+	return globalMock, regionalMock
+}
+
+func expectVerifiedLoginMocks(t *testing.T, emailVerifiedAt *time.Time) (pgxmock.PgxPoolIface, pgxmock.PgxPoolIface) {
+	t.Helper()
+
+	passwordHash, err := auth.HashPassword(testLoginPassword)
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	globalMock, err := pgxmock.NewPool(pgxmock.QueryMatcherOption(pgxmock.QueryMatcherEqual))
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool global: %v", err)
+	}
+	t.Cleanup(func() { globalMock.Close() })
+
+	registrySQL, registryArgs, err := query.LookupUsersRegistryByEmail(testLoginEmail)
+	if err != nil {
+		t.Fatalf("LookupUsersRegistryByEmail: %v", err)
+	}
+	globalMock.ExpectQuery(registrySQL).WithArgs(registryArgs...).WillReturnRows(
+		pgxmock.NewRows([]string{"id", "email", "region", "user_id"}).
+			AddRow(uuid.New(), testLoginEmail, "uk", &testLoginUserID),
+	)
+
+	regionalMock, err := pgxmock.NewPool(pgxmock.QueryMatcherOption(pgxmock.QueryMatcherEqual))
+	if err != nil {
+		t.Fatalf("pgxmock.NewPool regional: %v", err)
+	}
+	t.Cleanup(func() { regionalMock.Close() })
+
+	userSQL, userArgs, err := query.LookupAccountUserByID(testLoginUserID)
+	if err != nil {
+		t.Fatalf("LookupAccountUserByID: %v", err)
+	}
+	regionalMock.ExpectQuery(userSQL).WithArgs(userArgs...).WillReturnRows(userAccountRows(passwordHash, emailVerifiedAt))
+	regionalMock.ExpectQuery(userSQL).WithArgs(userArgs...).WillReturnRows(userAccountRows(passwordHash, emailVerifiedAt))
+
+	return globalMock, regionalMock
+}
+
+func userAccountRows(passwordHash string, emailVerifiedAt *time.Time) *pgxmock.Rows {
+	return pgxmock.NewRows([]string{
+		"id", "email", "password_hash", "email_verified_at", "onboarding_completed_at",
+		"account_type", "first_name", "last_name", "legal_full_name", "country_id",
+		"totp_secret", "totp_enabled_at",
+	}).AddRow(
+		testLoginUserID, testLoginEmail, passwordHash, emailVerifiedAt, nil,
+		nil, nil, nil, nil, nil,
+		nil, nil,
+	)
+}
+
+func testAuthRouter(
+	t *testing.T,
+	regionalMock pgxmock.PgxPoolIface,
+	globalMock pgxmock.PgxPoolIface,
+	redisClient *goredis.Client,
+) chi.Router {
+	t.Helper()
+
+	crypto, err := auth.NewTOTPCrypto("secret")
+	if err != nil {
+		t.Fatalf("NewTOTPCrypto: %v", err)
+	}
+
+	h := NewAuthHandler(
+		dbrouter.NewWithPools(map[region.Region]dbrouter.PgxPool{
+			region.RegionUK: regionalMock,
+		}),
+		globalMock,
+		redisClient,
+		testSessionManager(redisClient),
+		nil,
+		crypto,
+	)
+
+	router := chi.NewRouter()
+	router.Route("/api/v1/auth", func(r chi.Router) {
+		h.RegisterRoutes(r)
+	})
+
+	return router
+}
+
+func testSessionManager(redisClient *goredis.Client) *session.Manager {
+	return session.NewManager(redisClient, session.ManagerConfig{Kind: session.KindProduct, Secure: false})
+}
+
+func testRedisClient(t *testing.T) *goredis.Client {
+	t.Helper()
+
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis.Run: %v", err)
+	}
+	t.Cleanup(mr.Close)
+
+	client := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() {
+		if closeErr := client.Close(); closeErr != nil {
+			t.Logf("close redis client: %v", closeErr)
+		}
+	})
+
+	return client
+}
+
+func postAuthLogin(t *testing.T, router chi.Router, email, password string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	body, err := json.Marshal(map[string]string{
+		"email":    email,
+		"password": password,
+	})
+	if err != nil {
+		t.Fatalf("marshal login body: %v", err)
+	}
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	return rec
+}

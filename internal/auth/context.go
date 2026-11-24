@@ -6,14 +6,27 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Angle-HR/server/internal/region"
+	"github.com/Angle-HR/server/internal/session"
 )
 
 type contextKey string
 
 const (
-	userIDKey contextKey = "authUserID"
-	regionKey contextKey = "authRegion"
+	userIDKey  contextKey = "authUserID"
+	regionKey  contextKey = "authRegion"
+	sessionKey contextKey = "authSession"
 )
+
+// WithSession stores the validated session identity (CSRF token, session key) on the context.
+func WithSession(ctx context.Context, ident session.Identity) context.Context {
+	return context.WithValue(ctx, sessionKey, ident)
+}
+
+// SessionFromContext returns the validated session identity.
+func SessionFromContext(ctx context.Context) (session.Identity, bool) {
+	ident, ok := ctx.Value(sessionKey).(session.Identity)
+	return ident, ok
+}
 
 // WithUser stores authenticated user ID on the context.
 func WithUser(ctx context.Context, userID uuid.UUID, reg region.Region) context.Context {

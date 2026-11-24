@@ -24,8 +24,16 @@ type DB interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
+// SaveHook runs inside Save's transaction after the record, status and events are written. An error rolls the
+// whole save back. It is how org events reach the outbox in the same transaction as the status change.
+type SaveHook func(ctx context.Context, tx pgx.Tx, rec *kyb.Record) error
+
 // Store persists verification state in the organization's regional database.
-type Store struct{ DB DB }
+type Store struct {
+	DB DB
+	// OnSave is optional.
+	OnSave SaveHook
+}
 
 const loadSQL = `
 SELECT organization_id::text, country_code, registration_number, identifiers, legal_name_submitted,
@@ -141,6 +149,11 @@ func (s *Store) Save(ctx context.Context, rec *kyb.Record, events ...kyb.Event) 
 		if _, err = tx.Exec(ctx, eventSQL, ev.OrganizationID, ev.Name, string(ev.Status), string(ev.Reason),
 			ev.ActorID, detail, eventTime(ev.At)); err != nil {
 			return fmt.Errorf("kybstore: save event: %w", err)
+		}
+	}
+	if s.OnSave != nil {
+		if err = s.OnSave(ctx, tx, rec); err != nil {
+			return fmt.Errorf("kybstore: save hook: %w", err)
 		}
 	}
 	if err = tx.Commit(ctx); err != nil {

@@ -2,10 +2,13 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 
+	"github.com/Angle-HR/server/internal/session"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
 )
@@ -23,42 +26,60 @@ type AdminUserStore interface {
 	ListAdminPermissions(ctx context.Context, userID uuid.UUID) ([]string, error)
 }
 
-// AdminMiddleware validates admin JWTs and loads permissions from the store.
+// AdminMiddleware validates admin sessions and loads permissions from the store.
 type AdminMiddleware struct {
-	Tokens *TokenService
-	Store  AdminUserStore
+	Sessions *session.Manager
+	Store    AdminUserStore
+	// RequireMFA (ADMIN_TOTP_REQUIRED) refuses every admin route except the TOTP enrolment ones to a session that
+	// has not passed a second factor (session MFA flag), answering 403 TOTP_ENROLLMENT_REQUIRED.
+	RequireMFA bool
+}
+
+// mfaExemptSuffixes are the admin routes a session without a second factor may still call: read the profile and
+// run the enrolment (logout is public).
+var mfaExemptSuffixes = []string{"/admin/auth/me", "/admin/auth/totp/enroll", "/admin/auth/totp/confirm"}
+
+func mfaExempt(path string) bool {
+	for _, s := range mfaExemptSuffixes {
+		if strings.HasSuffix(strings.TrimSuffix(path, "/"), s) {
+			return true
+		}
+	}
+	return false
 }
 
 // NewAdminMiddleware returns admin auth middleware.
-func NewAdminMiddleware(tokens *TokenService, store AdminUserStore) *AdminMiddleware {
-	return &AdminMiddleware{Tokens: tokens, Store: store}
+func NewAdminMiddleware(sessions *session.Manager, store AdminUserStore) *AdminMiddleware {
+	return &AdminMiddleware{Sessions: sessions, Store: store}
 }
 
-// RequireAdmin rejects requests without a valid admin access token and active user.
+// RequireAdmin rejects requests without a valid admin session and active user.
 func (m *AdminMiddleware) RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if m == nil || m.Tokens == nil || m.Store == nil {
+		if m == nil || m.Sessions == nil || m.Store == nil {
 			response.Error(w, r, apperror.ErrUnauthorized)
 			return
 		}
 
-		token := bearerToken(r.Header.Get("Authorization"))
-		if token == "" {
-			response.Error(w, r, apperror.ErrUnauthorized)
-			return
-		}
-
-		claims, err := m.Tokens.ParseAdminAccess(token)
+		ident, err := m.Sessions.Authenticate(r)
 		if err != nil {
+			if errors.Is(err, session.ErrUnavailable) {
+				response.Error(w, r, apperror.ErrInternal)
+				return
+			}
 			response.Error(w, r, apperror.ErrUnauthorized)
 			return
 		}
-
-		userID, err := AdminUserIDFromAccess(claims)
-		if err != nil {
-			response.Error(w, r, apperror.ErrUnauthorized)
+		if session.IsUnsafeMethod(r.Method) && !session.CheckCSRF(r, ident) {
+			response.Error(w, r, apperror.New(apperror.CodeCSRFInvalid, "missing or invalid CSRF token"))
 			return
 		}
+		if m.RequireMFA && !ident.MFA && !mfaExempt(r.URL.Path) {
+			response.Error(w, r, apperror.New(apperror.CodeTOTPEnrollmentRequired,
+				"two-factor authentication is required: enrol an authenticator first"))
+			return
+		}
+		userID := ident.UserID
 
 		user, err := m.Store.GetAdminPrincipal(r.Context(), userID)
 		if err != nil || !user.IsActive {
@@ -72,7 +93,7 @@ func (m *AdminMiddleware) RequireAdmin(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := WithAdmin(r.Context(), user.ID, user.Email, perms)
+		ctx := WithSession(WithAdmin(r.Context(), user.ID, user.Email, perms), ident)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

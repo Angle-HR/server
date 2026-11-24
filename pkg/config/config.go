@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"strconv"
@@ -14,22 +15,27 @@ import (
 
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/logger"
+	"github.com/Angle-HR/server/pkg/platform/secrets"
 )
 
-// Default JWT lifetimes in seconds: one hour access, seven days refresh.
 // maxPort is the highest valid TCP port.
 const maxPort = 65535
 
+// Default session lifetimes in seconds: two hours idle (sliding), twelve hours absolute.
 const (
-	defaultAccessTTLSeconds  = 3600
-	defaultRefreshTTLSeconds = 604800
+	defaultSessionIdleTTLSeconds     = 7200
+	defaultSessionAbsoluteTTLSeconds = 43200
 )
 
 // Config holds runtime configuration values.
 type Config struct {
-	ServerPort             string
-	DBUrlGlobal            string
-	RedisURL               string
+	ServerPort  string
+	DBUrlGlobal string
+	RedisURL    string
+	// NotificationsTransport selects how email requests leave the monolith: "fluvio" (default, the in-process
+	// queue drained by email-worker) or "events" (outbox + NATS, consumed by the notifications service).
+	NotificationsTransport string
+	NATSURL                string
 	AppEnv                 string
 	LogLevel               string
 	PublicAPIURL           string
@@ -37,18 +43,33 @@ type Config struct {
 	FluvioBasicAuthUser    string
 	FluvioBasicAuthPass    string
 	CORSAllowedOrigins     []string
-	JWTSecret              string
-	JWTAccessTTL           time.Duration
-	JWTRefreshTTL          time.Duration
+	// SessionIdleTTL is the sliding idle timeout of a server-side session (SESSION_IDLE_TTL, seconds).
+	SessionIdleTTL time.Duration
+	// SessionAbsoluteTTL is the hard lifetime of a session regardless of activity (SESSION_ABSOLUTE_TTL, seconds).
+	SessionAbsoluteTTL time.Duration
+	// CookieSecure marks session cookies Secure and uses the __Host- prefix (COOKIE_SECURE, default true).
+	// Set COOKIE_SECURE=false only for plain-http local development.
+	CookieSecure bool
+	// AllowedOrigins is the Origin/Referer allow-list for unsafe methods (ALLOWED_ORIGINS, falls back to
+	// CORS_ALLOWED_ORIGINS).
+	AllowedOrigins         []string
 	AuthDefaultRegion      region.Region
 	AdminBootstrapEmail    string
 	AdminBootstrapPassword string
 	AdminBootstrapName     string
-	TOTPEncryptionKey      string
-	AddressVerifyMode      string
-	AddressSearchMode      string
-	GoogleMapsAPIKey       string
-	CompaniesHouseAPIKey   string
+	// TOTPEncryptionKey encrypts TOTP secrets at rest (TOTP_ENCRYPTION_KEY). It is the only key new secrets are
+	// written with. TOTPEncryptionKeyPrevious (TOTP_ENCRYPTION_KEY_PREVIOUS, comma separated) lists retired keys
+	// that can still decrypt existing secrets while the key is being rotated (see cmd/totp-rekey).
+	TOTPEncryptionKey string
+	// AdminTOTPRequired (ADMIN_TOTP_REQUIRED) forces every admin to enrol an authenticator: a password-only admin
+	// session can then do nothing but enrol. Unset it defaults to true in production-like environments (production,
+	// prod, staging) and false elsewhere; setting it false in a production-like environment is refused.
+	AdminTOTPRequired         bool
+	TOTPEncryptionKeyPrevious []string
+	AddressVerifyMode         string
+	AddressSearchMode         string
+	GoogleMapsAPIKey          string
+	CompaniesHouseAPIKey      string
 }
 
 // Load reads configuration from the environment.
@@ -57,30 +78,47 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("load env file: %w", err)
 	}
 
+	// Secrets come from NAME or the file named by NAME_FILE (pkg/platform/secrets).
+	var sec secrets.Reader
+
 	cfg := Config{
-		ServerPort:             os.Getenv("SERVER_PORT"),
-		DBUrlGlobal:            os.Getenv("DB_URL_GLOBAL"),
-		RedisURL:               os.Getenv("REDIS_URL"),
-		CompaniesHouseAPIKey:   strings.TrimSpace(os.Getenv("COMPANIES_HOUSE_API_KEY")),
-		AppEnv:                 os.Getenv("APP_ENV"),
-		LogLevel:               strings.TrimSpace(os.Getenv("LOG_LEVEL")),
-		PublicAPIURL:           os.Getenv("PUBLIC_API_URL"),
-		FluvioUIOrigin:         os.Getenv("FLUVIO_UI_ORIGIN"),
-		FluvioBasicAuthUser:    os.Getenv("FLUVIO_BASIC_AUTH_USER"),
-		FluvioBasicAuthPass:    os.Getenv("FLUVIO_BASIC_AUTH_PASSWORD"),
-		JWTSecret:              os.Getenv("JWT_SECRET"),
-		AdminBootstrapEmail:    strings.TrimSpace(os.Getenv("ADMIN_BOOTSTRAP_EMAIL")),
-		AdminBootstrapPassword: os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
-		AdminBootstrapName:     strings.TrimSpace(os.Getenv("ADMIN_BOOTSTRAP_NAME")),
-		TOTPEncryptionKey:      strings.TrimSpace(os.Getenv("TOTP_ENCRYPTION_KEY")),
-		AddressVerifyMode:      strings.ToLower(strings.TrimSpace(os.Getenv("ADDRESS_VERIFY_MODE"))),
-		AddressSearchMode:      strings.ToLower(strings.TrimSpace(os.Getenv("ADDRESS_SEARCH_MODE"))),
-		GoogleMapsAPIKey:       strings.TrimSpace(os.Getenv("GOOGLE_MAPS_API_KEY")),
+		ServerPort:                os.Getenv("SERVER_PORT"),
+		DBUrlGlobal:               sec.Get("DB_URL_GLOBAL"),
+		RedisURL:                  sec.Get("REDIS_URL"),
+		CompaniesHouseAPIKey:      strings.TrimSpace(sec.Get("COMPANIES_HOUSE_API_KEY")),
+		AppEnv:                    os.Getenv("APP_ENV"),
+		LogLevel:                  strings.TrimSpace(os.Getenv("LOG_LEVEL")),
+		PublicAPIURL:              os.Getenv("PUBLIC_API_URL"),
+		FluvioUIOrigin:            os.Getenv("FLUVIO_UI_ORIGIN"),
+		FluvioBasicAuthUser:       os.Getenv("FLUVIO_BASIC_AUTH_USER"),
+		NotificationsTransport:    strings.ToLower(strings.TrimSpace(os.Getenv("NOTIFICATIONS_TRANSPORT"))),
+		NATSURL:                   os.Getenv("NATS_URL"),
+		FluvioBasicAuthPass:       sec.Get("FLUVIO_BASIC_AUTH_PASSWORD"),
+		AdminBootstrapEmail:       strings.TrimSpace(os.Getenv("ADMIN_BOOTSTRAP_EMAIL")),
+		AdminBootstrapPassword:    sec.Get("ADMIN_BOOTSTRAP_PASSWORD"),
+		AdminBootstrapName:        strings.TrimSpace(os.Getenv("ADMIN_BOOTSTRAP_NAME")),
+		TOTPEncryptionKey:         strings.TrimSpace(sec.Get("TOTP_ENCRYPTION_KEY")),
+		TOTPEncryptionKeyPrevious: splitList(sec.Get("TOTP_ENCRYPTION_KEY_PREVIOUS")),
+		AddressVerifyMode:         strings.ToLower(strings.TrimSpace(os.Getenv("ADDRESS_VERIFY_MODE"))),
+		AddressSearchMode:         strings.ToLower(strings.TrimSpace(os.Getenv("ADDRESS_SEARCH_MODE"))),
+		GoogleMapsAPIKey:          strings.TrimSpace(sec.Get("GOOGLE_MAPS_API_KEY")),
+	}
+
+	if err := sec.Err(); err != nil {
+		return Config{}, err
 	}
 
 	applyDefaults(&cfg)
 
-	if err := loadJWTTTLs(&cfg); err != nil {
+	if err := resolveTOTPKey(&cfg, sec.Get("JWT_SECRET")); err != nil {
+		return Config{}, err
+	}
+
+	if err := loadSessionSettings(&cfg); err != nil {
+		return Config{}, err
+	}
+
+	if err := loadAdminTOTPRequired(&cfg); err != nil {
 		return Config{}, err
 	}
 
@@ -103,16 +141,22 @@ func Load() (Config, error) {
 	}
 	cfg.CORSAllowedOrigins = origins
 
+	cfg.AllowedOrigins = origins
+	if raw := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS")); raw != "" {
+		allowed, allowedErr := parseCORSAllowedOrigins(raw)
+		if allowedErr != nil {
+			return Config{}, allowedErr
+		}
+		cfg.AllowedOrigins = allowed
+	}
+
 	return cfg, nil
 }
 
 // applyDefaults fills in development-friendly defaults for unset values.
 func applyDefaults(cfg *Config) {
-	if cfg.JWTSecret == "" {
-		cfg.JWTSecret = "dev-insecure-jwt-secret-change-me"
-	}
-	if cfg.TOTPEncryptionKey == "" {
-		cfg.TOTPEncryptionKey = cfg.JWTSecret
+	if cfg.NotificationsTransport == "" {
+		cfg.NotificationsTransport = "fluvio"
 	}
 	if cfg.ServerPort == "" {
 		cfg.ServerPort = "8080"
@@ -130,19 +174,111 @@ func applyDefaults(cfg *Config) {
 	}
 }
 
-// loadJWTTTLs reads the access and refresh token lifetimes from the environment.
-func loadJWTTTLs(cfg *Config) error {
-	accessTTL, err := parsePositiveIntEnv("JWT_ACCESS_TTL", defaultAccessTTLSeconds)
-	if err != nil {
-		return err
-	}
-	cfg.JWTAccessTTL = time.Duration(accessTTL) * time.Second
+// InsecureDevTOTPKey is the development-only fallback key. Production-like environments refuse to start with it.
+const InsecureDevTOTPKey = "dev-insecure-jwt-secret-change-me"
 
-	refreshTTL, err := parsePositiveIntEnv("JWT_REFRESH_TTL", defaultRefreshTTLSeconds)
+// minProdTOTPKeyLen is the shortest TOTP key accepted in production-like environments.
+const minProdTOTPKeyLen = 16
+
+// HardenedEnv reports whether appEnv is production-like (production, prod or staging): environments that must not run
+// with development defaults.
+func HardenedEnv(appEnv string) bool {
+	switch strings.ToLower(strings.TrimSpace(appEnv)) {
+	case "production", "prod", "staging":
+		return true
+	default:
+		return false
+	}
+}
+
+// splitList splits a comma separated list, dropping blanks.
+func splitList(raw string) []string {
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+// resolveTOTPKey picks the TOTP encryption key. TOTP_ENCRYPTION_KEY wins. JWT_SECRET (the key TOTP secrets used to
+// be encrypted with) is still accepted as a fallback so existing enrolments decrypt. Development falls back to a
+// fixed insecure key; production-like environments refuse to start without a real key, and the fallbacks are
+// rejected there when they are the insecure default.
+func resolveTOTPKey(cfg *Config, jwtSecret string) error {
+	hardened := HardenedEnv(cfg.AppEnv)
+	jwtSecret = strings.TrimSpace(jwtSecret)
+
+	if cfg.TOTPEncryptionKey == "" && jwtSecret != "" {
+		cfg.TOTPEncryptionKey = jwtSecret
+		if hardened {
+			slog.Warn("TOTP_ENCRYPTION_KEY is unset; falling back to JWT_SECRET. " +
+				"Set TOTP_ENCRYPTION_KEY and move the old value to TOTP_ENCRYPTION_KEY_PREVIOUS (see docs/microservices/hardening.md)")
+		}
+	}
+	if cfg.TOTPEncryptionKey == "" && !hardened {
+		cfg.TOTPEncryptionKey = InsecureDevTOTPKey
+	}
+	if !hardened {
+		return nil
+	}
+	switch {
+	case cfg.TOTPEncryptionKey == "":
+		return fmt.Errorf("TOTP_ENCRYPTION_KEY is required when APP_ENV=%s", cfg.AppEnv)
+	case cfg.TOTPEncryptionKey == InsecureDevTOTPKey:
+		return fmt.Errorf("TOTP_ENCRYPTION_KEY is the insecure development default; set a real key when APP_ENV=%s", cfg.AppEnv)
+	case len(cfg.TOTPEncryptionKey) < minProdTOTPKeyLen:
+		return fmt.Errorf("TOTP_ENCRYPTION_KEY must be at least %d characters when APP_ENV=%s", minProdTOTPKeyLen, cfg.AppEnv)
+	}
+	return nil
+}
+
+// loadSessionSettings reads the session lifetimes and cookie settings from the environment.
+func loadSessionSettings(cfg *Config) error {
+	idle, err := parsePositiveIntEnv("SESSION_IDLE_TTL", defaultSessionIdleTTLSeconds)
 	if err != nil {
 		return err
 	}
-	cfg.JWTRefreshTTL = time.Duration(refreshTTL) * time.Second
+	cfg.SessionIdleTTL = time.Duration(idle) * time.Second
+
+	abs, err := parsePositiveIntEnv("SESSION_ABSOLUTE_TTL", defaultSessionAbsoluteTTLSeconds)
+	if err != nil {
+		return err
+	}
+	cfg.SessionAbsoluteTTL = time.Duration(abs) * time.Second
+	if cfg.SessionAbsoluteTTL < cfg.SessionIdleTTL {
+		return errors.New("SESSION_ABSOLUTE_TTL must be >= SESSION_IDLE_TTL")
+	}
+
+	cfg.CookieSecure = true
+	if raw := strings.TrimSpace(os.Getenv("COOKIE_SECURE")); raw != "" {
+		secure, parseErr := strconv.ParseBool(raw)
+		if parseErr != nil {
+			return fmt.Errorf("invalid COOKIE_SECURE %q", raw)
+		}
+		cfg.CookieSecure = secure
+	}
+	return nil
+}
+
+// loadAdminTOTPRequired reads ADMIN_TOTP_REQUIRED. Unset: true in production-like environments, false elsewhere.
+// An explicit false in a production-like environment is refused.
+func loadAdminTOTPRequired(cfg *Config) error {
+	hardened := HardenedEnv(cfg.AppEnv)
+	cfg.AdminTOTPRequired = hardened
+	raw := strings.TrimSpace(os.Getenv("ADMIN_TOTP_REQUIRED"))
+	if raw == "" {
+		return nil
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return fmt.Errorf("invalid ADMIN_TOTP_REQUIRED %q (want true or false)", raw)
+	}
+	if hardened && !v {
+		return fmt.Errorf("ADMIN_TOTP_REQUIRED must be true when APP_ENV=%s", cfg.AppEnv)
+	}
+	cfg.AdminTOTPRequired = v
 	return nil
 }
 

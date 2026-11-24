@@ -63,7 +63,7 @@ func jobView(row fluvio.JobRow) adminJobView {
 //	@Summary		List Fluvio jobs
 //	@Tags			admin/jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		AdminSessionCookie
 //	@Param			queue	query	string	false	"Queue name"
 //	@Param			state	query	string	false	"Job state"
 //	@Param			kind	query	string	false	"Job kind"
@@ -102,7 +102,7 @@ func (h *AdminHandler) listJobs(w http.ResponseWriter, r *http.Request) {
 //	@Summary		Get Fluvio job
 //	@Tags			admin/jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		AdminSessionCookie
 //	@Param			id	path		int	true	"Job ID"
 //	@Success		200	{object}	handler.AdminJobEnvelope
 //	@Router			/admin/jobs/{id} [get]
@@ -126,7 +126,7 @@ func (h *AdminHandler) getJob(w http.ResponseWriter, r *http.Request) {
 //	@Description	Replays dead jobs, runs scheduled jobs now, or requeues failed jobs as pending.
 //	@Tags			admin/jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		AdminSessionCookie
 //	@Param			id	path		int	true	"Job ID"
 //	@Success		200	{object}	handler.AdminJobEnvelope
 //	@Router			/admin/jobs/{id}/retry [post]

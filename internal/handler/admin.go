@@ -12,6 +12,7 @@ import (
 	"github.com/Angle-HR/server/internal/admin"
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/internal/dbrouter"
+	"github.com/Angle-HR/server/internal/session"
 	"github.com/Angle-HR/server/pkg/besteffort"
 )
 
@@ -28,7 +29,7 @@ type AdminHandler struct {
 	Store           *admin.Store
 	Router          *dbrouter.DBRouter
 	GlobalDB        globalDB
-	Tokens          *auth.TokenService
+	Sessions        *session.Manager
 	Jobs            *fluvio.Client
 	Enqueuer        jobEnqueuer
 	KYBNotifierFor  KYBNotifierFactory // optional, emails the owner when a review rejects
@@ -42,7 +43,7 @@ func NewAdminHandler(
 	router *dbrouter.DBRouter,
 	globalDB globalDB,
 	redisClient *goredis.Client,
-	tokens *auth.TokenService,
+	sessions *session.Manager,
 	jobs *fluvio.Client,
 	enqueuer jobEnqueuer,
 ) *AdminHandler {
@@ -50,7 +51,7 @@ func NewAdminHandler(
 		Store:    store,
 		Router:   router,
 		GlobalDB: globalDB,
-		Tokens:   tokens,
+		Sessions: sessions,
 		Jobs:     jobs,
 		Enqueuer: enqueuer,
 		PasswordLockout: auth.NewLoginLockout(redisClient, "admin_pwd",
@@ -59,22 +60,10 @@ func NewAdminHandler(
 	}
 }
 
-// RegisterPublicRoutes mounts unauthenticated admin auth routes.
-func (h *AdminHandler) RegisterPublicRoutes(r chi.Router) {
-	r.Post("/auth/login", h.login)
-	r.Post("/auth/refresh", h.refresh)
-	r.Get("/auth/invite/{token}", h.getInvite)
-	r.Post("/auth/accept-invite", h.acceptInvite)
-}
-
-// RegisterProtectedRoutes mounts authenticated admin routes. Caller must apply RequireAdmin.
+// RegisterProtectedRoutes mounts the authenticated admin routes this package still serves (catalogs, jobs). The
+// identity routes (auth, users, staff, roles, audit, verification) moved to internal/identityhttp. Caller must apply
+// RequireAdmin.
 func (h *AdminHandler) RegisterProtectedRoutes(r chi.Router, mw *auth.AdminMiddleware) {
-	r.Get("/auth/me", h.me)
-
-	r.With(mw.RequirePermission(admin.PermUsersRead)).Get("/users", h.listUsers)
-	r.With(mw.RequirePermission(admin.PermUsersRead)).Get("/users/{id}", h.getUser)
-	r.With(mw.RequirePermission(admin.PermUsersWrite)).Patch("/users/{id}", h.patchUser)
-
 	r.With(mw.RequirePermission(admin.PermCatalogsRead)).Get("/catalogs/{type}", h.listCatalog)
 	r.With(mw.RequirePermission(admin.PermCatalogsWrite)).Post("/catalogs/{type}", h.createCatalog)
 	r.With(mw.RequirePermission(admin.PermCatalogsWrite)).Patch("/catalogs/{type}/{id}", h.patchCatalog)
@@ -82,24 +71,6 @@ func (h *AdminHandler) RegisterProtectedRoutes(r chi.Router, mw *auth.AdminMiddl
 	r.With(mw.RequirePermission(admin.PermJobsRead)).Get("/jobs", h.listJobs)
 	r.With(mw.RequirePermission(admin.PermJobsRead)).Get("/jobs/{id}", h.getJob)
 	r.With(mw.RequirePermission(admin.PermJobsWrite)).Post("/jobs/{id}/retry", h.retryJob)
-
-	r.With(mw.RequirePermission(admin.PermAdminsRead)).Get("/staff", h.listStaff)
-	r.With(mw.RequirePermission(admin.PermAdminsWrite)).Post("/staff", h.createStaff)
-	r.With(mw.RequirePermission(admin.PermAdminsWrite)).Patch("/staff/{id}", h.patchStaff)
-	r.With(mw.RequirePermission(admin.PermAdminsWrite)).Post("/staff/{id}/resend-invite", h.resendInvite)
-
-	r.With(mw.RequirePermission(admin.PermAdminsRead)).Get("/roles", h.listRoles)
-	r.With(mw.RequirePermission(admin.PermAdminsWrite)).Post("/roles", h.createRole)
-	r.With(mw.RequirePermission(admin.PermAdminsWrite)).Patch("/roles/{id}", h.patchRole)
-	r.With(mw.RequirePermission(admin.PermAdminsWrite)).Delete("/roles/{id}", h.deleteRole)
-	r.With(mw.RequirePermission(admin.PermAdminsRead)).Get("/permissions", h.listPermissions)
-
-	r.With(mw.RequirePermission(admin.PermAuditRead)).Get("/audit-logs", h.listAuditLogs)
-
-	r.With(mw.RequirePermission(admin.PermVerificationReview)).Get("/verification", h.listVerificationQueue)
-	r.With(mw.RequirePermission(admin.PermVerificationReview)).Get("/verification/{organizationID}", h.getVerificationItem)
-	r.With(mw.RequirePermission(admin.PermVerificationReview)).
-		Post("/verification/{organizationID}/review", h.reviewVerification)
 }
 
 func (h *AdminHandler) audit(r *http.Request, action, resourceType, resourceID string, meta map[string]any) {

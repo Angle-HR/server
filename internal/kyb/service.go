@@ -49,6 +49,13 @@ type Queue interface {
 	Resolve(ctx context.Context, organizationID, reviewerID string, approved bool) error
 }
 
+// CaseQueue is a Queue that can also open a case of a given type (verifyqueue.CaseIndividual for the identity review
+// of a personal organization). Both queue adapters implement it.
+type CaseQueue interface {
+	Queue
+	EnqueueCase(ctx context.Context, organizationID, countryCode, caseType string) error
+}
+
 // Notice is an email in the lifecycle of KYB V2 §5.4.
 type Notice string
 

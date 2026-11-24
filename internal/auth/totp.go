@@ -17,12 +17,20 @@ import (
 const totpIssuer = "OpenHR"
 
 // TOTPCrypto encrypts authenticator secrets at rest.
+//
+// It always encrypts with the current key. Decrypt tries the current key first, then each previous key (see
+// NewTOTPCryptoKeys), so the key can be rotated without invalidating existing enrolments.
 type TOTPCrypto struct {
-	gcm cipher.AEAD
+	gcm      cipher.AEAD
+	previous []cipher.AEAD
 }
 
 // NewTOTPCrypto derives an AES-GCM key from the provided secret material.
 func NewTOTPCrypto(secretMaterial string) (*TOTPCrypto, error) {
+	return NewTOTPCryptoKeys(secretMaterial, nil)
+}
+
+func newGCM(secretMaterial string) (cipher.AEAD, error) {
 	if secretMaterial == "" {
 		return nil, errors.New("totp encryption key is required")
 	}
@@ -31,11 +39,7 @@ func NewTOTPCrypto(secretMaterial string) (*TOTPCrypto, error) {
 	if err != nil {
 		return nil, err
 	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	return &TOTPCrypto{gcm: gcm}, nil
+	return cipher.NewGCM(block)
 }
 
 // Encrypt encodes plaintext with AES-GCM and returns a base64 payload.
@@ -60,16 +64,28 @@ func (c *TOTPCrypto) Decrypt(encoded string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("decode totp secret: %w", err)
 	}
+	plain, _, err := c.open(raw)
+	return plain, err
+}
+
+// open decrypts raw with the current key, then the previous keys. idx is 0 for the current key and 1+ for the
+// previous keys in order.
+func (c *TOTPCrypto) open(raw []byte) (plain string, idx int, err error) {
 	nonceSize := c.gcm.NonceSize()
 	if len(raw) < nonceSize {
-		return "", errors.New("invalid totp secret payload")
+		return "", 0, errors.New("invalid totp secret payload")
 	}
 	nonce, ciphertext := raw[:nonceSize], raw[nonceSize:]
-	plain, err := c.gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		return "", fmt.Errorf("decrypt totp secret: %w", err)
+	b, openErr := c.gcm.Open(nil, nonce, ciphertext, nil)
+	if openErr == nil {
+		return string(b), 0, nil
 	}
-	return string(plain), nil
+	for i, prev := range c.previous {
+		if b, prevErr := prev.Open(nil, nonce, ciphertext, nil); prevErr == nil {
+			return string(b), i + 1, nil
+		}
+	}
+	return "", 0, fmt.Errorf("decrypt totp secret: %w", openErr)
 }
 
 // GenerateTOTP creates a new TOTP key for email.

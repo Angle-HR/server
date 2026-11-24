@@ -409,24 +409,47 @@ func (s *Store) CompanySetup(ctx context.Context, tenantID, dpaVersion string) (
 	out := &hiringtypes.CompanySetup{DPAVersion: dpaVersion}
 	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		var acceptedAt *time.Time
-		err := tx.QueryRow(ctx, companySetupSQL, tenantID, dpaVersion).Scan(
-			&out.KYBStatus, &acceptedAt, &out.PrivacyContact, &out.DPOContact)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNotFound
-		}
-		if err != nil {
-			return fmt.Errorf("hiringstore: company setup: %w", err)
+		if s.Org != nil {
+			r, err := s.Org.Setup(ctx, s.Region, tenantID, dpaVersion)
+			if err != nil {
+				return err
+			}
+			out.KYBStatus, acceptedAt, out.PrivacyContact, out.DPOContact = r.KYBStatus, r.DPAAcceptedAt, r.PrivacyEmail, r.DPOContact
+		} else {
+			err := tx.QueryRow(ctx, companySetupSQL, tenantID, dpaVersion).Scan(
+				&out.KYBStatus, &acceptedAt, &out.PrivacyContact, &out.DPOContact)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrNotFound
+			}
+			if err != nil {
+				return fmt.Errorf("hiringstore: company setup: %w", err)
+			}
 		}
 		if acceptedAt != nil {
 			out.DPAAccepted, out.DPAAcceptedAt = true, acceptedAt.UTC().Format(time.RFC3339)
 		}
-		err = tx.QueryRow(ctx, latestDPIASQL, tenantID).Scan(&out.DPIAVersion, &out.DPIARecordedAt)
+		err := tx.QueryRow(ctx, latestDPIASQL, tenantID).Scan(&out.DPIAVersion, &out.DPIARecordedAt)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("hiringstore: latest dpia: %w", err)
 		}
 		return nil
 	})
 	return out, err
+}
+
+const dpiaRecordedSQL = `SELECT EXISTS (SELECT 1 FROM hiring.dpia_records WHERE tenant_id = $1::uuid)`
+
+// DPIARecorded reports whether Legal recorded a DPIA for the company. The DPIA is hiring's own data, so it stays
+// here when the rest of the company's readiness comes from the org service.
+func (s *Store) DPIARecorded(ctx context.Context, tenantID string) (bool, error) {
+	var ok bool
+	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, dpiaRecordedSQL, tenantID).Scan(&ok)
+	})
+	if err != nil {
+		return false, fmt.Errorf("hiringstore: dpia recorded: %w", err)
+	}
+	return ok, nil
 }
 
 // CompanyState reduces CompanySetup to what the publish checks read.
@@ -448,6 +471,9 @@ ON CONFLICT (organization_id, kind, version) DO NOTHING`
 
 // AcceptDPA records that a person accepted a version of the terms and DPA for the company.
 func (s *Store) AcceptDPA(ctx context.Context, tenantID, userID, version string) error {
+	if s.Org != nil {
+		return s.Org.AcceptAgreement(ctx, s.Region, tenantID, userID, version)
+	}
 	_, err := s.DB.Exec(ctx, acceptAgreementSQL, tenantID, version, userID)
 	if err != nil {
 		return fmt.Errorf("hiringstore: accept agreement: %w", mapPgError(err))
@@ -461,6 +487,9 @@ WHERE id = $1::uuid`
 
 // SetPrivacyContact stores the contact applicants are told to write to.
 func (s *Store) SetPrivacyContact(ctx context.Context, tenantID, email, dpo string) error {
+	if s.Org != nil {
+		return s.Org.SetPrivacyContact(ctx, s.Region, tenantID, email, dpo)
+	}
 	tag, err := s.DB.Exec(ctx, setPrivacyContactSQL, tenantID, email, dpo)
 	if err != nil {
 		return fmt.Errorf("hiringstore: privacy contact: %w", err)

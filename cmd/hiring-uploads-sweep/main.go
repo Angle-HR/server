@@ -15,9 +15,9 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/Angle-HR/server/internal/dbrouter"
-	"github.com/Angle-HR/server/internal/hiring/hiringstore"
+	"github.com/Angle-HR/server/internal/hiring/appstore"
+	"github.com/Angle-HR/server/internal/hiring/jobsource"
 	"github.com/Angle-HR/server/internal/hiring/uploads"
-	"github.com/Angle-HR/server/internal/hiring/uploads/r2"
 	"github.com/Angle-HR/server/pkg/logger"
 )
 
@@ -57,18 +57,14 @@ func run() error {
 			slogger.Warn("hiring uploads sweep: region skipped", "region", string(reg), "error", err)
 			continue
 		}
-		client, err := router.R2(reg)
+		bucket, err := router.Blob(reg)
 		if err != nil {
 			slogger.Warn("hiring uploads sweep: region has no object storage, skipped", "region", string(reg), "error", err)
 			continue
 		}
-		bucket, err := r2.New(client, router.Bucket(reg))
-		if err != nil {
-			slogger.Warn("hiring uploads sweep: region skipped", "region", string(reg), "error", err)
-			continue
-		}
-		store := &hiringstore.Store{DB: pool}
-		sweeper := &uploads.Sweeper{Tenants: store.TenantIDs, Store: store, Storage: bucket, Logger: slogger}
+		store := &appstore.Store{DB: pool}
+		jobs := jobsource.NewRegional(pool)
+		sweeper := &uploads.Sweeper{Tenants: jobs.TenantIDs, Store: store, Storage: bucket, Logger: slogger}
 		res, err := sweeper.Run(ctx)
 		attrs := []any{"region", string(reg), "companies", res.Companies, "deleted", res.Deleted, "errors", res.Errors}
 		if err != nil {

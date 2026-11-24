@@ -20,10 +20,9 @@ import (
 	"time"
 
 	"github.com/Angle-HR/server/internal/countrycode"
-	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
-	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/public"
+	"github.com/Angle-HR/server/internal/hiring/appjobs"
 	"github.com/Angle-HR/server/internal/sensitive"
+	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/formschema"
 	"github.com/Angle-HR/server/pkg/formschema/screening"
 )
@@ -31,7 +30,7 @@ import (
 // Errors the HTTP layer maps to responses.
 var (
 	// ErrNotFound: no such public job, or it is not public.
-	ErrNotFound = hiringtypes.ErrNotFound
+	ErrNotFound = apperror.ErrNotFound
 	// ErrNotAccepting: the job exists but is paused, closed or past its closing date.
 	ErrNotAccepting = errors.New("apply: job is not accepting applications")
 	// ErrGone: the job was archived.
@@ -52,7 +51,7 @@ var (
 )
 
 // FieldError points at the part of the request that is wrong, e.g. answers.<question id>.
-type FieldError = jobs.FieldError
+type FieldError = formschema.FieldError
 
 // ValidationError lists what is wrong with an application.
 type ValidationError struct{ Fields []FieldError }
@@ -71,24 +70,7 @@ const (
 type Flag = screening.Flag
 
 // Target is a published job as the apply step needs it, read in one transaction.
-type Target struct {
-	JobID           string
-	JobCode         string
-	Title           string
-	CompanyName     string
-	Declarations    []formschema.Declaration // the legal condition and purpose of each special category on the job
-	Region          string                   // set by Submit from the registry
-	TenantID        string                   // set by Submit from the registry
-	Status          string
-	ClosingDate     string // last day to apply, YYYY-MM-DD, or ""
-	LawfulBasis     string
-	RetentionMonths int
-	Markets         []string // market codes the job is open to
-	FormID          string
-	FormVersion     int // newest frozen form version
-	Questions       []formschema.FormQuestion
-	Rules           []screening.Rule
-}
+type Target = appjobs.ApplyTarget
 
 // NewApplication is a validated application ready to store.
 type NewApplication struct {
@@ -166,9 +148,6 @@ type Sealer interface {
 
 // Store is one region's database as the apply step uses it.
 type Store interface {
-	// LoadForApply reads a job by public id with its newest frozen form and screening rules. ErrNotFound when
-	// the job is not public.
-	LoadForApply(ctx context.Context, tenantID, publicID string) (*Target, error)
 	// InsertApplication saves the application and raises the job's applicant counters in one transaction. It
 	// returns false, with nothing written, when the same email already applied to the job or the idempotency
 	// key was already used.
@@ -285,7 +264,8 @@ const (
 
 // Service takes applications.
 type Service struct {
-	Registry  public.Registry
+	// Jobs finds a job by public id and reads it with its frozen form and screening rules.
+	Jobs      appjobs.JobSource
 	Directory Directory
 	Limiter   Limiter // nil disables rate limiting
 	Uploads   Uploads // nil: forms that ask for a file cannot be answered yet
@@ -332,7 +312,7 @@ func (s *Service) Submit(ctx context.Context, in Input) (*Receipt, error) {
 	if err := s.limit(ctx, "flood:ip:"+in.ClientIP, FloodPerIP, FloodWindow); err != nil {
 		return nil, err
 	}
-	entry, err := s.Registry.LookupJob(ctx, in.PublicID)
+	entry, err := s.Jobs.LookupJob(ctx, in.PublicID)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +320,11 @@ func (s *Service) Submit(ctx context.Context, in Input) (*Receipt, error) {
 	if err != nil {
 		return nil, fmt.Errorf("apply: region %q: %w", entry.Region, err)
 	}
-	t, err := st.LoadForApply(ctx, entry.OrganizationID, in.PublicID)
+	rj, err := s.Jobs.Regional(entry.Region)
+	if err != nil {
+		return nil, fmt.Errorf("apply: region %q: %w", entry.Region, err)
+	}
+	t, err := rj.LoadForApply(ctx, entry.OrganizationID, in.PublicID)
 	if err != nil {
 		return nil, err
 	}
@@ -362,13 +346,13 @@ func (s *Service) Submit(ctx context.Context, in Input) (*Receipt, error) {
 		}
 	}
 
-	state, ok := public.StateOf(t.Status, t.ClosingDate, s.now())
+	state, ok := formschema.StateOf(t.Status, t.ClosingDate, s.now())
 	switch {
-	case t.Status == jobs.StatusArchived:
+	case t.Status == formschema.StatusArchived:
 		return nil, ErrGone
 	case !ok:
 		return nil, ErrNotFound
-	case state != public.StateOpen:
+	case state != formschema.StateOpen:
 		return nil, ErrNotAccepting
 	}
 
@@ -469,9 +453,17 @@ func (s *Service) build(ctx context.Context, in Input, t *Target) (*NewApplicati
 		add("candidate_country", "choose your country")
 	default:
 		m, known := MarketFor(country)
-		if !known || !contains(t.Markets, m) {
+		switch {
+		case t.Anywhere:
+			// An anywhere job is open to every country. The market is the one that covers the country, or
+			// MarketOther for a country no launch market covers.
+			if !known {
+				m = MarketOther
+			}
+			market = m
+		case !known || !contains(t.Markets, m):
 			add("candidate_country", "this role is not open to candidates in that country")
-		} else {
+		default:
 			market = m
 		}
 	}
@@ -617,7 +609,7 @@ func (s *Service) build(ctx context.Context, in Input, t *Target) (*NewApplicati
 		Name: name, Email: email, Country: country, Market: market,
 		Answers: answers, Files: files, Sensitive: sealed, Flags: flags, Status: status, Source: source(in.Source),
 		IdempotencyKey: key,
-		NoticeVersion:  public.NoticeVersion, NoticeAcknowledgedAt: now,
+		NoticeVersion:  formschema.NoticeVersion, NoticeAcknowledgedAt: now,
 		LawfulBasis:        t.LawfulBasis,
 		CollectionPurpose:  "Assessing your application for this role and contacting you about it",
 		RetentionUntil:     RetentionUntil(now, t.ClosingDate, t.RetentionMonths),
@@ -639,7 +631,7 @@ func (s *Service) build(ctx context.Context, in Input, t *Target) (*NewApplicati
 // when the application is decided or the job closes. The months come from the job, within the market's limits.
 func RetentionUntil(now time.Time, closingDate string, months int) time.Time {
 	if months <= 0 {
-		months = jobs.DefaultRetentionMonths
+		months = formschema.DefaultRetentionMonths
 	}
 	base := now.UTC()
 	if closingDate != "" {
@@ -655,7 +647,7 @@ func RetentionUntil(now time.Time, closingDate string, months int) time.Time {
 // source keeps only a known share channel; anything else is "direct".
 func source(src string) string {
 	src = strings.ToLower(strings.TrimSpace(src))
-	if public.ValidSource(src) {
+	if formschema.ValidSource(src) {
 		return src
 	}
 	return "direct"

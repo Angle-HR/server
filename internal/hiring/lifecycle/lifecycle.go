@@ -9,7 +9,7 @@ import (
 	"sort"
 
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 // Action is something a person (or the closing-date task) does to a job's status.

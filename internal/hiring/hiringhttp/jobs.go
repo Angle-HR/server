@@ -20,6 +20,10 @@ var _ = apidoc.ErrorEnvelope{}
 
 // RegisterProtectedRoutes mounts the authenticated hiring routes.
 func (h *HiringHandler) RegisterProtectedRoutes(r chi.Router) {
+	if h.Remote {
+		h.registerApplicationsOnly(r)
+		return
+	}
 	h.registerPublishRoutes(r)
 	r.Route("/jobs", func(r chi.Router) {
 		r.Get("/", h.listJobs)
@@ -37,7 +41,9 @@ func (h *HiringHandler) RegisterProtectedRoutes(r chi.Router) {
 			r.Put("/application-form", h.putForm)
 			r.Get("/preview", h.preview)
 			r.Post("/duplicates/dismiss", h.dismissDuplicate)
-			h.registerApplicationRoutes(r)
+			if h.servesApplications() {
+				h.appRoutes().RegisterJobRoutes(r)
+			}
 		})
 	})
 	r.Route("/hiring", func(r chi.Router) {
@@ -59,8 +65,20 @@ func (h *HiringHandler) RegisterProtectedRoutes(r chi.Router) {
 		r.Get("/templates/{id}/export", h.exportTemplate)
 		r.Get("/settings", h.settings)
 		r.Put("/settings", h.putSettings)
-		h.registerApplicantSettingsRoutes(r)
+		if h.servesApplications() {
+			h.appRoutes().RegisterSettingsRoutes(r)
+		}
 	})
+}
+
+// registerApplicationsOnly mounts just the applications routes, for a monolith whose hiring routes are served by
+// the hiring service (HIRING_REMOTE=on) but whose applications routes are still its own.
+func (h *HiringHandler) registerApplicationsOnly(r chi.Router) {
+	if !h.servesApplications() {
+		return
+	}
+	r.Route("/jobs/{id}", h.appRoutes().RegisterJobRoutes)
+	r.Route("/hiring", h.appRoutes().RegisterSettingsRoutes)
 }
 
 // JobEnvelope is a successful single-job response.
@@ -95,7 +113,7 @@ func (h *HiringHandler) jobID(r *http.Request) string { return chi.URLParam(r, "
 //	@Description	Newest updated first unless sort and order say otherwise. People who can only see assigned jobs get the jobs they created or were added to. Each row carries the workplace type, published and closing dates and the hiring managers. applicant_count is the number of applications received and new_applicant_count the number nobody has opened yet.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			status			query		string	false	"Comma-separated statuses, e.g. draft,published"
 //	@Param			department_id	query		string	false	"Only this department"
 //	@Param			q				query		string	false	"Search the title or department name"
@@ -162,7 +180,7 @@ type JobCountsEnvelope struct {
 //	@Description	The numbers for the status tabs, in one call instead of loading every job. Takes the same filters as the jobs list (search, department, creator, assignee, employment and workplace type, location mode, market, created dates); status, cursor, limit and sort are ignored. Every status is present, zero when there are none, and all is the total. People who can only see assigned jobs are counted on those jobs only.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			q				query		string	false	"Search title or department"
 //	@Param			department_id	query		string	false	"Only this department"
 //	@Param			created_by		query		string	false	"Only jobs created by this user id"
@@ -211,7 +229,7 @@ func nonNilItems(in []hiringtypes.ListItem) []hiringtypes.ListItem {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			body	body		draft.CreateRequest	false	"Job fields"
 //	@Success		201		{object}	hiringhttp.JobEnvelope
 //	@Failure		400		{object}	apidoc.ErrorEnvelope
@@ -249,7 +267,7 @@ func (h *HiringHandler) createJob(w http.ResponseWriter, r *http.Request) {
 //	@Description	Returns the job with warnings (market rules, pay advice, possible duplicates). The ETag header carries the revision to send back in If-Match.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id	path		string	true	"Job id"
 //	@Success		200	{object}	hiringhttp.JobEnvelope
 //	@Failure		404	{object}	apidoc.ErrorEnvelope
@@ -302,7 +320,7 @@ func (h *HiringHandler) save(w http.ResponseWriter, r *http.Request, strict bool
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id			path		string		true	"Job id"
 //	@Param			If-Match	header		string		true	"Revision the client loaded"
 //	@Param			body		body		jobs.Patch	true	"Fields to change"
@@ -321,7 +339,7 @@ func (h *HiringHandler) patchJob(w http.ResponseWriter, r *http.Request) { h.sav
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id			path		string		true	"Job id"
 //	@Param			If-Match	header		string		true	"Revision the client loaded"
 //	@Param			body		body		jobs.Patch	true	"Fields to change"
@@ -346,7 +364,7 @@ type MarketsRequest struct {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id			path		string					true	"Job id"
 //	@Param			If-Match	header		string					true	"Revision the client loaded"
 //	@Param			body		body		hiringhttp.MarketsRequest	true	"Markets"
@@ -396,7 +414,7 @@ func (h *HiringHandler) putMarkets(w http.ResponseWriter, r *http.Request) {
 //	@Description	Only drafts can be deleted. Everything else is closed or archived instead.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id			path		string	true	"Job id"
 //	@Param			If-Match	header		string	true	"Revision the client loaded"
 //	@Success		200			{object}	map[string]bool
@@ -424,7 +442,7 @@ func (h *HiringHandler) deleteJob(w http.ResponseWriter, r *http.Request) {
 //	@Summary		Get the application form
 //	@Tags			application-form
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id	path		string	true	"Job id"
 //	@Success		200	{object}	hiringhttp.FormEnvelope
 //	@Failure		404	{object}	apidoc.ErrorEnvelope
@@ -450,7 +468,7 @@ func (h *HiringHandler) getForm(w http.ResponseWriter, r *http.Request) {
 //	@Tags			application-form
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id			path		string				true	"Job id"
 //	@Param			If-Match	header		string				true	"Revision the client loaded"
 //	@Param			body		body		draft.FormInput		true	"Form"
@@ -493,7 +511,7 @@ func (h *HiringHandler) putForm(w http.ResponseWriter, r *http.Request) {
 //	@Description	The candidate-facing view, built the same way as the live page. It never contains knockout rules, the lawful basis, retention or the assessment link.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id	path		string	true	"Job id"
 //	@Success		200	{object}	hiringhttp.PreviewEnvelope
 //	@Failure		404	{object}	apidoc.ErrorEnvelope
@@ -517,7 +535,7 @@ func (h *HiringHandler) preview(w http.ResponseWriter, r *http.Request) {
 //	@Description	Records in the audit log that the user saw the warning and kept going. The warning still shows if the job is opened again.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id	path		string	true	"Job id"
 //	@Success		200	{object}	map[string]bool
 //	@Failure		404	{object}	apidoc.ErrorEnvelope

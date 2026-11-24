@@ -11,7 +11,7 @@ func TestBusNeeded(t *testing.T) {
 		transport, hiring string
 		want              bool
 	}{
-		{"fluvio", "", false}, {"fluvio", "off", false}, {"events", "", true}, {"events", "on", true},
+		{"fluvio", "", false}, {"fluvio", "off", false}, {"events", "", true}, {"fluvio", "on", true}, {"events", "on", true},
 	}
 	for _, c := range cases {
 		// Hermetic: the other gates must not leak in from the developer's environment.

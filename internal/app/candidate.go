@@ -12,12 +12,13 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/applications"
 	"github.com/Angle-HR/server/internal/hiring/apply"
 	"github.com/Angle-HR/server/internal/hiring/apply/redislimit"
+	"github.com/Angle-HR/server/internal/hiring/appstore"
 	"github.com/Angle-HR/server/internal/hiring/hiringhttp"
 	"github.com/Angle-HR/server/internal/hiring/hiringstore"
+	"github.com/Angle-HR/server/internal/hiring/jobsource"
 	"github.com/Angle-HR/server/internal/hiring/public"
 	"github.com/Angle-HR/server/internal/hiring/reapply"
 	"github.com/Angle-HR/server/internal/hiring/uploads"
-	"github.com/Angle-HR/server/internal/hiring/uploads/r2"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/internal/sensitive"
 	"github.com/Angle-HR/server/pkg/config"
@@ -46,6 +47,10 @@ func newPublicHandler(
 		return p, nil
 	}
 	g := &hiringstore.Global{DB: global}
+	jobSource := &jobsource.Source{
+		Global: g,
+		Pool:   func(reg string) (hiringstore.DB, error) { return pool(region.Region(reg)) },
+	}
 	pub := &public.Service{
 		Registry:  g,
 		Directory: hiringhttp.PublicDirectory{Pool: pool},
@@ -54,7 +59,7 @@ func newPublicHandler(
 	}
 	hasher := newReapplyHasher(log)
 	app := &apply.Service{
-		Registry:  g,
+		Jobs:      jobSource,
 		Directory: hiringhttp.ApplyDirectory{Pool: pool},
 		Limiter:   redislimit.New(rdb),
 		Logger:    log,
@@ -69,7 +74,7 @@ func newPublicHandler(
 	if scanners := regionScanners(); len(scanners) > 0 {
 		limiter := redislimit.New(rdb)
 		up := &uploads.Service{
-			Registry: g,
+			Jobs: jobSource,
 			Directory: hiringhttp.UploadDirectory{
 				Pool: pool,
 				Bucket: func(reg string) (uploads.Storage, error) {
@@ -106,11 +111,7 @@ func regionScanners() map[string]uploads.Scanner {
 
 // regionStorage is a region's bucket for uploads.
 func regionStorage(router *dbrouter.DBRouter, reg region.Region) (uploads.Storage, error) {
-	client, err := router.R2(reg)
-	if err != nil {
-		return nil, err
-	}
-	return r2.New(client, router.Bucket(reg))
+	return router.Blob(reg)
 }
 
 // newKeyring reads the keys that encrypt special category answers, ANGLEHR_<REGION>_SENSITIVE_KEYS, one variable per
@@ -171,8 +172,10 @@ func newApplicationsService(
 		if err != nil {
 			return nil, err
 		}
+		jobs := jobsource.NewRegional(p)
 		svc := &applications.Service{
-			Store:     &hiringstore.Store{DB: p},
+			Store:     &appstore.Store{DB: p, Jobs: jobs, Region: string(reg)},
+			Jobs:      jobs,
 			Hasher:    hasher,
 			NoticeURL: noticeURL(siteURL),
 		}

@@ -4,9 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/minio/minio-go/v7"
-
 	"github.com/Angle-HR/server/internal/region"
+	"github.com/Angle-HR/server/pkg/platform/blob"
 )
 
 func TestLoadConfigsFromEnv_missing(t *testing.T) {
@@ -118,7 +117,7 @@ func TestLoadConfigsFromEnv_httpsSSL(t *testing.T) {
 
 func newDBRouterForTest(
 	pools map[region.Region]PgxPool,
-	storageClients map[region.Region]*minio.Client,
+	storageClients map[region.Region]blob.BlobStore,
 	buckets map[region.Region]string,
 ) *DBRouter {
 	return &DBRouter{
@@ -159,24 +158,24 @@ func TestMustDB_panics(t *testing.T) {
 	router.MustDB(region.RegionUK)
 }
 
-func TestR2_unknownRegion(t *testing.T) {
-	router := newDBRouterForTest(nil, map[region.Region]*minio.Client{}, nil)
+func TestBlob_unknownRegion(t *testing.T) {
+	router := newDBRouterForTest(nil, map[region.Region]blob.BlobStore{}, nil)
 
-	_, err := router.R2(region.RegionUK)
+	_, err := router.Blob(region.RegionUK)
 	if !errors.Is(err, ErrUnknownRegion) {
 		t.Fatalf("got %v, want ErrUnknownRegion", err)
 	}
 }
 
-func TestMustR2_panics(t *testing.T) {
-	router := newDBRouterForTest(nil, map[region.Region]*minio.Client{}, nil)
+func TestMustBlob_panics(t *testing.T) {
+	router := newDBRouterForTest(nil, map[region.Region]blob.BlobStore{}, nil)
 
 	defer func() {
 		if recover() == nil {
 			t.Fatal("expected panic")
 		}
 	}()
-	router.MustR2(region.RegionUK)
+	router.MustBlob(region.RegionUK)
 }
 
 func TestBucket(t *testing.T) {
@@ -242,8 +241,8 @@ func TestLoadConfigsFromEnv_noKeysUsesCredentialChain(t *testing.T) {
 		if err := validateRegionConfig(cfg); err != nil {
 			t.Fatalf("validateRegionConfig: %v", err)
 		}
-		if _, err := newR2Client(cfg); err != nil {
-			t.Fatalf("newR2Client: %v", err)
+		if _, err := newBlobStore(cfg); err != nil {
+			t.Fatalf("newBlobStore: %v", err)
 		}
 	}
 }

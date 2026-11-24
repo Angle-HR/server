@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Angle-HR/server/internal/hiring/appjobs"
 	"github.com/Angle-HR/server/internal/hiring/retention"
 	"github.com/Angle-HR/server/internal/hiring/uploads"
 )
@@ -22,7 +23,7 @@ type fakeStore struct {
 	log       []string
 }
 
-func (f *fakeStore) ShortenForClosedJobs(context.Context, string, time.Time) (int, error) {
+func (f *fakeStore) ShortenForClosedJobs(context.Context, string, []appjobs.ClosedJob) (int, error) {
 	f.log = append(f.log, "shorten")
 	return f.shortened, nil
 }
@@ -52,12 +53,25 @@ func (f *fakeStore) DeleteExpiredBlocks(context.Context, string, time.Time) (int
 	return f.blocks, nil
 }
 func (f *fakeStore) DeleteOldEmails(context.Context, string, time.Time) (int, error) { return 0, nil }
-func (f *fakeStore) QueueNotice(_ context.Context, tid string, _ time.Time, items []retention.NoticeItem) error {
+func (f *fakeStore) QueueNotice(_ context.Context, tid string, _ time.Time, _, _ string, items []retention.NoticeItem) error {
 	if f.notices == nil {
 		f.notices = map[string][]retention.NoticeItem{}
 	}
 	f.notices[tid] = items
 	return nil
+}
+
+// fakeJobs has one closed job in every company, no labels (the fake rows carry their own) and one recipient.
+type fakeJobs struct{ appjobs.RegionalJobs }
+
+func (fakeJobs) ClosedJobs(context.Context, string, time.Time) ([]appjobs.ClosedJob, error) {
+	return []appjobs.ClosedJob{{JobID: "j1", Until: now}}, nil
+}
+func (fakeJobs) JobLabels(context.Context, string, []string) (map[string]appjobs.JobLabel, error) {
+	return nil, nil
+}
+func (fakeJobs) NoticeRecipient(context.Context, string) (string, string, error) {
+	return "privacy@acme.test", "Acme", nil
 }
 
 type fakeStorage struct {
@@ -66,7 +80,7 @@ type fakeStorage struct {
 	failKey string
 }
 
-func (s *fakeStorage) Remove(_ context.Context, key string) error {
+func (s *fakeStorage) Delete(_ context.Context, key string) error {
 	if key == s.failKey {
 		return errors.New("r2 down")
 	}
@@ -78,7 +92,7 @@ func (s *fakeStorage) Remove(_ context.Context, key string) error {
 func sweeper(st *fakeStore, sg *fakeStorage, tenants ...string) *retention.Sweeper {
 	return &retention.Sweeper{
 		Tenants: func(context.Context) ([]string, error) { return tenants, nil },
-		Store:   st, Storage: sg, Now: func() time.Time { return now },
+		Store:   st, Jobs: fakeJobs{}, Storage: sg, Now: func() time.Time { return now },
 	}
 }
 

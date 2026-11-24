@@ -15,8 +15,8 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/gates"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/rbac"
 	"github.com/Angle-HR/server/pkg/formschema"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 // Store is the regional database as the service sees it.
@@ -43,6 +43,8 @@ type Store interface {
 	DeleteTemplate(ctx context.Context, tenantID, userID, id string) error
 	// DueJobIDs returns up to limit published jobs of the company whose closing date has passed.
 	DueJobIDs(ctx context.Context, tenantID string, limit int) ([]string, error)
+	// LiveJobIDs returns up to limit published or paused jobs of the company.
+	LiveJobIDs(ctx context.Context, tenantID string, limit int) ([]string, error)
 	RenameTemplate(ctx context.Context, tenantID, userID, id, name string) (*hiringtypes.Template, error)
 	SetTemplatePinned(ctx context.Context, tenantID, userID, id string, pinned bool) (*hiringtypes.Template, error)
 	TouchTemplate(ctx context.Context, tenantID, userID, id string) error
@@ -113,6 +115,19 @@ type Service struct {
 	Company Company
 	// NewPublicID makes the public id of a job on first publish. Nil uses a random id.
 	NewPublicID func() string
+	// Applicants fills the applicant counters of the job list. Nil leaves what the store returned (zero for the real
+	// store, which no longer reads the applications tables).
+	Applicants ApplicantCounts
+}
+
+// ApplicantCount is the per-job counters the list shows: everyone who applied, and how many of them nobody on the
+// hiring team has opened yet.
+type ApplicantCount struct{ Total, New int }
+
+// ApplicantCounts answers the counters of a page of jobs in one call. Jobs with no applications are absent or zero.
+// Implementations: internal/hiring/applicantcounts (DB: today's table read, GRPC: ApplicationsService).
+type ApplicantCounts interface {
+	ApplicantCounts(ctx context.Context, c Caller, jobIDs []string) (map[string]ApplicantCount, error)
 }
 
 func (s *Service) now() time.Time {
@@ -359,7 +374,26 @@ func (s *Service) List(ctx context.Context, c Caller, q ListQuery) ([]hiringtype
 	if !c.can(rbac.JobViewAll) {
 		f.OnlyMine = c.UserID
 	}
-	return s.Store.ListJobs(ctx, c.OrgID, f)
+	items, next, err := s.Store.ListJobs(ctx, c.OrgID, f)
+	if err != nil || s.Applicants == nil || len(items) == 0 {
+		return items, next, err
+	}
+	ids := make([]string, len(items))
+	for i := range items {
+		ids[i] = items[i].ID
+	}
+	counts, cerr := s.Applicants.ApplicantCounts(ctx, c, ids)
+	if cerr != nil {
+		// The list stays usable when applications is unreachable; the counters show zero until it is back.
+		slog.WarnContext(ctx, "applicant counts unavailable", "error", cerr)
+		return items, next, nil
+	}
+	for i := range items {
+		if n, ok := counts[items[i].ID]; ok {
+			items[i].ApplicantCount, items[i].NewApplicantCount = n.Total, n.New
+		}
+	}
+	return items, next, nil
 }
 
 // JobCounts is the number of jobs per status for the jobs page tabs. Every known status is present, zero when empty.

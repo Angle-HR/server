@@ -13,8 +13,8 @@ import (
 
 	"github.com/Angle-HR/server/internal/hiring/draft"
 	"github.com/Angle-HR/server/internal/hiring/drafttest"
-	"github.com/Angle-HR/server/internal/rbac"
 	"github.com/Angle-HR/server/internal/region"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 const (

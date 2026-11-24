@@ -16,9 +16,9 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/Angle-HR/server/internal/dbrouter"
-	"github.com/Angle-HR/server/internal/hiring/hiringstore"
+	"github.com/Angle-HR/server/internal/hiring/appstore"
+	"github.com/Angle-HR/server/internal/hiring/jobsource"
 	"github.com/Angle-HR/server/internal/hiring/retention"
-	"github.com/Angle-HR/server/internal/hiring/uploads/r2"
 	"github.com/Angle-HR/server/pkg/logger"
 )
 
@@ -60,18 +60,14 @@ func run() error {
 		}
 		// A region without object storage cannot hold uploads, so it has no files to delete either; but
 		// deleting rows without removing files is never done, so such a region is skipped.
-		client, err := router.R2(reg)
+		bucket, err := router.Blob(reg)
 		if err != nil {
 			slogger.Warn("hiring retention: region has no object storage, skipped", "region", string(reg), "error", err)
 			continue
 		}
-		bucket, err := r2.New(client, router.Bucket(reg))
-		if err != nil {
-			slogger.Warn("hiring retention: region skipped", "region", string(reg), "error", err)
-			continue
-		}
-		store := &hiringstore.Store{DB: pool}
-		sweeper := &retention.Sweeper{Tenants: store.TenantIDs, Store: store, Storage: bucket, Logger: slogger}
+		store := &appstore.Store{DB: pool}
+		jobs := jobsource.NewRegional(pool)
+		sweeper := &retention.Sweeper{Tenants: jobs.TenantIDs, Store: store, Jobs: jobs, Storage: bucket, Logger: slogger}
 		res, err := sweeper.Run(ctx)
 		attrs := []any{
 			"region", string(reg), "companies", res.Companies, "shortened", res.Shortened, "deleted", res.Deleted,

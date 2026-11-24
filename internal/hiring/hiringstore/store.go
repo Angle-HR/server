@@ -37,7 +37,16 @@ var (
 type StaleRevisionError = hiringtypes.StaleRevisionError
 
 // Store persists regional hiring data.
-type Store struct{ DB DB }
+type Store struct {
+	DB DB
+	// Region is the region code of DB. It is written on job events (HIRING_EVENTS=on); a store that changes jobs
+	// with events on and no region fails the change rather than emit an event nobody can route.
+	Region string
+	// Org, when set, replaces the reads and writes of accounts.* (company row, settings page, DPA, privacy
+	// contact). Users, when set, resolves the names of a job's hiring managers. Both nil: the shared tables.
+	Org   CompanyOrg
+	Users UserNames
+}
 
 // Postgres error codes the store translates.
 const (

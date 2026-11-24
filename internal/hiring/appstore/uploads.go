@@ -1,4 +1,4 @@
-package hiringstore
+package appstore
 
 import (
 	"context"
@@ -23,7 +23,7 @@ func (s *Store) InsertUpload(ctx context.Context, tenantID string, r *uploads.Re
 		_, err := tx.Exec(ctx, insertUploadSQL, r.ID, tenantID, r.JobID, r.QuestionID, r.Filename, r.ContentType,
 			r.Declared, r.ExpiresAt, r.RetentionUntil, r.LawfulBasis, r.CollectionPurpose)
 		if err != nil {
-			return fmt.Errorf("hiringstore: insert upload: %w", mapPgError(err))
+			return fmt.Errorf("appstore: insert upload: %w", mapPgError(err))
 		}
 		return nil
 	})
@@ -46,7 +46,7 @@ func (s *Store) GetUpload(ctx context.Context, tenantID, id string) (*uploads.Re
 			return ErrNotFound
 		}
 		if err != nil {
-			return fmt.Errorf("hiringstore: load upload: %w", err)
+			return fmt.Errorf("appstore: load upload: %w", err)
 		}
 		out = r
 		return nil
@@ -68,7 +68,7 @@ func (s *Store) MarkUploadClean(ctx context.Context, tenantID, id string, size i
 	return s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, markUploadCleanSQL, id, tenantID, size, sha)
 		if err != nil {
-			return fmt.Errorf("hiringstore: mark upload clean: %w", err)
+			return fmt.Errorf("appstore: mark upload clean: %w", err)
 		}
 		if tag.RowsAffected() != 1 {
 			return ErrConflict
@@ -86,7 +86,7 @@ WHERE id = $1::uuid AND tenant_id = $2::uuid AND status IN ('pending', 'clean') 
 func (s *Store) RejectUpload(ctx context.Context, tenantID, id string) error {
 	return s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, rejectUploadSQL, id, tenantID); err != nil {
-			return fmt.Errorf("hiringstore: reject upload: %w", err)
+			return fmt.Errorf("appstore: reject upload: %w", err)
 		}
 		return nil
 	})
@@ -105,13 +105,13 @@ func (s *Store) ExpiredUploads(ctx context.Context, tenantID string, now time.Ti
 	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, expiredUploadsSQL, tenantID, now, limit)
 		if err != nil {
-			return fmt.Errorf("hiringstore: list expired uploads: %w", err)
+			return fmt.Errorf("appstore: list expired uploads: %w", err)
 		}
 		defer rows.Close()
 		for rows.Next() {
 			e := uploads.Expired{TenantID: tenantID}
 			if err = rows.Scan(&e.ID, &e.JobID); err != nil {
-				return fmt.Errorf("hiringstore: scan expired upload: %w", err)
+				return fmt.Errorf("appstore: scan expired upload: %w", err)
 			}
 			out = append(out, e)
 		}
@@ -128,7 +128,7 @@ WHERE id = $1::uuid AND tenant_id = $2::uuid AND application_id IS NULL`
 func (s *Store) DeleteUpload(ctx context.Context, tenantID, id string) error {
 	return s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, deleteUploadSQL, id, tenantID); err != nil {
-			return fmt.Errorf("hiringstore: delete upload: %w", err)
+			return fmt.Errorf("appstore: delete upload: %w", err)
 		}
 		return nil
 	})

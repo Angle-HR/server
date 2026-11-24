@@ -86,7 +86,7 @@ func (w *Sweeper) Run(ctx context.Context) (SweepResult, error) {
 func (w *Sweeper) delete(ctx context.Context, tenantID string, u Expired) error {
 	// Objects first: a row without an object is harmless, an object without a row would never be found.
 	for _, key := range []string{StagingKey(tenantID, u.JobID, u.ID), FinalKey(tenantID, u.JobID, u.ID)} {
-		if err := w.Storage.Remove(ctx, key); err != nil {
+		if err := w.Storage.Delete(ctx, key); err != nil {
 			return fmt.Errorf("remove %s: %w", u.ID, err)
 		}
 	}

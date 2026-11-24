@@ -69,3 +69,45 @@ func (s *Service) expireOne(ctx context.Context, tenantID, id string) (bool, err
 	}
 	return true, nil
 }
+
+// ArchiveLiveJobs archives every published or paused job of a company (the company was deleted). Each goes through
+// the normal write, so the closed event (reason archived) and the registry status follow. It returns how many it
+// archived and the first error; running it again picks up what is left.
+func (s *Service) ArchiveLiveJobs(ctx context.Context, tenantID string) (int, error) {
+	const batch = 200
+	n := 0
+	for {
+		ids, err := s.Store.LiveJobIDs(ctx, tenantID, batch)
+		if err != nil {
+			return n, err
+		}
+		if len(ids) == 0 {
+			return n, nil
+		}
+		for _, id := range ids {
+			var publicID string
+			_, err := s.Store.UpdateJob(ctx, tenantID, "", id, 0,
+				func(cur *hiringtypes.JobRecord) (*hiringtypes.UpdateResult, error) {
+					if cur.Job.Status != jobs.StatusPublished && cur.Job.Status != jobs.StatusPaused {
+						return nil, nil
+					}
+					publicID = cur.Job.PublicID
+					return &hiringtypes.UpdateResult{
+						Completed: cur.Job.CompletedSections, Step: cur.Job.CurrentStep,
+						Status:      &hiringtypes.StatusChange{To: jobs.StatusArchived},
+						AuditAction: "job.archive",
+						AuditDiff:   map[string]any{"from": cur.Job.Status, "to": jobs.StatusArchived, "reason": "company_deleted"},
+					}, nil
+				})
+			if err != nil {
+				return n, err
+			}
+			if publicID != "" {
+				if rerr := s.Ref.SetRegistryStatus(ctx, publicID, registryStatus(jobs.StatusArchived)); rerr != nil {
+					slog.WarnContext(ctx, "draft: registry status not updated", "job", id, "error", rerr)
+				}
+				n++
+			}
+		}
+	}
+}

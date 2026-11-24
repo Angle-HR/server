@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 func TestTemplateManagementOverHTTP(t *testing.T) {

@@ -1,4 +1,4 @@
-package hiringhttp
+package apphttp
 
 import (
 	"context"
@@ -12,11 +12,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/Angle-HR/server/internal/hiring/appjobs"
 	"github.com/Angle-HR/server/internal/hiring/applications"
-	"github.com/Angle-HR/server/internal/hiring/draft"
-	"github.com/Angle-HR/server/internal/rbac"
 	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 const (
@@ -27,18 +27,24 @@ const (
 
 type stubDirectory struct{ err error }
 
-func (d stubDirectory) Scope(_ context.Context, userID string, _ region.Region) (*draft.Service, draft.Caller, error) {
+func (d stubDirectory) ResolveCaller(_ context.Context, userID string, _ region.Region) (applications.Caller, error) {
 	if d.err != nil {
-		return nil, draft.Caller{}, d.err
+		return applications.Caller{}, d.err
 	}
-	return nil, draft.Caller{UserID: userID, OrgID: "11111111-1111-4111-8111-111111111111",
+	return applications.Caller{UserID: userID, OrgID: "11111111-1111-4111-8111-111111111111",
 		Perms: rbac.NewSet(rbac.JobViewAll, rbac.JobManageAny, rbac.JobRetentionSet)}, nil
 }
 
 type stubAppStore struct{ change error }
 
-func (s *stubAppStore) JobAccess(context.Context, string, string, string) (*applications.JobAccess, error) {
+// stubJobs is the job source of the applications service.
+type stubJobs struct{ appjobs.RegionalJobs }
+
+func (stubJobs) JobAccess(context.Context, string, string, string) (*applications.JobAccess, error) {
 	return &applications.JobAccess{JobID: tJob, CreatedBy: tUser, RetentionMonths: 6}, nil
+}
+func (stubJobs) JobSummary(context.Context, string, string) (*appjobs.JobSummary, error) {
+	return &appjobs.JobSummary{Code: "JB-1", Title: "Engineer", Company: "Acme", PublicID: "abc", RetentionMonths: 6}, nil
 }
 func (s *stubAppStore) List(context.Context, string, string, applications.StoreListQuery) ([]applications.Summary, map[string]int, error) {
 	return nil, nil, nil
@@ -60,18 +66,20 @@ func (s *stubAppStore) GetApplicantSettings(context.Context, string) (int, bool,
 }
 func (s *stubAppStore) SaveApplicantSettings(context.Context, string, int, bool) error { return nil }
 
-func appRouter(h *HiringHandler) http.Handler {
+func appRouter(h *Handler) http.Handler {
 	r := chi.NewRouter()
-	h.RegisterProtectedRoutes(r)
+	h.Mount(r)
 	return r
 }
 
-func appHandler(dir HiringDirectory, st applications.Store) *HiringHandler {
-	h := NewHiringHandler(dir, func(context.Context) (string, region.Region, bool) { return tUser, region.Region("uk"), true })
+func appHandler(dir CallerResolver, st applications.Store) *Handler {
+	d := Deps{Callers: dir, Identify: func(context.Context) (string, region.Region, bool) { return tUser, region.Region("uk"), true }}
 	if st != nil {
-		h.Applications = func(region.Region) (*applications.Service, error) { return &applications.Service{Store: st}, nil }
+		d.Applications = func(region.Region) (*applications.Service, error) {
+			return &applications.Service{Store: st, Jobs: stubJobs{}}, nil
+		}
 	}
-	return h
+	return New(d)
 }
 
 func do(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
@@ -164,5 +172,31 @@ func TestApplicantSettingsRoutes(t *testing.T) {
 	rec = do(h, http.MethodPut, "/hiring/applicant-settings", `{"send_status_emails":false}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestNoOrganizationIs404AndSignedOutIs401(t *testing.T) {
+	h := appHandler(stubDirectory{err: ErrNoOrganization}, &stubAppStore{})
+	if rec := do(appRouter(h), http.MethodGet, "/jobs/"+tJob+"/applications", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("no org: %d %s", rec.Code, rec.Body)
+	}
+	h = appHandler(stubDirectory{}, &stubAppStore{})
+	h.Identify = func(context.Context) (string, region.Region, bool) { return "", "", false }
+	if rec := do(appRouter(h), http.MethodGet, "/hiring/applicant-settings", ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("signed out: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestMountWrapsCompanyRoutesInRequireAuthButNotPublicOnes(t *testing.T) {
+	h := appHandler(stubDirectory{}, &stubAppStore{})
+	h.RequireAuth = func(http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
+	}
+	r := appRouter(h)
+	if rec := do(r, http.MethodGet, "/jobs/"+tJob+"/applications", ""); rec.Code != http.StatusTeapot {
+		t.Fatalf("company route must sit behind RequireAuth: %d", rec.Code)
+	}
+	if rec := do(r, http.MethodPost, "/public/jobs/abc/uploads", `{}`); rec.Code == http.StatusTeapot {
+		t.Fatal("public route must not sit behind RequireAuth")
 	}
 }

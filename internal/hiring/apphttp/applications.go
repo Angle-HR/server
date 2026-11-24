@@ -1,4 +1,4 @@
-package hiringhttp
+package apphttp
 
 import (
 	"errors"
@@ -10,16 +10,11 @@ import (
 
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/hiring/applications"
-	"github.com/Angle-HR/server/internal/hiring/draft"
-	"github.com/Angle-HR/server/internal/region"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/response"
 )
 
 var _ = apidoc.ErrorEnvelope{}
-
-// RegionalApplications returns the applications service of a region.
-type RegionalApplications func(reg region.Region) (*applications.Service, error)
 
 // Envelopes for the API documentation.
 type (
@@ -45,9 +40,8 @@ type (
 	}
 )
 
-// registerApplicationRoutes mounts the per-job routes inside /jobs/{id}. Nothing is mounted when the handler has
-// no applications service.
-func (h *HiringHandler) registerApplicationRoutes(r chi.Router) {
+// RegisterJobRoutes mounts the per-job routes. r is the router of /jobs/{id}.
+func (h *Handler) RegisterJobRoutes(r chi.Router) {
 	r.Get("/applications", h.listApplications)
 	r.Get("/applications/{app_id}", h.getApplication)
 	r.Post("/applications/{app_id}/status", h.setApplicationStatus)
@@ -55,40 +49,40 @@ func (h *HiringHandler) registerApplicationRoutes(r chi.Router) {
 	r.Get("/applications/{app_id}/files/{file_id}", h.applicationFile)
 }
 
-// registerApplicantSettingsRoutes mounts the company-level candidate settings inside /hiring.
-func (h *HiringHandler) registerApplicantSettingsRoutes(r chi.Router) {
+// RegisterSettingsRoutes mounts the company-level candidate settings. r is the router of /hiring.
+func (h *Handler) RegisterSettingsRoutes(r chi.Router) {
 	r.Get("/applicant-settings", h.getApplicantSettings)
 	r.Put("/applicant-settings", h.putApplicantSettings)
 }
 
 // appScope resolves who is calling and the applications service of their region.
-func (h *HiringHandler) appScope(w http.ResponseWriter, r *http.Request) (*applications.Service, draft.Caller, bool) {
+func (h *Handler) appScope(w http.ResponseWriter, r *http.Request) (*applications.Service, applications.Caller, bool) {
 	if h.Applications == nil {
 		response.Error(w, r, apperror.New(apperror.CodeServiceUnavailable, "applications are not available"))
-		return nil, draft.Caller{}, false
+		return nil, applications.Caller{}, false
 	}
 	userID, reg, ok := h.Identify(r.Context())
 	if !ok {
 		response.Error(w, r, apperror.ErrUnauthorized)
-		return nil, draft.Caller{}, false
+		return nil, applications.Caller{}, false
 	}
-	_, c, err := h.Directory.Scope(r.Context(), userID, reg)
+	c, err := h.Callers.ResolveCaller(r.Context(), userID, reg)
 	if err != nil {
 		if errors.Is(err, ErrNoOrganization) {
 			err = apperror.New(apperror.CodeNotFound, "no organization for this account")
 		}
 		response.Error(w, r, err)
-		return nil, draft.Caller{}, false
+		return nil, applications.Caller{}, false
 	}
 	svc, err := h.Applications(reg)
 	if err != nil {
 		response.Error(w, r, err)
-		return nil, draft.Caller{}, false
+		return nil, applications.Caller{}, false
 	}
 	return svc, c, true
 }
 
-// applicationsError maps the pipeline errors, then falls back to the hiring mapping.
+// applicationsError maps the pipeline errors; anything else is returned as it is.
 func applicationsError(err error) error {
 	reason := ""
 	msg := ""
@@ -103,8 +97,10 @@ func applicationsError(err error) error {
 		reason, msg = "not_opened", "open the application yourself before deciding it"
 	case errors.Is(err, applications.ErrStale):
 		reason, msg = "changed", "the application was changed by someone else; reload it and try again"
+	case errors.Is(err, apperror.ErrNotFound):
+		return apperror.New(apperror.CodeNotFound, "not found")
 	default:
-		return hiringError(err)
+		return err
 	}
 	return apperror.NewWithDetails(apperror.CodeConflict, msg, map[string]any{"reason": reason})
 }
@@ -114,8 +110,9 @@ func noStore(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-store")
 }
 
-func (h *HiringHandler) appID(r *http.Request) string  { return chi.URLParam(r, "app_id") }
-func (h *HiringHandler) fileID(r *http.Request) string { return chi.URLParam(r, "file_id") }
+func jobID(r *http.Request) string  { return chi.URLParam(r, "id") }
+func appID(r *http.Request) string  { return chi.URLParam(r, "app_id") }
+func fileID(r *http.Request) string { return chi.URLParam(r, "file_id") }
 
 // listApplications godoc
 //
@@ -123,7 +120,7 @@ func (h *HiringHandler) fileID(r *http.Request) string { return chi.URLParam(r, 
 //	@Description	Newest first, 25 per page by default (100 at most). Rows carry no answers. `status` can be repeated or comma separated; `new=true` lists applications nobody has opened. `counts` are for the whole job, whatever the filters. Seen by people who can see the job.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id		path		string	true	"Job id"
 //	@Param			status	query		[]string	false	"received, in_review, flagged, rejected, hired or withdrawn"
 //	@Param			source	query		string	false	"Where the candidate came from"
@@ -131,11 +128,11 @@ func (h *HiringHandler) fileID(r *http.Request) string { return chi.URLParam(r, 
 //	@Param			new		query		bool	false	"Only applications nobody has opened"
 //	@Param			cursor	query		string	false	"next_cursor of the previous page"
 //	@Param			limit	query		int		false	"Page size"
-//	@Success		200		{object}	hiringhttp.ApplicationPageEnvelope
+//	@Success		200		{object}	apphttp.ApplicationPageEnvelope
 //	@Failure		400		{object}	apidoc.ErrorEnvelope
 //	@Failure		404		{object}	apidoc.ErrorEnvelope
 //	@Router			/jobs/{id}/applications [get]
-func (h *HiringHandler) listApplications(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) listApplications(w http.ResponseWriter, r *http.Request) {
 	svc, c, ok := h.appScope(w, r)
 	if !ok {
 		return
@@ -159,7 +156,7 @@ func (h *HiringHandler) listApplications(w http.ResponseWriter, r *http.Request)
 		}
 		q.Limit = n
 	}
-	page, err := svc.List(r.Context(), c, h.jobID(r), q)
+	page, err := svc.List(r.Context(), c, jobID(r), q)
 	if err != nil {
 		response.Error(w, r, applicationsError(err))
 		return
@@ -174,18 +171,18 @@ func (h *HiringHandler) listApplications(w http.ResponseWriter, r *http.Request)
 //	@Description	Returns the answers (special category answers are never returned), the files, the flags and the review. Opening is recorded in the job's audit log; the first opening takes the application out of the job's new count. Whoever may decide a flagged application and opens it becomes its reviewer.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id		path		string	true	"Job id"
 //	@Param			app_id	path		string	true	"Application id"
-//	@Success		200		{object}	hiringhttp.ApplicationEnvelope
+//	@Success		200		{object}	apphttp.ApplicationEnvelope
 //	@Failure		404		{object}	apidoc.ErrorEnvelope
 //	@Router			/jobs/{id}/applications/{app_id} [get]
-func (h *HiringHandler) getApplication(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getApplication(w http.ResponseWriter, r *http.Request) {
 	svc, c, ok := h.appScope(w, r)
 	if !ok {
 		return
 	}
-	d, err := svc.Get(r.Context(), c, h.jobID(r), h.appID(r))
+	d, err := svc.Get(r.Context(), c, jobID(r), appID(r))
 	if err != nil {
 		response.Error(w, r, applicationsError(err))
 		return
@@ -207,17 +204,17 @@ type ApplicationStatusRequest struct {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id		path		string								true	"Job id"
 //	@Param			app_id	path		string								true	"Application id"
-//	@Param			body	body		hiringhttp.ApplicationStatusRequest	true	"New status"
-//	@Success		200		{object}	hiringhttp.ApplicationResultEnvelope
+//	@Param			body	body		apphttp.ApplicationStatusRequest	true	"New status"
+//	@Success		200		{object}	apphttp.ApplicationResultEnvelope
 //	@Failure		400		{object}	apidoc.ErrorEnvelope
 //	@Failure		403		{object}	apidoc.ErrorEnvelope
 //	@Failure		404		{object}	apidoc.ErrorEnvelope
 //	@Failure		409		{object}	apidoc.ErrorEnvelope
 //	@Router			/jobs/{id}/applications/{app_id}/status [post]
-func (h *HiringHandler) setApplicationStatus(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) setApplicationStatus(w http.ResponseWriter, r *http.Request) {
 	svc, c, ok := h.appScope(w, r)
 	if !ok {
 		return
@@ -231,7 +228,7 @@ func (h *HiringHandler) setApplicationStatus(w http.ResponseWriter, r *http.Requ
 		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
-	res, err := svc.SetStatus(r.Context(), c, h.jobID(r), h.appID(r), applications.StatusInput{Status: req.Status, Note: req.Note})
+	res, err := svc.SetStatus(r.Context(), c, jobID(r), appID(r), applications.StatusInput{Status: req.Status, Note: req.Note})
 	if err != nil {
 		response.Error(w, r, applicationsError(err))
 		return
@@ -252,17 +249,17 @@ type ApplicationReviewRequest struct {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id		path		string								true	"Job id"
 //	@Param			app_id	path		string								true	"Application id"
-//	@Param			body	body		hiringhttp.ApplicationReviewRequest	true	"Decision"
-//	@Success		200		{object}	hiringhttp.ApplicationResultEnvelope
+//	@Param			body	body		apphttp.ApplicationReviewRequest	true	"Decision"
+//	@Success		200		{object}	apphttp.ApplicationResultEnvelope
 //	@Failure		400		{object}	apidoc.ErrorEnvelope
 //	@Failure		403		{object}	apidoc.ErrorEnvelope
 //	@Failure		404		{object}	apidoc.ErrorEnvelope
 //	@Failure		409		{object}	apidoc.ErrorEnvelope
 //	@Router			/jobs/{id}/applications/{app_id}/review [post]
-func (h *HiringHandler) reviewApplication(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) reviewApplication(w http.ResponseWriter, r *http.Request) {
 	svc, c, ok := h.appScope(w, r)
 	if !ok {
 		return
@@ -276,7 +273,7 @@ func (h *HiringHandler) reviewApplication(w http.ResponseWriter, r *http.Request
 		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
-	res, err := svc.Review(r.Context(), c, h.jobID(r), h.appID(r), applications.ReviewInput{Decision: req.Decision, Note: req.Note})
+	res, err := svc.Review(r.Context(), c, jobID(r), appID(r), applications.ReviewInput{Decision: req.Decision, Note: req.Note})
 	if err != nil {
 		response.Error(w, r, applicationsError(err))
 		return
@@ -290,19 +287,19 @@ func (h *HiringHandler) reviewApplication(w http.ResponseWriter, r *http.Request
 //	@Description	Returns a link that works for 5 minutes and downloads the file under its original name. The request is recorded in the job's audit log. Ask again for a new link.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id		path		string	true	"Job id"
 //	@Param			app_id	path		string	true	"Application id"
 //	@Param			file_id	path		string	true	"File id"
-//	@Success		200		{object}	hiringhttp.FileLinkEnvelope
+//	@Success		200		{object}	apphttp.FileLinkEnvelope
 //	@Failure		404		{object}	apidoc.ErrorEnvelope
 //	@Router			/jobs/{id}/applications/{app_id}/files/{file_id} [get]
-func (h *HiringHandler) applicationFile(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) applicationFile(w http.ResponseWriter, r *http.Request) {
 	svc, c, ok := h.appScope(w, r)
 	if !ok {
 		return
 	}
-	l, err := svc.File(r.Context(), c, h.jobID(r), h.appID(r), h.fileID(r))
+	l, err := svc.File(r.Context(), c, jobID(r), appID(r), fileID(r))
 	if err != nil {
 		response.Error(w, r, applicationsError(err))
 		return
@@ -317,11 +314,11 @@ func (h *HiringHandler) applicationFile(w http.ResponseWriter, r *http.Request) 
 //	@Description	Whether rejected candidates are blocked from reapplying (0 or 6 months) and whether candidates are emailed when rejected or hired.
 //	@Tags			hiring
 //	@Produce		json
-//	@Security		BearerAuth
-//	@Success		200	{object}	hiringhttp.ApplicantSettingsEnvelope
+//	@Security		SessionCookie
+//	@Success		200	{object}	apphttp.ApplicantSettingsEnvelope
 //	@Failure		403	{object}	apidoc.ErrorEnvelope
 //	@Router			/hiring/applicant-settings [get]
-func (h *HiringHandler) getApplicantSettings(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getApplicantSettings(w http.ResponseWriter, r *http.Request) {
 	svc, c, ok := h.appScope(w, r)
 	if !ok {
 		return
@@ -347,13 +344,13 @@ type ApplicantSettingsRequest struct {
 //	@Tags			hiring
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
-//	@Param			body	body		hiringhttp.ApplicantSettingsRequest	true	"Settings"
-//	@Success		200		{object}	hiringhttp.ApplicantSettingsEnvelope
+//	@Security		SessionCookie
+//	@Param			body	body		apphttp.ApplicantSettingsRequest	true	"Settings"
+//	@Success		200		{object}	apphttp.ApplicantSettingsEnvelope
 //	@Failure		400		{object}	apidoc.ErrorEnvelope
 //	@Failure		403		{object}	apidoc.ErrorEnvelope
 //	@Router			/hiring/applicant-settings [put]
-func (h *HiringHandler) putApplicantSettings(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) putApplicantSettings(w http.ResponseWriter, r *http.Request) {
 	svc, c, ok := h.appScope(w, r)
 	if !ok {
 		return

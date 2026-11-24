@@ -6,6 +6,8 @@ import (
 	"log/slog"
 
 	"github.com/Angle-HR/server/internal/dbrouter"
+	"github.com/Angle-HR/server/internal/hiring/appevents"
+	"github.com/Angle-HR/server/internal/hiring/jobevents"
 	"github.com/Angle-HR/server/internal/identityevents"
 	"github.com/Angle-HR/server/internal/identityhttp"
 	"github.com/Angle-HR/server/internal/notifications"
@@ -24,15 +26,15 @@ type emailEnqueuer interface {
 	EnqueueTx(ctx context.Context, tx fluvio.Tx, args fluvio.JobArgs, opts ...fluvio.EnqueueOption) (*fluvio.JobRow, error)
 }
 
-// busNeeded says whether this process must publish outbox rows: the events email transport, org events or identity
-// events.
+// busNeeded says whether this process must publish outbox rows: the events email transport, hiring job events or
+// application events.
 func busNeeded(cfg config.Config) bool {
-	return cfg.NotificationsTransport == "events" || (orgevents.Enabled() && !orghttp.Remote()) ||
+	return cfg.NotificationsTransport == "events" || jobevents.Enabled() || appevents.Enabled() || (orgevents.Enabled() && !orghttp.Remote()) ||
 		(identityevents.Enabled() && !identityhttp.Remote())
 }
 
 // selectEmailEnqueuer returns the Fluvio client (default) or the events outbox enqueuer. Whenever a feature needs
-// the bus (events email transport, or ORG_EVENTS/IDENTITY_EVENTS=on) it also opens one bus connection and starts one outbox
+// the bus (events email transport, or HIRING_EVENTS=on) it also opens one bus connection and starts one outbox
 // relay per database (global plus every region) and returns a stop func.
 func selectEmailEnqueuer(
 	ctx context.Context, cfg config.Config, log *slog.Logger,
@@ -42,14 +44,14 @@ func selectEmailEnqueuer(
 		return fluvioClient, func() {}, nil
 	}
 	if cfg.NATSURL == "" {
-		return nil, nil, fmt.Errorf("NOTIFICATIONS_TRANSPORT=events, ORG_EVENTS=on or IDENTITY_EVENTS=on requires NATS_URL")
+		return nil, nil, fmt.Errorf("NOTIFICATIONS_TRANSPORT=events, HIRING_EVENTS=on, APPLICATIONS_EVENTS=on, ORG_EVENTS=on or IDENTITY_EVENTS=on requires NATS_URL")
 	}
 	stop, err := startOutboxRelays(ctx, cfg.NATSURL, log, global, router)
 	if err != nil {
 		return nil, nil, err
 	}
 	if cfg.NotificationsTransport != "events" {
-		log.Info("outbox relays running (domain events)")
+		log.Info("outbox relays running (hiring job events)")
 		return fluvioClient, stop, nil
 	}
 	log.Info("email transport: events (outbox relays running)")

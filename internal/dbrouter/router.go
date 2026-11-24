@@ -8,10 +8,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 
 	"github.com/Angle-HR/server/internal/region"
+	"github.com/Angle-HR/server/pkg/platform/blob"
+	"github.com/Angle-HR/server/pkg/platform/blob/azureblob"
+	"github.com/Angle-HR/server/pkg/platform/blob/s3compat"
 )
 
 // poolHealthCheckPeriod is how often idle pool connections are health-checked.
@@ -29,7 +30,7 @@ const regionalSearchPath = "accounts,waitlist,hiring,public"
 // DBRouter holds one PostgreSQL pool and one R2 (S3-compatible) client per region.
 type DBRouter struct {
 	pools   map[region.Region]PgxPool
-	storage map[region.Region]*minio.Client
+	storage map[region.Region]blob.BlobStore
 	buckets map[region.Region]string
 }
 
@@ -41,7 +42,7 @@ func NewWithPools(pools map[region.Region]PgxPool) *DBRouter {
 
 	return &DBRouter{
 		pools:   pools,
-		storage: map[region.Region]*minio.Client{},
+		storage: map[region.Region]blob.BlobStore{},
 		buckets: map[region.Region]string{},
 	}
 }
@@ -71,7 +72,7 @@ func New(ctx context.Context, configs []RegionConfig) (*DBRouter, error) {
 
 	router := &DBRouter{
 		pools:   make(map[region.Region]PgxPool, len(allRegions())),
-		storage: make(map[region.Region]*minio.Client, len(allRegions())),
+		storage: make(map[region.Region]blob.BlobStore, len(allRegions())),
 		buckets: make(map[region.Region]string, len(allRegions())),
 	}
 
@@ -87,7 +88,7 @@ func New(ctx context.Context, configs []RegionConfig) (*DBRouter, error) {
 		router.pools[reg] = pool
 
 		slog.Info("dbrouter connecting", "region", reg, "component", "r2")
-		client, err := newR2Client(cfg)
+		client, err := newBlobStore(cfg)
 		if err != nil {
 			router.Close()
 			return nil, fmt.Errorf("dbrouter: r2 %s: %w", reg, err)
@@ -103,6 +104,12 @@ func New(ctx context.Context, configs []RegionConfig) (*DBRouter, error) {
 func validateRegionConfig(cfg RegionConfig) error {
 	if cfg.PostgresDSN == "" {
 		return fmt.Errorf("dbrouter: postgres DSN is required for region %q", cfg.Region)
+	}
+	if cfg.BlobProvider == BlobProviderAzure {
+		if cfg.AzureAccount == "" || cfg.R2Bucket == "" {
+			return fmt.Errorf("dbrouter: azure account and container are required for region %q", cfg.Region)
+		}
+		return nil
 	}
 	if cfg.R2Endpoint == "" {
 		return fmt.Errorf("dbrouter: r2 endpoint is required for region %q", cfg.Region)
@@ -144,28 +151,30 @@ func newPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-func newR2Client(cfg RegionConfig) (*minio.Client, error) {
-	creds := credentials.NewStaticV4(cfg.R2AccessKey, cfg.R2SecretKey, "")
-	if cfg.R2AccessKey == "" {
-		// AWS_ACCESS_KEY_ID etc. first (local runs), then the ECS task role / instance profile.
-		creds = credentials.NewChainCredentials([]credentials.Provider{
-			&credentials.EnvAWS{},
-			&credentials.IAM{},
+func newBlobStore(cfg RegionConfig) (blob.BlobStore, error) {
+	if cfg.BlobProvider == BlobProviderAzure {
+		st, err := azureblob.New(azureblob.Config{
+			AccountName: cfg.AzureAccount, AccountKey: cfg.AzureKey, Container: cfg.R2Bucket, Endpoint: cfg.AzureEndpoint,
 		})
+		if err != nil {
+			return nil, fmt.Errorf("create azure blob store: %w", err)
+		}
+		return st, nil
 	}
 	signingRegion := cfg.R2Region
 	if signingRegion == "" {
 		signingRegion = "auto"
 	}
-	client, err := minio.New(cfg.R2Endpoint, &minio.Options{
-		Creds:  creds,
-		Secure: cfg.R2UseSSL,
-		Region: signingRegion,
+	// With no static keys the adapter uses the AWS environment, then the ECS task role / instance profile.
+	st, err := s3compat.New(s3compat.Config{
+		Endpoint: cfg.R2Endpoint, Bucket: cfg.R2Bucket, Region: signingRegion, UseSSL: cfg.R2UseSSL,
+		AccessKey: cfg.R2AccessKey, SecretKey: cfg.R2SecretKey,
+		PublicEndpoint: cfg.R2PublicEndpoint, PublicUseSSL: cfg.R2PublicUseSSL,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create r2 client: %w", err)
+		return nil, fmt.Errorf("create s3 blob store: %w", err)
 	}
-	return client, nil
+	return st, nil
 }
 
 // DB returns the PostgreSQL pool for reg.
@@ -194,30 +203,30 @@ func (r *DBRouter) MustDB(reg region.Region) PgxPool {
 	return pool
 }
 
-// R2 returns the S3-compatible client for reg's Cloudflare R2 bucket.
-func (r *DBRouter) R2(reg region.Region) (*minio.Client, error) {
+// Blob returns the object store of reg's bucket (S3, R2, MinIO or Azure container).
+func (r *DBRouter) Blob(reg region.Region) (blob.BlobStore, error) {
 	if r == nil {
 		return nil, ErrUnknownRegion
 	}
 
-	client, ok := r.storage[reg]
+	st, ok := r.storage[reg]
 	if !ok {
 		return nil, ErrUnknownRegion
 	}
-	if client == nil {
-		return nil, fmt.Errorf("dbrouter: r2 client is nil for region %q", reg)
+	if st == nil {
+		return nil, fmt.Errorf("dbrouter: blob store is nil for region %q", reg)
 	}
 
-	return client, nil
+	return st, nil
 }
 
-// MustR2 returns the R2 client for reg or panics if the region is unknown.
-func (r *DBRouter) MustR2(reg region.Region) *minio.Client {
-	client, err := r.R2(reg)
+// MustBlob returns the store for reg or panics if the region is unknown.
+func (r *DBRouter) MustBlob(reg region.Region) blob.BlobStore {
+	st, err := r.Blob(reg)
 	if err != nil {
-		panic(fmt.Sprintf("dbrouter: MustR2(%q): %v", reg, err))
+		panic(fmt.Sprintf("dbrouter: MustBlob(%q): %v", reg, err))
 	}
-	return client
+	return st
 }
 
 // Bucket returns the configured bucket name for reg.

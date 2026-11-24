@@ -1,4 +1,4 @@
-package hiringstore
+package appstore
 
 import (
 	"context"
@@ -11,39 +11,13 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Angle-HR/server/internal/hiring/appevents"
 	"github.com/Angle-HR/server/internal/hiring/applications"
 )
 
 // ---- the hiring team's view of applications (phase 3e) ----
 
 var _ applications.Store = (*Store)(nil)
-
-const jobAccessSQL = `
-SELECT j.id::text, 'JB-' || j.job_number::text, COALESCE(j.title, ''), j.status, j.created_by::text,
-       COALESCE(m.role, ''), j.retention_months::int
-FROM hiring.job_postings j
-LEFT JOIN hiring.job_members m ON m.job_id = j.id AND m.user_id = $3::uuid
-WHERE j.id = $1::uuid AND j.tenant_id = $2::uuid AND j.deleted_at IS NULL`
-
-// JobAccess implements applications.Store.
-func (s *Store) JobAccess(ctx context.Context, tenantID, jobID, userID string) (*applications.JobAccess, error) {
-	var a applications.JobAccess
-	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, jobAccessSQL, jobID, tenantID, userID).
-			Scan(&a.JobID, &a.Code, &a.Title, &a.Status, &a.CreatedBy, &a.MemberRole, &a.RetentionMonths)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNotFound
-		}
-		if err != nil {
-			return fmt.Errorf("hiringstore: job access: %w", err)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &a, nil
-}
 
 // The list holds no answers. The search matches name and email only, with LIKE wildcards in the text escaped.
 const listApplicationsSQL = `
@@ -87,31 +61,31 @@ func (s *Store) List(ctx context.Context, tenantID, jobID string, q applications
 		rows, err := tx.Query(ctx, listApplicationsSQL, tenantID, jobID, statuses, q.Source, q.NewOnly,
 			likeEscaper.Replace(q.Search), after, afterID, q.Limit)
 		if err != nil {
-			return fmt.Errorf("hiringstore: list applications: %w", err)
+			return fmt.Errorf("appstore: list applications: %w", err)
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var a applications.Summary
 			if err = rows.Scan(&a.ID, &a.Name, &a.Email, &a.Country, &a.Market, &a.Status, &a.Source, &a.FlagCount,
 				&a.Opened, &a.HasFiles, &a.SubmittedAt); err != nil {
-				return fmt.Errorf("hiringstore: scan application: %w", err)
+				return fmt.Errorf("appstore: scan application: %w", err)
 			}
 			out = append(out, a)
 		}
 		if err = rows.Err(); err != nil {
-			return fmt.Errorf("hiringstore: list applications: %w", err)
+			return fmt.Errorf("appstore: list applications: %w", err)
 		}
 		rows.Close()
 		crows, err := tx.Query(ctx, countApplicationsSQL, tenantID, jobID)
 		if err != nil {
-			return fmt.Errorf("hiringstore: count applications: %w", err)
+			return fmt.Errorf("appstore: count applications: %w", err)
 		}
 		defer crows.Close()
 		for crows.Next() {
 			var st string
 			var n int
 			if err = crows.Scan(&st, &n); err != nil {
-				return fmt.Errorf("hiringstore: scan count: %w", err)
+				return fmt.Errorf("appstore: scan count: %w", err)
 			}
 			counts[st] = n
 		}
@@ -141,11 +115,6 @@ const decrementNewSQL = `
 UPDATE hiring.job_applicant_counts SET new_applicant_count = GREATEST(new_applicant_count - 1, 0)
 WHERE job_id = $1::uuid AND tenant_id = $2::uuid`
 
-const openedFormSQL = `
-SELECT v.schema FROM hiring.form_versions v
-JOIN hiring.application_forms f ON f.id = v.form_id
-WHERE v.form_id = $1::uuid AND v.version = $2 AND f.tenant_id = $3::uuid`
-
 const applicationFilesSQL = `
 SELECT id::text, question_id, original_filename, content_type, size_bytes
 FROM hiring.application_files
@@ -165,11 +134,11 @@ WHERE application_id = $1::uuid AND tenant_id = $3::uuid AND status = 'open'`
 func markOpened(ctx context.Context, tx pgx.Tx, tenantID, jobID, appID, actorID string) error {
 	tag, err := tx.Exec(ctx, markOpenedSQL, appID, actorID, tenantID)
 	if err != nil {
-		return fmt.Errorf("hiringstore: mark opened: %w", err)
+		return fmt.Errorf("appstore: mark opened: %w", err)
 	}
 	if tag.RowsAffected() == 1 {
 		if _, err = tx.Exec(ctx, decrementNewSQL, jobID, tenantID); err != nil {
-			return fmt.Errorf("hiringstore: new applicant count: %w", err)
+			return fmt.Errorf("appstore: new applicant count: %w", err)
 		}
 	}
 	return nil
@@ -191,43 +160,39 @@ func (s *Store) Open(ctx context.Context, tenantID string, in applications.OpenI
 			return ErrNotFound
 		}
 		if err != nil {
-			return fmt.Errorf("hiringstore: open application: %w", err)
+			return fmt.Errorf("appstore: open application: %w", err)
 		}
 		if err = markOpened(ctx, tx, tenantID, in.JobID, in.AppID, in.ActorID); err != nil {
 			return err
 		}
 		d.Opened = true
 
-		var raw []byte
-		if err = tx.QueryRow(ctx, openedFormSQL, formID, d.FormVersion, tenantID).Scan(&raw); err != nil {
-			return fmt.Errorf("hiringstore: load form of application: %w", err)
-		}
-		var schema frozenSchema
-		if err = json.Unmarshal(raw, &schema); err != nil {
-			return fmt.Errorf("hiringstore: decode form of application: %w", err)
+		questions, err := s.Jobs.FrozenQuestions(ctx, tenantID, formID, d.FormVersion)
+		if err != nil {
+			return fmt.Errorf("appstore: load form of application: %w", err)
 		}
 		stored := map[string]json.RawMessage{}
 		if err = json.Unmarshal(answers, &stored); err != nil {
-			return fmt.Errorf("hiringstore: decode answers: %w", err)
+			return fmt.Errorf("appstore: decode answers: %w", err)
 		}
 
 		d.Files = []applications.File{}
 		byQuestion := map[string]string{}
 		frows, err := tx.Query(ctx, applicationFilesSQL, in.AppID, tenantID)
 		if err != nil {
-			return fmt.Errorf("hiringstore: application files: %w", err)
+			return fmt.Errorf("appstore: application files: %w", err)
 		}
 		defer frows.Close()
 		for frows.Next() {
 			var f applications.File
 			if err = frows.Scan(&f.ID, &f.QuestionID, &f.Filename, &f.ContentType, &f.SizeBytes); err != nil {
-				return fmt.Errorf("hiringstore: scan file: %w", err)
+				return fmt.Errorf("appstore: scan file: %w", err)
 			}
 			d.Files = append(d.Files, f)
 			byQuestion[f.QuestionID] = f.ID
 		}
 		if err = frows.Err(); err != nil {
-			return fmt.Errorf("hiringstore: application files: %w", err)
+			return fmt.Errorf("appstore: application files: %w", err)
 		}
 		frows.Close()
 		d.HasFiles = len(d.Files) > 0
@@ -235,7 +200,7 @@ func (s *Store) Open(ctx context.Context, tenantID string, in applications.OpenI
 		// Answers follow the form's order. Special category questions are skipped even if a value were present:
 		// their answers live sealed in another schema and are never read here. An upload answer is a claim token,
 		// not content, so it is replaced by the file's id.
-		qs := schema.Questions
+		qs := questions
 		sort.SliceStable(qs, func(i, j int) bool { return qs[i].Position < qs[j].Position })
 		d.Answers = []applications.Answer{}
 		for _, q := range qs {
@@ -263,11 +228,11 @@ func (s *Store) Open(ctx context.Context, tenantID string, in applications.OpenI
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 		case err != nil:
-			return fmt.Errorf("hiringstore: application review: %w", err)
+			return fmt.Errorf("appstore: application review: %w", err)
 		default:
 			if in.TrackReview && rStatus == "open" {
 				if _, err = tx.Exec(ctx, trackReviewSQL, in.AppID, in.ActorID, tenantID); err != nil {
-					return fmt.Errorf("hiringstore: track review: %w", err)
+					return fmt.Errorf("appstore: track review: %w", err)
 				}
 				rOpenedBy = in.ActorID
 			}
@@ -279,7 +244,7 @@ func (s *Store) Open(ctx context.Context, tenantID string, in applications.OpenI
 
 		diff, _ := json.Marshal(map[string]any{"application_id": in.AppID})
 		if _, err = tx.Exec(ctx, insertAuditSQL, in.JobID, tenantID, in.ActorID, "application.viewed", diff); err != nil {
-			return fmt.Errorf("hiringstore: audit view: %w", err)
+			return fmt.Errorf("appstore: audit view: %w", err)
 		}
 		return nil
 	})
@@ -309,11 +274,11 @@ func (s *Store) FileInfo(ctx context.Context, tenantID, jobID, appID, fileID, ac
 			return ErrNotFound
 		}
 		if err != nil {
-			return fmt.Errorf("hiringstore: file info: %w", err)
+			return fmt.Errorf("appstore: file info: %w", err)
 		}
 		diff, _ := json.Marshal(map[string]any{"application_id": appID, "file_id": fileID})
 		if _, err = tx.Exec(ctx, insertAuditSQL, jobID, tenantID, actorID, "application.file_downloaded", diff); err != nil {
-			return fmt.Errorf("hiringstore: audit download: %w", err)
+			return fmt.Errorf("appstore: audit download: %w", err)
 		}
 		return nil
 	})
@@ -327,12 +292,9 @@ const loadReviewStateSQL = `SELECT status = 'open', COALESCE(opened_by::text, ''
 FROM hiring.review_tasks WHERE application_id = $1::uuid AND tenant_id = $2::uuid`
 
 const loadChangeSQL = `
-SELECT a.status, a.candidate_name, a.candidate_email, 'JB-' || j.job_number::text, COALESCE(j.title, ''),
-       o.legal_name, COALESCE(j.public_id, ''), j.retention_months::int,
+SELECT a.status, a.candidate_name, a.candidate_email,
        COALESCE(s.reapply_block_months, 0)::int, COALESCE(s.send_status_emails, TRUE)
 FROM hiring.applications a
-JOIN hiring.job_postings j ON j.id = a.job_id AND j.tenant_id = a.tenant_id
-JOIN accounts.organizations o ON o.id = a.tenant_id
 LEFT JOIN hiring.org_settings s ON s.tenant_id = a.tenant_id
 WHERE a.id = $1::uuid AND a.job_id = $2::uuid AND a.tenant_id = $3::uuid`
 
@@ -341,13 +303,12 @@ func (s *Store) LoadChange(ctx context.Context, tenantID, jobID, appID string) (
 	var st applications.ChangeState
 	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, loadChangeSQL, appID, jobID, tenantID).Scan(&st.Status, &st.Name, &st.Email,
-			&st.JobCode, &st.JobTitle, &st.Company, &st.PublicID, &st.RetentionMonths, &st.ReapplyBlockMonths,
-			&st.SendStatusEmails)
+			&st.ReapplyBlockMonths, &st.SendStatusEmails)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
 		if err != nil {
-			return fmt.Errorf("hiringstore: load change: %w", err)
+			return fmt.Errorf("appstore: load change: %w", err)
 		}
 		var open bool
 		var by string
@@ -355,7 +316,7 @@ func (s *Store) LoadChange(ctx context.Context, tenantID, jobID, appID string) (
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 		case err != nil:
-			return fmt.Errorf("hiringstore: load review: %w", err)
+			return fmt.Errorf("appstore: load review: %w", err)
 		default:
 			st.Review = &applications.ReviewState{Open: open, OpenedBy: by}
 		}
@@ -414,7 +375,7 @@ func (s *Store) ApplyChange(ctx context.Context, tenantID string, ch *applicatio
 			return applications.ErrStale
 		}
 		if err != nil {
-			return fmt.Errorf("hiringstore: change status: %w", mapPgError(err))
+			return fmt.Errorf("appstore: change status: %w", mapPgError(err))
 		}
 		if err = markOpened(ctx, tx, tenantID, ch.JobID, ch.AppID, ch.ActorID); err != nil {
 			return err
@@ -422,13 +383,13 @@ func (s *Store) ApplyChange(ctx context.Context, tenantID string, ch *applicatio
 		if final {
 			var moved int
 			if err = tx.QueryRow(ctx, followOneRetentionSQL, ch.AppID, tenantID).Scan(&moved); err != nil {
-				return fmt.Errorf("hiringstore: follow retention: %w", err)
+				return fmt.Errorf("appstore: follow retention: %w", err)
 			}
 		}
 		if ch.Decision != "" {
 			tag, err := tx.Exec(ctx, closeReviewSQL, ch.AppID, tenantID, ch.Decision, ch.ActorID, ch.Now, ch.Note)
 			if err != nil {
-				return fmt.Errorf("hiringstore: close review: %w", err)
+				return fmt.Errorf("appstore: close review: %w", err)
 			}
 			if tag.RowsAffected() != 1 {
 				return applications.ErrNotOpened
@@ -436,7 +397,7 @@ func (s *Store) ApplyChange(ctx context.Context, tenantID string, ch *applicatio
 		}
 		if ch.Block != nil {
 			if _, err = tx.Exec(ctx, upsertBlockSQL, tenantID, ch.Block.EmailHMAC, ch.Block.Until); err != nil {
-				return fmt.Errorf("hiringstore: reapply block: %w", err)
+				return fmt.Errorf("appstore: reapply block: %w", err)
 			}
 		}
 		if ch.Email != nil {
@@ -448,10 +409,16 @@ func (s *Store) ApplyChange(ctx context.Context, tenantID string, ch *applicatio
 			"application_id": ch.AppID, "from": ch.From, "to": ch.To, "decision": ch.Decision, "has_note": ch.Note != "",
 		})
 		if err != nil {
-			return fmt.Errorf("hiringstore: encode audit: %w", err)
+			return fmt.Errorf("appstore: encode audit: %w", err)
 		}
 		if _, err = tx.Exec(ctx, insertAuditSQL, ch.JobID, tenantID, ch.ActorID, "application.status_changed", diff); err != nil {
-			return fmt.Errorf("hiringstore: audit status change: %w", err)
+			return fmt.Errorf("appstore: audit status change: %w", err)
+		}
+		if err = appevents.EnqueueStatusChanged(ctx, tx, appevents.StatusChanged{
+			ApplicationID: ch.AppID, JobID: ch.JobID, CompanyID: tenantID, Region: s.Region, FromStatus: ch.From,
+			ToStatus: ch.To, ChangedByUserID: ch.ActorID, ChangedAt: ch.Now,
+		}); err != nil {
+			return fmt.Errorf("appstore: emit status changed event: %w", err)
 		}
 		return nil
 	})
@@ -472,7 +439,7 @@ func (s *Store) GetApplicantSettings(ctx context.Context, tenantID string) (int,
 	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, getApplicantSettingsSQL, tenantID).Scan(&months, &emails)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("hiringstore: get applicant settings: %w", err)
+			return fmt.Errorf("appstore: get applicant settings: %w", err)
 		}
 		return nil
 	})
@@ -483,7 +450,7 @@ func (s *Store) GetApplicantSettings(ctx context.Context, tenantID string) (int,
 func (s *Store) SaveApplicantSettings(ctx context.Context, tenantID string, months int, emails bool) error {
 	return s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, saveApplicantSettingsSQL, tenantID, months, emails); err != nil {
-			return fmt.Errorf("hiringstore: save applicant settings: %w", mapPgError(err))
+			return fmt.Errorf("appstore: save applicant settings: %w", mapPgError(err))
 		}
 		return nil
 	})

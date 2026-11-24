@@ -22,7 +22,7 @@ type ShareKitEnvelope struct {
 //	@Description	The job's public link and ready-made share links for WhatsApp, X, Facebook, LinkedIn, Telegram and email. Each link carries its channel as src, so applications show which link brought the candidate. Available once the job has been published.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id	path		string	true	"Job id"
 //	@Success		200	{object}	hiringhttp.ShareKitEnvelope
 //	@Failure		404	{object}	apidoc.ErrorEnvelope

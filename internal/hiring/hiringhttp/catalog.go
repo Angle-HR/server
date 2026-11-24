@@ -90,7 +90,7 @@ type SettingsRequest struct {
 //	@Description	Fixed lists (employment type, pay, travel, visa, lawful basis, currencies, retention options), seniority, experience, industries and every market with its warnings and whether it is open.
 //	@Tags			hiring
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Success		200	{object}	hiringhttp.CatalogEnvelope
 //	@Router			/hiring/catalog [get]
 func (h *HiringHandler) catalog(w http.ResponseWriter, r *http.Request) {
@@ -112,7 +112,7 @@ func (h *HiringHandler) catalog(w http.ResponseWriter, r *http.Request) {
 //	@Description	Time zones with their current UTC offset, for jobs that are open to a time zone rather than a place.
 //	@Tags			hiring
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Success		200	{object}	hiringhttp.TimezonesEnvelope
 //	@Router			/hiring/timezones [get]
 func (h *HiringHandler) timezones(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +128,7 @@ func (h *HiringHandler) timezones(w http.ResponseWriter, r *http.Request) {
 //	@Summary		Search skills
 //	@Tags			hiring
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			q		query		string	false	"Start of the skill name"
 //	@Param			limit	query		int		false	"Most results (default 20, max 50)"
 //	@Success		200		{object}	hiringhttp.SkillsEnvelope
@@ -161,7 +161,7 @@ func (h *HiringHandler) skills(w http.ResponseWriter, r *http.Request) {
 //	@Description	The signed-in person's company roles and the permissions they add up to, such as job.export. Use it to show or hide actions; the server still checks every request.
 //	@Tags			hiring
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Success		200	{object}	hiringhttp.MeEnvelope
 //	@Failure		401	{object}	apidoc.ErrorEnvelope
 //	@Failure		404	{object}	apidoc.ErrorEnvelope
@@ -180,7 +180,7 @@ func (h *HiringHandler) me(w http.ResponseWriter, r *http.Request) {
 //	@Description	Members of the caller's company, with their roles, for the "add people to this job" picker. Search matches the name or email. Returns at most 50 people. Needs job.collaborator.add or job.collaborator.add_limited.
 //	@Tags			hiring
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			q	query		string	false	"Part of a name or email"
 //	@Success		200	{object}	hiringhttp.PeopleEnvelope
 //	@Failure		403	{object}	apidoc.ErrorEnvelope
@@ -203,7 +203,7 @@ func (h *HiringHandler) people(w http.ResponseWriter, r *http.Request) {
 //	@Summary		List departments
 //	@Tags			hiring
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Success		200	{object}	hiringhttp.DepartmentsEnvelope
 //	@Failure		403	{object}	apidoc.ErrorEnvelope
 //	@Router			/hiring/departments [get]
@@ -227,7 +227,7 @@ func (h *HiringHandler) departments(w http.ResponseWriter, r *http.Request) {
 //	@Tags			hiring
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			body	body		hiringhttp.DepartmentRequest	true	"Department"
 //	@Success		200		{object}	hiringhttp.DepartmentEnvelope
 //	@Failure		400		{object}	apidoc.ErrorEnvelope
@@ -261,7 +261,7 @@ func (h *HiringHandler) addDepartment(w http.ResponseWriter, r *http.Request) {
 //	@Description	Company templates plus the caller's own default setup.
 //	@Tags			templates
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			kind	query		string	false	"job_details or application_form"	Enums(job_details, application_form)
 //	@Success		200		{object}	hiringhttp.TemplatesEnvelope
 //	@Failure		403		{object}	apidoc.ErrorEnvelope
@@ -286,7 +286,7 @@ func (h *HiringHandler) templates(w http.ResponseWriter, r *http.Request) {
 //	@Tags			templates
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			body	body		draft.TemplateInput	true	"Template"
 //	@Success		201		{object}	hiringhttp.TemplateEnvelope
 //	@Failure		400		{object}	apidoc.ErrorEnvelope
@@ -319,7 +319,7 @@ func (h *HiringHandler) saveTemplate(w http.ResponseWriter, r *http.Request) {
 //	@Summary		Delete a template
 //	@Tags			templates
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id	path		string	true	"Template id"
 //	@Success		200	{object}	map[string]bool
 //	@Failure		403	{object}	apidoc.ErrorEnvelope
@@ -361,7 +361,7 @@ type TemplateExportEnvelope struct {
 //	@Tags			templates
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id		path		string							true	"Template id"
 //	@Param			body	body		hiringhttp.TemplatePatchRequest	true	"Changes"
 //	@Success		200		{object}	hiringhttp.TemplateEnvelope
@@ -408,7 +408,7 @@ func (h *HiringHandler) patchTemplate(w http.ResponseWriter, r *http.Request) {
 //	@Tags			templates
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id		path		string								true	"Template id"
 //	@Param			body	body		hiringhttp.TemplateDuplicateRequest	false	"Copy name"
 //	@Success		201		{object}	hiringhttp.TemplateEnvelope
@@ -448,7 +448,7 @@ func (h *HiringHandler) duplicateTemplate(w http.ResponseWriter, r *http.Request
 //	@Description	Returns a company template's kind, name and payload in a portable form.
 //	@Tags			templates
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id	path		string	true	"Template id"
 //	@Success		200	{object}	hiringhttp.TemplateExportEnvelope
 //	@Failure		403	{object}	apidoc.ErrorEnvelope
@@ -473,7 +473,7 @@ func (h *HiringHandler) exportTemplate(w http.ResponseWriter, r *http.Request) {
 //	@Description	Company-level switches. Automated screening (knockout questions) is off until the company's legal contact turns it on.
 //	@Tags			hiring
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Success		200	{object}	hiringhttp.SettingsEnvelope
 //	@Failure		403	{object}	apidoc.ErrorEnvelope
 //	@Router			/hiring/settings [get]
@@ -497,7 +497,7 @@ func (h *HiringHandler) settings(w http.ResponseWriter, r *http.Request) {
 //	@Tags			hiring
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			body	body		hiringhttp.SettingsRequest	true	"Settings"
 //	@Success		200		{object}	hiringhttp.SettingsEnvelope
 //	@Failure		400		{object}	apidoc.ErrorEnvelope

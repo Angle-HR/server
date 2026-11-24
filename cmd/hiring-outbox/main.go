@@ -15,9 +15,12 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/Angle-HR/server/internal/dbrouter"
-	"github.com/Angle-HR/server/internal/hiring/hiringstore"
+	"github.com/Angle-HR/server/internal/hiring/appstore"
+	"github.com/Angle-HR/server/internal/hiring/jobsource"
 	"github.com/Angle-HR/server/internal/hiring/outbox"
 	"github.com/Angle-HR/server/internal/mailer"
+	"github.com/Angle-HR/server/internal/notifications"
+	natsbus "github.com/Angle-HR/server/pkg/events/nats"
 	"github.com/Angle-HR/server/pkg/logger"
 )
 
@@ -40,20 +43,38 @@ func run() error {
 	slogger := logger.New(appEnv, os.Getenv("LOG_LEVEL"))
 	ctx := context.Background()
 
+	var sender outbox.Sender
+	if os.Getenv("NOTIFICATIONS_TRANSPORT") == "events" {
+		bus, berr := natsbus.Connect(notifications.BusConfig(os.Getenv("NATS_URL"), "hiring-outbox"))
+		if berr != nil {
+			return berr
+		}
+		defer func() { _ = bus.Close() }()
+		sender = notifications.BusSender{Pub: bus, Source: "/jobs/hiring-outbox"}
+		slogger.Info("hiring outbox: sending through the events transport")
+	}
+
 	smtpPort := os.Getenv("SMTP_PORT")
 	if smtpPort == "" {
 		smtpPort = "587"
 	}
-	if os.Getenv("SMTP_HOST") == "" {
-		return errors.New("SMTP_HOST is required")
-	}
-	m, err := mailer.New(mailer.Config{
-		Host: os.Getenv("SMTP_HOST"), Port: smtpPort, User: os.Getenv("SMTP_USER"), Password: os.Getenv("SMTP_PASSWORD"),
-		From: os.Getenv("SMTP_FROM"), FromName: os.Getenv("SMTP_FROM_NAME"), AppURL: os.Getenv("APP_URL"),
-		AdminAppURL: os.Getenv("ADMIN_APP_URL"), Logger: slogger,
-	})
-	if err != nil {
-		return fmt.Errorf("initialize mailer: %w", err)
+	if sender == nil {
+		if os.Getenv("SMTP_HOST") == "" {
+			return errors.New("SMTP_HOST is required")
+		}
+		appURL, adminAppURL, uerr := mailer.AppLinkURLs(os.Getenv("APP_ENV"), os.Getenv("APP_URL"), os.Getenv("ADMIN_APP_URL"))
+		if uerr != nil {
+			return uerr
+		}
+		m, merr := mailer.New(mailer.Config{
+			Host: os.Getenv("SMTP_HOST"), Port: smtpPort, User: os.Getenv("SMTP_USER"), Password: os.Getenv("SMTP_PASSWORD"),
+			From: os.Getenv("SMTP_FROM"), FromName: os.Getenv("SMTP_FROM_NAME"), AppURL: appURL,
+			AdminAppURL: adminAppURL, Logger: slogger,
+		})
+		if merr != nil {
+			return fmt.Errorf("initialize mailer: %w", merr)
+		}
+		sender = m
 	}
 
 	regionConfigs, err := dbrouter.LoadConfigsFromEnv()
@@ -73,8 +94,9 @@ func run() error {
 			slogger.Warn("hiring outbox: region skipped", "region", string(reg), "error", err)
 			continue
 		}
-		store := &hiringstore.Store{DB: pool}
-		w := &outbox.Worker{Tenants: store.TenantIDs, Store: store, Sender: m, Logger: slogger}
+		store := &appstore.Store{DB: pool}
+		jobs := jobsource.NewRegional(pool)
+		w := &outbox.Worker{Tenants: jobs.TenantIDs, Store: store, Sender: sender, Logger: slogger}
 		res, err := w.Run(ctx)
 		attrs := []any{"region", string(reg), "sent", res.Sent, "retry", res.Retry, "failed", res.Failed}
 		if err != nil {

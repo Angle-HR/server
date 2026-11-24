@@ -9,7 +9,7 @@ import (
 
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 // CurrentDPAVersion is the version of the terms and data processing agreement that counts as current. It is a

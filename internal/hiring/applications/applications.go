@@ -14,23 +14,32 @@ package applications
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/Angle-HR/server/internal/hiring/appjobs"
 	"github.com/Angle-HR/server/internal/hiring/apply"
-	"github.com/Angle-HR/server/internal/hiring/draft"
-	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
-	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/reapply"
 	"github.com/Angle-HR/server/internal/hiring/uploads"
-	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/formschema"
+	"github.com/Angle-HR/server/pkg/platform/blob"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
-// Caller is the signed-in member and what they may do.
-type Caller = draft.Caller
+// Caller is the signed-in member and what they may do, resolved once per request by whoever authenticates the
+// request (today the hiring HTTP layer; later the CallContext the BFF passes to the service).
+type Caller struct {
+	UserID string
+	OrgID  string
+	Region string
+	Perms  rbac.Set
+	Roles  []string // company roles the caller holds, e.g. founder, hr_1
+}
 
 // Application statuses.
 const (
@@ -63,7 +72,7 @@ const MaxNote = 2000
 // Errors.
 var (
 	// ErrNotFound: no such job or application, or the caller may not see it.
-	ErrNotFound = hiringtypes.ErrNotFound
+	ErrNotFound = apperror.ErrNotFound
 	// ErrInvalidTransition: the application cannot move from its status to the one asked for.
 	ErrInvalidTransition = errors.New("applications: that status change is not allowed")
 	// ErrReviewRequired: a flagged application is decided through its review, not by changing its status.
@@ -77,15 +86,7 @@ var (
 )
 
 // JobAccess is a job as access checks need it: who created it and the caller's role on it.
-type JobAccess struct {
-	JobID           string
-	Code            string
-	Title           string
-	Status          string
-	CreatedBy       string
-	MemberRole      string // the caller's role in the job's team, "" when not a member
-	RetentionMonths int
-}
+type JobAccess = appjobs.JobAccess
 
 // Summary is one row of the applications list. It holds no answers.
 type Summary struct {
@@ -245,14 +246,14 @@ type Change struct {
 
 // Store is one region's database as this package uses it.
 type Store interface {
-	// JobAccess returns hiringtypes.ErrNotFound for an unknown job.
-	JobAccess(ctx context.Context, tenantID, jobID, userID string) (*JobAccess, error)
 	List(ctx context.Context, tenantID, jobID string, q StoreListQuery) ([]Summary, map[string]int, error)
 	// Open loads one application, records that it was opened (counters, review task) and writes the audit entry,
-	// in one transaction. It returns hiringtypes.ErrNotFound when the application is not on the job.
+	// in one transaction. It returns ErrNotFound when the application is not on the job.
 	Open(ctx context.Context, tenantID string, in OpenInput) (*Detail, error)
 	// FileInfo finds a file of an application and writes the audit entry for the download.
 	FileInfo(ctx context.Context, tenantID, jobID, appID, fileID, actorID string) (*FileInfo, error)
+	// LoadChange reads the application, its review and the company's candidate settings. The job fields of the
+	// state (title, code, company, public id, retention) are left empty: the service fills them from Jobs.
 	LoadChange(ctx context.Context, tenantID, jobID, appID string) (*ChangeState, error)
 	// ApplyChange makes the change if the application is still in ch.From (ErrStale otherwise) and, for a review
 	// decision, still awaiting the actor's decision (ErrNotOpened otherwise).
@@ -263,7 +264,7 @@ type Store interface {
 
 // Files makes short-lived download links. uploads.Storage implements it.
 type Files interface {
-	PresignGet(ctx context.Context, key string, ttl time.Duration, filename, contentType string) (string, error)
+	PresignGet(ctx context.Context, key string, opts blob.GetOptions) (string, error)
 }
 
 var _ Files = uploads.Storage(nil)
@@ -273,7 +274,9 @@ const FileLinkTTL = 5 * time.Minute
 
 // Service serves the hiring team of one region.
 type Service struct {
-	Store  Store
+	Store Store
+	// Jobs is what the application side knows about jobs: access to a job and what a status email says about it.
+	Jobs   appjobs.RegionalJobs
 	Files  Files
 	Hasher *reapply.Hasher
 	// NoticeURL is the link to a job's applicant privacy notice, put in status emails. Optional.
@@ -288,10 +291,12 @@ func (s *Service) now() time.Time {
 	return time.Now()
 }
 
-func forbidden(msg string) error { return &draft.ForbiddenError{Msg: msg} }
+func forbidden(msg string) error { return apperror.New(apperror.CodeForbidden, msg) }
 
+// Invalid is a validation error that names the fields that are wrong, in the shape the API returns.
 func invalid(path, msg string) error {
-	return &draft.ValidationError{Fields: []jobs.FieldError{{Path: path, Message: msg}}}
+	return apperror.NewWithDetails(apperror.CodeValidationError, "some fields need attention",
+		map[string]any{"fields": []formschema.FieldError{{Path: path, Message: msg}}})
 }
 
 func has(c Caller, p rbac.Permission) bool { return c.Perms.Has(p) }
@@ -313,16 +318,16 @@ func canDecide(c Caller, a *JobAccess) bool {
 		return false
 	}
 	return has(c, rbac.JobManageAny) || a.CreatedBy == c.UserID ||
-		a.MemberRole == hiringtypes.MemberHiringManager || a.MemberRole == hiringtypes.MemberRecruiter
+		a.MemberRole == appjobs.MemberHiringManager || a.MemberRole == appjobs.MemberRecruiter
 }
 
 // access loads the job and refuses with ErrNotFound when the caller may not see it, so the existence of a job is
 // not revealed.
 func (s *Service) access(ctx context.Context, c Caller, jobID string) (*JobAccess, error) {
-	if !jobs.IsUUID(jobID) {
+	if !formschema.IsUUID(jobID) {
 		return nil, ErrNotFound
 	}
-	a, err := s.Store.JobAccess(ctx, c.OrgID, jobID, c.UserID)
+	a, err := s.Jobs.JobAccess(ctx, c.OrgID, jobID, c.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +364,7 @@ func (s *Service) List(ctx context.Context, c Caller, jobID string, q ListQuery)
 		limit = 100
 	}
 	if q.Cursor != "" {
-		ts, id, err := hiringtypes.DecodeCursor(q.Cursor)
+		ts, id, err := decodeCursor(q.Cursor)
 		if err != nil {
 			return nil, invalid("cursor", "invalid cursor")
 		}
@@ -378,7 +383,7 @@ func (s *Service) List(ctx context.Context, c Caller, jobID string, q ListQuery)
 	if len(items) > limit {
 		page.Items = items[:limit]
 		last := page.Items[limit-1]
-		page.NextCursor = hiringtypes.EncodeCursor(last.SubmittedAt.UTC().Format(time.RFC3339Nano), last.ID)
+		page.NextCursor = encodeCursor(last.SubmittedAt.UTC().Format(time.RFC3339Nano), last.ID)
 	}
 	if page.Items == nil {
 		page.Items = []Summary{}
@@ -397,7 +402,7 @@ func (s *Service) Get(ctx context.Context, c Caller, jobID, appID string) (*Deta
 	if err != nil {
 		return nil, err
 	}
-	if !jobs.IsUUID(appID) {
+	if !formschema.IsUUID(appID) {
 		return nil, ErrNotFound
 	}
 	decide := canDecide(c, a)
@@ -421,7 +426,7 @@ func (s *Service) File(ctx context.Context, c Caller, jobID, appID, fileID strin
 	if _, err := s.access(ctx, c, jobID); err != nil {
 		return nil, err
 	}
-	if !jobs.IsUUID(appID) || !jobs.IsUUID(fileID) {
+	if !formschema.IsUUID(appID) || !formschema.IsUUID(fileID) {
 		return nil, ErrNotFound
 	}
 	if s.Files == nil {
@@ -431,7 +436,7 @@ func (s *Service) File(ctx context.Context, c Caller, jobID, appID, fileID strin
 	if err != nil {
 		return nil, err
 	}
-	url, err := s.Files.PresignGet(ctx, uploads.FinalKey(c.OrgID, f.JobID, f.ID), FileLinkTTL, f.Filename, f.ContentType)
+	url, err := s.Files.PresignGet(ctx, uploads.FinalKey(c.OrgID, f.JobID, f.ID), blob.GetOptions{TTL: FileLinkTTL, Filename: f.Filename, ContentType: f.ContentType})
 	if err != nil {
 		return nil, fmt.Errorf("applications: download link: %w", err)
 	}
@@ -475,7 +480,7 @@ func (s *Service) SetStatus(ctx context.Context, c Caller, jobID, appID string, 
 	if !canDecide(c, a) {
 		return nil, forbidden("you cannot change the status of applications on this job")
 	}
-	if !jobs.IsUUID(appID) {
+	if !formschema.IsUUID(appID) {
 		return nil, ErrNotFound
 	}
 	if !contains(AllStatuses, in.Status) {
@@ -485,7 +490,7 @@ func (s *Service) SetStatus(ctx context.Context, c Caller, jobID, appID string, 
 	if err != nil {
 		return nil, err
 	}
-	st, err := s.Store.LoadChange(ctx, c.OrgID, jobID, appID)
+	st, err := s.loadChange(ctx, c, jobID, appID)
 	if err != nil {
 		return nil, err
 	}
@@ -515,7 +520,7 @@ func (s *Service) Review(ctx context.Context, c Caller, jobID, appID string, in 
 	if !canDecide(c, a) {
 		return nil, forbidden("you cannot review applications on this job")
 	}
-	if !jobs.IsUUID(appID) {
+	if !formschema.IsUUID(appID) {
 		return nil, ErrNotFound
 	}
 	if in.Decision != DecisionProceed && in.Decision != DecisionReject {
@@ -525,7 +530,7 @@ func (s *Service) Review(ctx context.Context, c Caller, jobID, appID string, in 
 	if err != nil {
 		return nil, err
 	}
-	st, err := s.Store.LoadChange(ctx, c.OrgID, jobID, appID)
+	st, err := s.loadChange(ctx, c, jobID, appID)
 	if err != nil {
 		return nil, err
 	}
@@ -639,4 +644,38 @@ func contains(list []string, v string) bool {
 		}
 	}
 	return false
+}
+
+// encodeCursor and decodeCursor carry the keyset position (submitted_at, id) between pages.
+func encodeCursor(ts, id string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(ts + "|" + id))
+}
+
+func decodeCursor(c string) (ts, id string, err error) {
+	raw, err := base64.RawURLEncoding.DecodeString(c)
+	if err != nil {
+		return "", "", errors.New("invalid cursor")
+	}
+	parts := strings.SplitN(string(raw), "|", 2)
+	if len(parts) != 2 || !formschema.IsUUID(parts[1]) {
+		return "", "", errors.New("invalid cursor")
+	}
+	if _, err = time.Parse(time.RFC3339Nano, parts[0]); err != nil {
+		return "", "", errors.New("invalid cursor")
+	}
+	return parts[0], parts[1], nil
+}
+
+// loadChange reads the application's state from the store and adds what the job and its company contribute.
+func (s *Service) loadChange(ctx context.Context, c Caller, jobID, appID string) (*ChangeState, error) {
+	st, err := s.Store.LoadChange(ctx, c.OrgID, jobID, appID)
+	if err != nil {
+		return nil, err
+	}
+	j, err := s.Jobs.JobSummary(ctx, c.OrgID, jobID)
+	if err != nil {
+		return nil, err
+	}
+	st.JobCode, st.JobTitle, st.Company, st.PublicID, st.RetentionMonths = j.Code, j.Title, j.Company, j.PublicID, j.RetentionMonths
+	return st, nil
 }

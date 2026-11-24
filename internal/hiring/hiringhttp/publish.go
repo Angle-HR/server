@@ -50,9 +50,11 @@ func (h *HiringHandler) registerPublishItemRoutes(r chi.Router) {
 
 // registerPublishRoutes mounts the organization-level routes.
 func (h *HiringHandler) registerPublishRoutes(r chi.Router) {
-	r.Get("/organization/agreements", h.companySetup)
-	r.Post("/organization/agreements", h.acceptAgreement)
-	r.Put("/organization/privacy-contact", h.putPrivacyContact)
+	if !orgRemote() {
+		r.Get("/organization/agreements", h.companySetup)
+		r.Post("/organization/agreements", h.acceptAgreement)
+		r.Put("/organization/privacy-contact", h.putPrivacyContact)
+	}
 	r.Put("/organization/dpia", h.putDPIA)
 }
 
@@ -94,7 +96,7 @@ type (
 //	@Description	The dry run of publishing: the same checks, nothing written. Blocking issues stop a publish; warnings do not. Also lists the compliance gates that apply and where each stands.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id	path		string	true	"Job id"
 //	@Success		200	{object}	hiringhttp.ReportEnvelope
 //	@Failure		404	{object}	apidoc.ErrorEnvelope
@@ -118,7 +120,7 @@ func (h *HiringHandler) publishCheck(w http.ResponseWriter, r *http.Request) {
 //	@Description	Runs every publish check inside the same transaction as the status change: a verified company, an accepted DPA, a privacy contact, complete details, an open market, a lawful basis, the screening prerequisites and every required compliance gate. People who may not publish submit the job for approval instead. A blocked publish returns 422 with every issue.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id			path		string	true	"Job id"
 //	@Param			If-Match	header		string	true	"Revision the client loaded"
 //	@Success		200			{object}	hiringhttp.TransitionEnvelope
@@ -151,7 +153,7 @@ func (h *HiringHandler) publish(w http.ResponseWriter, r *http.Request) {
 //	@Description	One path per action: pause, resume, close, reopen, archive, to-draft and withdraw. Pause, close and move-to-draft take a job off every board. Resume and reopen run the publish checks again. HR 2 can change only the jobs it created. Which statuses allow which action is in the status rules of the lifecycle package.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id			path		string	true	"Job id"
 //	@Param			If-Match	header		string	true	"Revision the client loaded"
 //	@Success		200			{object}	hiringhttp.TransitionEnvelope
@@ -192,7 +194,7 @@ func (h *HiringHandler) lifecycle(action string) http.HandlerFunc {
 //	@Description	Copies the details and application form into a new draft owned by the caller. The copy has no team, no screening rules, no confirmations and no public id.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id	path		string	true	"Job id"
 //	@Success		201	{object}	hiringhttp.JobEnvelope
 //	@Failure		403	{object}	apidoc.ErrorEnvelope
@@ -219,7 +221,7 @@ func (h *HiringHandler) duplicate(w http.ResponseWriter, r *http.Request) {
 //	@Description	The gates that apply to the job's markets, special categories and screening, with where each stands. Gates marked auto are answered from the job's own details.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id	path		string	true	"Job id"
 //	@Success		200	{object}	hiringhttp.GatesEnvelope
 //	@Failure		404	{object}	apidoc.ErrorEnvelope
@@ -249,7 +251,7 @@ type ConfirmRequest struct {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id			path		string						true	"Job id"
 //	@Param			gate_id		path		string						true	"Gate id, e.g. uk-lawful"
 //	@Param			If-Match	header		string						true	"Revision the client loaded"
@@ -290,7 +292,7 @@ func (h *HiringHandler) confirmGate(w http.ResponseWriter, r *http.Request) {
 //	@Summary		List a job's hiring team
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id	path		string	true	"Job id"
 //	@Success		200	{object}	hiringhttp.MembersEnvelope
 //	@Failure		403	{object}	apidoc.ErrorEnvelope
@@ -321,7 +323,7 @@ type MembersRequest struct {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id			path		string						true	"Job id"
 //	@Param			If-Match	header		string						true	"Revision the client loaded"
 //	@Param			body		body		hiringhttp.MembersRequest	true	"The whole team"
@@ -361,7 +363,7 @@ func (h *HiringHandler) putMembers(w http.ResponseWriter, r *http.Request) {
 //	@Summary		Get a job's screening rules
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id	path		string	true	"Job id"
 //	@Success		200	{object}	hiringhttp.RulesEnvelope
 //	@Failure		404	{object}	apidoc.ErrorEnvelope
@@ -386,7 +388,7 @@ func (h *HiringHandler) getRules(w http.ResponseWriter, r *http.Request) {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			id			path		string			true	"Job id"
 //	@Param			If-Match	header		string			true	"Revision the client loaded"
 //	@Param			body		body		draft.RulesInput	true	"Rules"
@@ -434,7 +436,7 @@ type BulkRequest struct {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			body	body		hiringhttp.BulkRequest	true	"Action and job ids"
 //	@Success		200		{object}	hiringhttp.BulkEnvelope
 //	@Failure		400		{object}	apidoc.ErrorEnvelope
@@ -467,7 +469,7 @@ func (h *HiringHandler) bulk(w http.ResponseWriter, r *http.Request) {
 //	@Description	Every job the caller may see, newest first, or only the jobs in ids. CSV is the default; format=json returns the same rows as on the jobs list. Needs job.export.
 //	@Tags			jobs
 //	@Produce		text/csv,json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			status	query	string	false	"Comma-separated statuses"
 //	@Param			ids		query	string	false	"Comma-separated job ids; only these jobs are exported"
 //	@Param			format	query	string	false	"csv (default) or json"
@@ -534,7 +536,7 @@ func csvSafe(s string) string {
 //	@Description	Verification status, the DPA version to accept and whether it is accepted, the privacy contact and the DPIA.
 //	@Tags			jobs
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Success		200	{object}	hiringhttp.CompanySetupEnvelope
 //	@Router			/organization/agreements [get]
 func (h *HiringHandler) companySetup(w http.ResponseWriter, r *http.Request) {
@@ -562,7 +564,7 @@ type AcceptRequest struct {
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			body	body		hiringhttp.AcceptRequest	true	"Version"
 //	@Success		200		{object}	hiringhttp.CompanySetupEnvelope
 //	@Failure		400		{object}	apidoc.ErrorEnvelope
@@ -597,7 +599,7 @@ func (h *HiringHandler) acceptAgreement(w http.ResponseWriter, r *http.Request) 
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			body	body		draft.PrivacyContactInput	true	"Contact"
 //	@Success		200		{object}	hiringhttp.CompanySetupEnvelope
 //	@Failure		400		{object}	apidoc.ErrorEnvelope
@@ -632,7 +634,7 @@ func (h *HiringHandler) putPrivacyContact(w http.ResponseWriter, r *http.Request
 //	@Tags			jobs
 //	@Accept			json
 //	@Produce		json
-//	@Security		BearerAuth
+//	@Security		SessionCookie
 //	@Param			body	body		draft.DPIAInput	true	"Where the assessment is kept and what it covers"
 //	@Success		200		{object}	hiringhttp.CompanySetupEnvelope
 //	@Failure		400		{object}	apidoc.ErrorEnvelope

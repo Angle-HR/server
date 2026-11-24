@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Angle-HR/server/internal/hiring/draft"
-	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
+	"github.com/Angle-HR/server/internal/hiring/appjobs"
 	"github.com/Angle-HR/server/internal/hiring/reapply"
-	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/platform/blob"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 const (
@@ -59,7 +60,7 @@ func (f *fakeStore) FileInfo(_ context.Context, _, jobID, _, fileID, _ string) (
 }
 func (f *fakeStore) LoadChange(context.Context, string, string, string) (*ChangeState, error) {
 	if f.state == nil {
-		return nil, hiringtypes.ErrNotFound
+		return nil, apperror.ErrNotFound
 	}
 	s := *f.state
 	return &s, nil
@@ -79,11 +80,36 @@ func (f *fakeStore) SaveApplicantSettings(_ context.Context, _ string, m int, e 
 	return nil
 }
 
+// isCode reports whether err is an API error with the given code.
+func isCode(err error, code string) bool {
+	var ae *apperror.AppError
+	return errors.As(err, &ae) && ae.Code == code
+}
+
+// fakeJobs is the job source: it serves the fake store's job.
+type fakeJobs struct {
+	appjobs.RegionalJobs // methods the service does not call
+	st                   *fakeStore
+}
+
+func (j fakeJobs) JobAccess(ctx context.Context, tenant, jobID, user string) (*appjobs.JobAccess, error) {
+	return j.st.JobAccess(ctx, tenant, jobID, user)
+}
+
+func (j fakeJobs) JobSummary(context.Context, string, string) (*appjobs.JobSummary, error) {
+	if j.st.state == nil {
+		return nil, apperror.ErrNotFound
+	}
+	s := j.st.state
+	return &appjobs.JobSummary{Code: s.JobCode, Title: s.JobTitle, Company: s.Company, PublicID: s.PublicID,
+		RetentionMonths: s.RetentionMonths}, nil
+}
+
 type fakeFiles struct{ key string }
 
-func (f *fakeFiles) PresignGet(_ context.Context, key string, _ time.Duration, name, _ string) (string, error) {
+func (f *fakeFiles) PresignGet(_ context.Context, key string, o blob.GetOptions) (string, error) {
 	f.key = key
-	return "https://r2.test/" + name, nil
+	return "https://r2.test/" + o.Filename, nil
 }
 
 func caller(user string, perms ...rbac.Permission) Caller {
@@ -103,7 +129,7 @@ func newSvc(t *testing.T, role string) (*Service, *fakeStore) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Service{Store: st, Files: &fakeFiles{}, Hasher: h,
+	return &Service{Store: st, Jobs: fakeJobs{st: st}, Files: &fakeFiles{}, Hasher: h,
 		NoticeURL: func(id string) string { return "https://x.test/j/" + id + "/privacy" },
 		Now:       func() time.Time { return time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC) }}, st
 }
@@ -123,7 +149,7 @@ func TestAccessFollowsTheJob(t *testing.T) {
 	if _, err := s.List(ctx, caller(other, rbac.JobViewAll), job, ListQuery{}); err != nil {
 		t.Fatalf("view all: %v", err)
 	}
-	s2, _ := newSvc(t, hiringtypes.MemberInterviewer)
+	s2, _ := newSvc(t, "interviewer")
 	if _, err := s2.List(ctx, caller(other, rbac.JobViewAssigned), job, ListQuery{}); err != nil {
 		t.Fatalf("team member: %v", err)
 	}
@@ -156,8 +182,7 @@ func TestListCursorAndFilters(t *testing.T) {
 	if _, err = s.List(context.Background(), c, job, ListQuery{Cursor: "!!"}); err == nil {
 		t.Fatal("bad cursor accepted")
 	}
-	var ve *draft.ValidationError
-	if _, err = s.List(context.Background(), c, job, ListQuery{Statuses: []string{"nope"}}); !errors.As(err, &ve) {
+	if _, err = s.List(context.Background(), c, job, ListQuery{Statuses: []string{"nope"}}); !isCode(err, apperror.CodeValidationError) {
 		t.Fatalf("bad status: %v", err)
 	}
 	p, _ = s.List(context.Background(), c, job, ListQuery{Limit: 1000})
@@ -167,14 +192,14 @@ func TestListCursorAndFilters(t *testing.T) {
 }
 
 func TestGetTracksReviewOnlyForDeciders(t *testing.T) {
-	s, st := newSvc(t, hiringtypes.MemberInterviewer)
+	s, st := newSvc(t, "interviewer")
 	if _, err := s.Get(context.Background(), caller(other, rbac.JobViewAssigned), job, app); err != nil {
 		t.Fatal(err)
 	}
 	if st.opened[0].TrackReview {
 		t.Fatal("an interviewer must not become the reviewer")
 	}
-	s, st = newSvc(t, hiringtypes.MemberRecruiter)
+	s, st = newSvc(t, appjobs.MemberRecruiter)
 	d, err := s.Get(context.Background(), caller(other, rbac.JobViewAssigned), job, app)
 	if err != nil || !st.opened[0].TrackReview || !d.CanDecide {
 		t.Fatalf("recruiter: %v %+v", err, st.opened)
@@ -221,13 +246,12 @@ func TestSetStatusTransitions(t *testing.T) {
 func TestOnlyDecidersChangeStatus(t *testing.T) {
 	ctx := context.Background()
 	for role, ok := range map[string]bool{
-		hiringtypes.MemberInterviewer: false, hiringtypes.MemberViewer: false,
-		hiringtypes.MemberRecruiter: true, hiringtypes.MemberHiringManager: true,
+		"interviewer": false, "viewer": false,
+		appjobs.MemberRecruiter: true, appjobs.MemberHiringManager: true,
 	} {
 		s, _ := newSvc(t, role)
 		_, err := s.SetStatus(ctx, caller(other, rbac.JobViewAssigned), job, app, StatusInput{Status: StatusRejected})
-		var fe *draft.ForbiddenError
-		if ok && err != nil || !ok && !errors.As(err, &fe) {
+		if ok && err != nil || !ok && !isCode(err, apperror.CodeForbidden) {
 			t.Errorf("%s: ok=%v err=%v", role, ok, err)
 		}
 	}
@@ -298,8 +322,7 @@ func TestNoteLength(t *testing.T) {
 	s, _ := newSvc(t, "")
 	_, err := s.SetStatus(context.Background(), caller(owner, rbac.JobViewAssigned), job, app,
 		StatusInput{Status: StatusHired, Note: strings.Repeat("x", MaxNote+1)})
-	var ve *draft.ValidationError
-	if !errors.As(err, &ve) {
+	if !isCode(err, apperror.CodeValidationError) {
 		t.Fatalf("%v", err)
 	}
 }
@@ -354,10 +377,9 @@ func TestReview(t *testing.T) {
 		t.Fatalf("want no review: %v", err)
 	}
 	// an interviewer cannot review
-	s, st = newSvc(t, hiringtypes.MemberInterviewer)
+	s, st = newSvc(t, "interviewer")
 	st.state.Status = StatusFlagged
-	var fe *draft.ForbiddenError
-	if _, err = s.Review(ctx, caller(other, rbac.JobViewAssigned), job, app, ReviewInput{Decision: DecisionProceed}); !errors.As(err, &fe) {
+	if _, err = s.Review(ctx, caller(other, rbac.JobViewAssigned), job, app, ReviewInput{Decision: DecisionProceed}); !isCode(err, apperror.CodeForbidden) {
 		t.Fatalf("want forbidden: %v", err)
 	}
 	// the store refuses a stale change
@@ -393,8 +415,7 @@ func TestSettings(t *testing.T) {
 	ctx := context.Background()
 	s, st := newSvc(t, "")
 	six, off := 6, false
-	var fe *draft.ForbiddenError
-	if _, err := s.SaveSettings(ctx, caller(owner, rbac.JobCreate), SettingsInput{ReapplyBlockMonths: &six}); !errors.As(err, &fe) {
+	if _, err := s.SaveSettings(ctx, caller(owner, rbac.JobCreate), SettingsInput{ReapplyBlockMonths: &six}); !isCode(err, apperror.CodeForbidden) {
 		t.Fatalf("want forbidden: %v", err)
 	}
 	got, err := s.SaveSettings(ctx, caller(owner, rbac.JobRetentionSet), SettingsInput{ReapplyBlockMonths: &six, SendStatusEmails: &off})
@@ -402,12 +423,11 @@ func TestSettings(t *testing.T) {
 		t.Fatalf("%v %+v", err, got)
 	}
 	three := 3
-	var ve *draft.ValidationError
-	if _, err = s.SaveSettings(ctx, caller(owner, rbac.JobRetentionSet), SettingsInput{ReapplyBlockMonths: &three}); !errors.As(err, &ve) {
+	if _, err = s.SaveSettings(ctx, caller(owner, rbac.JobRetentionSet), SettingsInput{ReapplyBlockMonths: &three}); !isCode(err, apperror.CodeValidationError) {
 		t.Fatalf("want validation: %v", err)
 	}
 	s.Hasher = nil
-	if _, err = s.SaveSettings(ctx, caller(owner, rbac.JobRetentionSet), SettingsInput{ReapplyBlockMonths: &six}); !errors.As(err, &ve) {
+	if _, err = s.SaveSettings(ctx, caller(owner, rbac.JobRetentionSet), SettingsInput{ReapplyBlockMonths: &six}); !isCode(err, apperror.CodeValidationError) {
 		t.Fatalf("no key must refuse 6: %v", err)
 	}
 	zero := 0

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 func perms(r rbac.Role) rbac.Set { return rbac.NewSet(rbac.DefaultMatrix[r]...) }

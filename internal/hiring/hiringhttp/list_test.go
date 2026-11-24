@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
-	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 func rows(t *testing.T, r reply) []map[string]any {

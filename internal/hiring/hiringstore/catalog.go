@@ -335,3 +335,24 @@ func (s *Store) DueJobIDs(ctx context.Context, tenantID string, limit int) ([]st
 	})
 	return out, err
 }
+
+// LiveJobIDs returns up to limit published or paused jobs of the company, oldest id first.
+func (s *Store) LiveJobIDs(ctx context.Context, tenantID string, limit int) ([]string, error) {
+	var out []string
+	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, liveJobIDsSQL+` LIMIT $2`, tenantID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			out = append(out, id)
+		}
+		return rows.Err()
+	})
+	return out, err
+}

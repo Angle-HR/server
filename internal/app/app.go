@@ -23,6 +23,8 @@ import (
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/docs"
 	"github.com/Angle-HR/server/internal/handler"
+	"github.com/Angle-HR/server/internal/hiring/applicantcounts"
+	"github.com/Angle-HR/server/internal/hiring/draft"
 	"github.com/Angle-HR/server/internal/hiring/hiringhttp"
 	"github.com/Angle-HR/server/internal/hiring/hiringstore"
 	"github.com/Angle-HR/server/internal/identityhttp"
@@ -180,10 +182,23 @@ func Run() error {
 		})
 	}
 	kybNotifierFor := newKYBNotifierFactory(dbRouter, globalPool, emailQueue)
-	hiringHandler := newHiringHandler(dbRouter, globalPool)
+	counts, closeCounts, err := applicantcounts.FromEnv(func(reg string) (*hiringstore.Store, error) {
+		pool, perr := dbRouter.DB(region.Region(reg))
+		if perr != nil {
+			return nil, perr
+		}
+		return &hiringstore.Store{DB: pool, Region: reg}, nil
+	})
+	if err != nil {
+		return fmt.Errorf("applicant counts: %w", err)
+	}
+	defer closeCounts()
+	hiringHandler := newHiringHandler(dbRouter, globalPool, counts)
 	publicHandler := newPublicHandler(cfg, dbRouter, globalPool, redisClient, log)
 	hiringHandler.Public = publicHandler.Public
 	hiringHandler.Applications = newApplicationsService(cfg, dbRouter, log)
+	hiringHandler.Remote = hiringhttp.HiringRemote()
+	publicHandler.Remote = hiringhttp.HiringRemote()
 	if authHandler != nil {
 		authHandler.MeAccess = hiringHandler.Access
 	}
@@ -295,7 +310,7 @@ func serve(server *http.Server, cfg config.Config, log *slog.Logger) error {
 
 // newHiringHandler builds the job drafts and form builder handler. Company data is read from the caller's own
 // region; markets and catalogs come from the global database.
-func newHiringHandler(router *dbrouter.DBRouter, global *pgxpool.Pool) *hiringhttp.HiringHandler {
+func newHiringHandler(router *dbrouter.DBRouter, global *pgxpool.Pool, counts draft.ApplicantCounts) *hiringhttp.HiringHandler {
 	dir := &hiringhttp.PostgresHiringDirectory{
 		Regional: func(reg region.Region) (hiringstore.DB, error) {
 			pool, err := router.DB(reg)
@@ -305,6 +320,7 @@ func newHiringHandler(router *dbrouter.DBRouter, global *pgxpool.Pool) *hiringht
 			return pool, nil
 		},
 		Global: global,
+		Counts: counts,
 	}
 	identify := func(ctx context.Context) (string, region.Region, bool) {
 		id, reg, ok := auth.UserFromContext(ctx)

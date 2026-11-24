@@ -12,6 +12,7 @@ import (
 
 	"github.com/Angle-HR/server/internal/hiring/gates"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
+	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/formschema"
 	"github.com/Angle-HR/server/pkg/formschema/screening"
 )
@@ -19,7 +20,7 @@ import (
 // Errors the HTTP layer maps to responses.
 var (
 	// ErrNotFound means the row does not exist, was deleted, or belongs to another company.
-	ErrNotFound = errors.New("hiringstore: not found")
+	ErrNotFound = apperror.ErrNotFound
 	// ErrConflict means a unique value (a template name, say) is already taken.
 	ErrConflict = errors.New("hiringstore: already exists")
 	// ErrBadReference means a foreign key pointed at a row that does not exist for this company.

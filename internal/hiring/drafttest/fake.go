@@ -652,3 +652,14 @@ func (f *Store) RecordDPIA(_ context.Context, _, _ string, _ json.RawMessage) (i
 	f.DPIAVersion++
 	return f.DPIAVersion, nil
 }
+
+// LiveJobIDs implements draft.Store.
+func (f *Store) LiveJobIDs(_ context.Context, tenant string, limit int) ([]string, error) {
+	var out []string
+	for k, rec := range f.Jobs {
+		if strings.HasPrefix(k, tenant+"|") && (rec.Job.Status == "published" || rec.Job.Status == "paused") && len(out) < limit {
+			out = append(out, rec.Job.ID)
+		}
+	}
+	return out, nil
+}

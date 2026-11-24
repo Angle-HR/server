@@ -10,7 +10,7 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/draft"
 	"github.com/Angle-HR/server/internal/hiring/drafttest"
 	"github.com/Angle-HR/server/internal/hiring/gates"
-	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 type stubCompany struct{ state draft.CompanyState }
@@ -110,6 +110,8 @@ func TestMembersAndRulesRoutes(t *testing.T) {
 }
 
 func TestCompanyRoutes(t *testing.T) {
+	t.Setenv("ORG_REMOTE", "") // the monolith serves the agreements routes unless org is remote
+	t.Setenv("APPLICATIONS_REMOTE", "")
 	e, _ := publishEnvHTTP(t, rbac.RoleFounder)
 	if r := e.do(t, "GET", "/organization/agreements", ""); r.Status != 200 {
 		t.Fatalf("agreements: %d %+v", r.Status, r.Err)
@@ -119,4 +121,31 @@ func TestCompanyRoutes(t *testing.T) {
 		t.Fatalf("bad email: %d %+v", r.Status, r.Err)
 	}
 	_ = strings.TrimSpace
+}
+
+func TestPublishFailsClosedWhenOrgIsDownOverHTTP(t *testing.T) {
+	e, _ := publishEnvHTTP(t, rbac.RoleFounder)
+	e.dir.svc.Company = &downCompany{}
+	id := e.create(t, publishableBody) // drafting does not need org
+	if r := e.do(t, "PUT", "/jobs/"+id+"/compliance/uk-lawful", `{"confirmed":true}`); r.Status != 200 {
+		t.Fatalf("confirm while org is down: %d %+v", r.Status, r.Err)
+	}
+	for _, p := range []struct{ method, path string }{{"POST", "/publish"}, {"GET", "/publish-check"}} {
+		r := e.do(t, p.method, "/jobs/"+id+p.path, "")
+		if r.Status != 503 || r.Err.Code != "SERVICE_UNAVAILABLE" || r.Err.Details["retryable"] != true {
+			t.Fatalf("%s %s: %d %+v", p.method, p.path, r.Status, r.Err)
+		}
+		if r.Header.Get("Retry-After") == "" {
+			t.Errorf("%s %s: no Retry-After header", p.method, p.path)
+		}
+	}
+	if r := e.do(t, "GET", "/jobs/"+id, ""); r.Status != 200 || !strings.Contains(string(r.Data), `"status":"draft"`) {
+		t.Fatalf("job should still be a draft: %d %s", r.Status, r.Data)
+	}
+}
+
+type downCompany struct{}
+
+func (downCompany) State(context.Context, string) (draft.CompanyState, error) {
+	return draft.CompanyState{}, draft.ErrCompanyUnavailable
 }

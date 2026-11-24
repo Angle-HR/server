@@ -10,9 +10,9 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/gates"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/rbac"
 	"github.com/Angle-HR/server/pkg/formschema"
 	"github.com/Angle-HR/server/pkg/formschema/screening"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 type fakeCompany struct {
@@ -547,4 +547,42 @@ func TestDuplicateCopiesDetailsNotState(t *testing.T) {
 func questionYesNo(label string) formschema.FormQuestion {
 	return formschema.FormQuestion{Section: "screening", Type: "single_choice", Label: label, Required: true,
 		Config: json.RawMessage(yesNoConfig)}
+}
+
+// When the company's readiness cannot be established, publishing fails closed with ErrCompanyUnavailable, nothing
+// is written or registered, and drafting, editing and confirming a gate keep working.
+func TestPublishFailsClosedWhenCompanyUnavailable(t *testing.T) {
+	s, st, ref, co := publishEnv(t)
+	founder := caller(userA, rbac.RoleFounder)
+	founder.Region = "uk"
+	v := readyJob(t, s, founder)
+
+	co.err = ErrCompanyUnavailable
+	ctx := context.Background()
+	if _, err := s.Publish(ctx, founder, v.ID, 0); !errors.Is(err, ErrCompanyUnavailable) {
+		t.Fatalf("publish: %v, want ErrCompanyUnavailable", err)
+	}
+	if _, err := s.PublishCheck(ctx, founder, v.ID); !errors.Is(err, ErrCompanyUnavailable) {
+		t.Fatalf("publish check: %v", err)
+	}
+	if after, _ := s.Get(ctx, founder, v.ID); after.Status != jobs.StatusDraft || after.PublicID != "" {
+		t.Errorf("job changed: %s %q", after.Status, after.PublicID)
+	}
+	if len(ref.Registry) != 0 {
+		t.Errorf("a job was registered while org was down: %v", ref.Registry)
+	}
+	// Drafting is unaffected.
+	if _, err := s.Create(ctx, founder, CreateRequest{Patch: patch(t, `{"title":"Cook"}`)}); err != nil {
+		t.Errorf("create while org is down: %v", err)
+	}
+	if _, err := s.ConfirmGate(ctx, founder, v.ID, "uk-lawful", true, 0); err != nil {
+		t.Errorf("confirm gate while org is down: %v", err)
+	}
+	_ = st
+
+	// Org is back: the same job publishes.
+	co.err = nil
+	if res, err := s.Publish(ctx, founder, v.ID, 0); err != nil || res.Job.Status != jobs.StatusPublished {
+		t.Fatalf("publish after recovery: %v", err)
+	}
 }

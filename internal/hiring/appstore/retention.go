@@ -1,4 +1,4 @@
-package hiringstore
+package appstore
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Angle-HR/server/internal/hiring/appjobs"
 	"github.com/Angle-HR/server/internal/hiring/outbox"
 	"github.com/Angle-HR/server/internal/hiring/retention"
 )
@@ -16,18 +17,13 @@ import (
 // ---- retention (phase 3d) ----
 
 // An application nobody decided keeps its provisional date (set when it arrived) until its job closes; then the
-// clock is the job's close date (or closing date plus a day) plus the job's retention months. LEAST makes sure a
-// date is only ever pulled back, never pushed out.
+// clock is the job's close date (or closing date plus a day) plus the job's retention months. The JobSource says
+// which jobs have closed and when each clock ends ($2 job ids, $3 dates). LEAST makes sure a date is only ever
+// pulled back, never pushed out.
 const shortenRetentionSQL = `
 UPDATE hiring.applications a
 SET retention_until = LEAST(a.retention_until, base.until)
-FROM (
-    SELECT j.id,
-           COALESCE(j.closed_at, (j.closing_date + 1)::timestamptz, $2::timestamptz)
-               + make_interval(months => j.retention_months::int) AS until
-    FROM hiring.job_postings j
-    WHERE j.tenant_id = $1::uuid AND j.status IN ('closed', 'expired') AND j.deleted_at IS NULL
-) base
+FROM unnest($2::uuid[], $3::timestamptz[]) AS base(id, until)
 WHERE a.job_id = base.id AND a.tenant_id = $1::uuid
   AND a.status IN ('received', 'flagged', 'in_review') AND a.retention_until > base.until`
 
@@ -42,12 +38,17 @@ WITH f AS (UPDATE hiring.application_files c SET retention_until = a.retention_u
 SELECT (SELECT count(*) FROM f) + (SELECT count(*) FROM s) + (SELECT count(*) FROM r)`
 
 // ShortenForClosedJobs implements retention.Store. It returns the number of applications changed.
-func (s *Store) ShortenForClosedJobs(ctx context.Context, tenantID string, now time.Time) (int, error) {
+func (s *Store) ShortenForClosedJobs(ctx context.Context, tenantID string, closed []appjobs.ClosedJob) (int, error) {
 	n := 0
+	ids := make([]string, len(closed))
+	until := make([]time.Time, len(closed))
+	for i, c := range closed {
+		ids[i], until[i] = c.JobID, c.Until
+	}
 	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, shortenRetentionSQL, tenantID, now)
+		tag, err := tx.Exec(ctx, shortenRetentionSQL, tenantID, ids, until)
 		if err != nil {
-			return fmt.Errorf("hiringstore: shorten retention: %w", err)
+			return fmt.Errorf("appstore: shorten retention: %w", err)
 		}
 		n = int(tag.RowsAffected())
 		if n == 0 {
@@ -55,7 +56,7 @@ func (s *Store) ShortenForClosedJobs(ctx context.Context, tenantID string, now t
 		}
 		var moved int
 		if err = tx.QueryRow(ctx, followRetentionSQL, tenantID).Scan(&moved); err != nil {
-			return fmt.Errorf("hiringstore: shorten retention of attached rows: %w", err)
+			return fmt.Errorf("appstore: shorten retention of attached rows: %w", err)
 		}
 		return nil
 	})
@@ -63,11 +64,10 @@ func (s *Store) ShortenForClosedJobs(ctx context.Context, tenantID string, now t
 }
 
 const dueApplicationsSQL = `
-SELECT a.id::text, a.job_id::text, 'JB-' || j.job_number::text, j.title,
+SELECT a.id::text, a.job_id::text,
        COALESCE((SELECT array_agg(f.id::text ORDER BY f.id) FROM hiring.application_files f
                  WHERE f.application_id = a.id AND f.tenant_id = a.tenant_id), '{}')::text[]
 FROM hiring.applications a
-JOIN hiring.job_postings j ON j.id = a.job_id AND j.tenant_id = a.tenant_id
 WHERE a.tenant_id = $1::uuid AND a.retention_until < $2
 ORDER BY a.retention_until, a.id
 LIMIT $3`
@@ -78,13 +78,13 @@ func (s *Store) DueApplications(ctx context.Context, tenantID string, now time.T
 	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, dueApplicationsSQL, tenantID, now, limit)
 		if err != nil {
-			return fmt.Errorf("hiringstore: list due applications: %w", err)
+			return fmt.Errorf("appstore: list due applications: %w", err)
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var d retention.Due
-			if err = rows.Scan(&d.ID, &d.JobID, &d.JobCode, &d.JobTitle, &d.FileIDs); err != nil {
-				return fmt.Errorf("hiringstore: scan due application: %w", err)
+			if err = rows.Scan(&d.ID, &d.JobID, &d.FileIDs); err != nil {
+				return fmt.Errorf("appstore: scan due application: %w", err)
 			}
 			out = append(out, d)
 		}
@@ -99,12 +99,6 @@ SELECT 1 FROM hiring.applications WHERE id = $1::uuid AND tenant_id = $2::uuid A
 
 const deleteApplicationFilesSQL = `DELETE FROM hiring.application_files WHERE application_id = $1::uuid AND tenant_id = $2::uuid`
 
-// The compliance log is append-only and has no foreign key, so the entry outlives the application. It holds the
-// application id and the reason, nothing about the candidate.
-const complianceDeletionSQL = `
-INSERT INTO hiring.compliance_log (job_id, tenant_id, gate_id, severity, event)
-VALUES ($1::uuid, $2::uuid, 'retention', 'informational', $3)`
-
 // The special category answers, review task and unsent emails go with the application (ON DELETE CASCADE).
 const deleteApplicationSQL = `DELETE FROM hiring.applications WHERE id = $1::uuid AND tenant_id = $2::uuid`
 
@@ -117,17 +111,17 @@ func (s *Store) DeleteApplication(ctx context.Context, tenantID string, d retent
 			return nil // already deleted, or no longer due
 		}
 		if err != nil {
-			return fmt.Errorf("hiringstore: lock application: %w", err)
+			return fmt.Errorf("appstore: lock application: %w", err)
 		}
 		if _, err = tx.Exec(ctx, deleteApplicationFilesSQL, d.ID, tenantID); err != nil {
-			return fmt.Errorf("hiringstore: delete application files: %w", err)
+			return fmt.Errorf("appstore: delete application files: %w", err)
 		}
 		event := "application_deleted: retention period ended (application " + d.ID + ")"
 		if _, err = tx.Exec(ctx, complianceDeletionSQL, d.JobID, tenantID, event); err != nil {
-			return fmt.Errorf("hiringstore: log deletion: %w", err)
+			return fmt.Errorf("appstore: log deletion: %w", err)
 		}
 		if _, err = tx.Exec(ctx, deleteApplicationSQL, d.ID, tenantID); err != nil {
-			return fmt.Errorf("hiringstore: delete application: %w", err)
+			return fmt.Errorf("appstore: delete application: %w", err)
 		}
 		return nil
 	})
@@ -141,7 +135,7 @@ func (s *Store) DeleteExpiredBlocks(ctx context.Context, tenantID string, now ti
 	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, deleteExpiredBlocksSQL, tenantID, now)
 		if err != nil {
-			return fmt.Errorf("hiringstore: delete expired reapply blocks: %w", err)
+			return fmt.Errorf("appstore: delete expired reapply blocks: %w", err)
 		}
 		n = int(tag.RowsAffected())
 		return nil
@@ -157,19 +151,13 @@ func (s *Store) DeleteOldEmails(ctx context.Context, tenantID string, now time.T
 	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, deleteOldEmailsSQL, tenantID, now)
 		if err != nil {
-			return fmt.Errorf("hiringstore: delete old emails: %w", err)
+			return fmt.Errorf("appstore: delete old emails: %w", err)
 		}
 		n = int(tag.RowsAffected())
 		return nil
 	})
 	return n, err
 }
-
-// The notice goes to the company's privacy contact, or to its owner when none was given.
-const noticeRecipientSQL = `
-SELECT COALESCE(NULLIF(o.privacy_contact_email, ''), u.email), o.legal_name
-FROM accounts.organizations o JOIN accounts.users u ON u.id = o.owner_user_id
-WHERE o.id = $1::uuid`
 
 const noticePurpose = "Telling the company which applications were deleted"
 
@@ -178,18 +166,14 @@ INSERT INTO hiring.email_outbox (tenant_id, kind, recipient, data, retention_unt
 VALUES ($1::uuid, 'retention_notice', $2, $3::jsonb, $4, 'legitimate_interests', $5)`
 
 // QueueNotice implements retention.Store.
-func (s *Store) QueueNotice(ctx context.Context, tenantID string, now time.Time, items []retention.NoticeItem) error {
+func (s *Store) QueueNotice(ctx context.Context, tenantID string, now time.Time, to, company string, items []retention.NoticeItem) error {
 	return s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
-		var to, company string
-		if err := tx.QueryRow(ctx, noticeRecipientSQL, tenantID).Scan(&to, &company); err != nil {
-			return fmt.Errorf("hiringstore: find notice recipient: %w", err)
-		}
 		data, err := json.Marshal(map[string]any{"company": company, "items": items})
 		if err != nil {
-			return fmt.Errorf("hiringstore: encode notice: %w", err)
+			return fmt.Errorf("appstore: encode notice: %w", err)
 		}
 		if _, err = tx.Exec(ctx, insertNoticeSQL, tenantID, to, data, now.Add(OutboxRetention), noticePurpose); err != nil {
-			return fmt.Errorf("hiringstore: queue notice: %w", err)
+			return fmt.Errorf("appstore: queue notice: %w", err)
 		}
 		return nil
 	})
@@ -216,14 +200,14 @@ func (s *Store) Lease(ctx context.Context, tenantID string, now time.Time, limit
 	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, leaseEmailsSQL, tenantID, now, limit, lease.Seconds())
 		if err != nil {
-			return fmt.Errorf("hiringstore: lease emails: %w", err)
+			return fmt.Errorf("appstore: lease emails: %w", err)
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var e outbox.Email
 			var data []byte
 			if err = rows.Scan(&e.ID, &e.Kind, &e.Recipient, &e.Name, &data, &e.Attempts); err != nil {
-				return fmt.Errorf("hiringstore: scan email: %w", err)
+				return fmt.Errorf("appstore: scan email: %w", err)
 			}
 			e.Data = json.RawMessage(data)
 			out = append(out, e)
@@ -241,7 +225,7 @@ WHERE id = $1::uuid AND tenant_id = $2::uuid`
 func (s *Store) MarkSent(ctx context.Context, tenantID, id string, now time.Time) error {
 	return s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, markEmailSentSQL, id, tenantID, now); err != nil {
-			return fmt.Errorf("hiringstore: mark email sent: %w", err)
+			return fmt.Errorf("appstore: mark email sent: %w", err)
 		}
 		return nil
 	})
@@ -256,7 +240,7 @@ WHERE id = $1::uuid AND tenant_id = $2::uuid`
 func (s *Store) MarkFailed(ctx context.Context, tenantID, id, reason string, final bool, next time.Time) error {
 	return s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, markEmailFailedSQL, id, tenantID, reason, final, next); err != nil {
-			return fmt.Errorf("hiringstore: mark email failed: %w", err)
+			return fmt.Errorf("appstore: mark email failed: %w", err)
 		}
 		return nil
 	})

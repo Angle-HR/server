@@ -7,11 +7,12 @@ import (
 
 	"golang.org/x/net/html"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 // Limits that keep a draft small and well under the API body cap.
@@ -27,10 +28,8 @@ const (
 	maxPayMinor         = int64(1_000_000_000_000)
 )
 
-var uuidRE = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
-
 // IsUUID reports whether s looks like a UUID.
-func IsUUID(s string) bool { return uuidRE.MatchString(s) }
+func IsUUID(s string) bool { return formschema.IsUUID(s) }
 
 // titleAllowed lists the punctuation a title may contain besides letters, digits and spaces.
 const titleAllowed = "-/&(),.+#'’"

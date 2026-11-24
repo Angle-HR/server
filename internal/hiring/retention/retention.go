@@ -20,6 +20,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/Angle-HR/server/internal/hiring/appjobs"
 	"github.com/Angle-HR/server/internal/hiring/uploads"
 )
 
@@ -41,28 +42,32 @@ type NoticeItem struct {
 
 // Store is one region's database as the retention task uses it.
 type Store interface {
-	// ShortenForClosedJobs pulls the retention date of undecided applications on closed or expired jobs back to
-	// the job's close date plus its retention months. It never extends a date.
-	ShortenForClosedJobs(ctx context.Context, tenantID string, now time.Time) (int, error)
+	// ShortenForClosedJobs pulls the retention date of undecided applications on the closed or expired jobs back
+	// to each job's Until (its close date plus its retention months). It never extends a date.
+	ShortenForClosedJobs(ctx context.Context, tenantID string, closed []appjobs.ClosedJob) (int, error)
+	// DueApplications lists applications past their date. Due.JobCode and Due.JobTitle are left empty: the
+	// sweeper fills them from the JobSource.
 	DueApplications(ctx context.Context, tenantID string, now time.Time, limit int) ([]Due, error)
 	// DeleteApplication deletes one due application and everything that belongs to it, and writes the
 	// compliance log entry, in one transaction. It does nothing when the application is no longer due.
 	DeleteApplication(ctx context.Context, tenantID string, d Due, now time.Time) error
 	DeleteExpiredBlocks(ctx context.Context, tenantID string, now time.Time) (int, error)
 	DeleteOldEmails(ctx context.Context, tenantID string, now time.Time) (int, error)
-	// QueueNotice saves the email to the company's privacy contact (or its owner).
-	QueueNotice(ctx context.Context, tenantID string, now time.Time, items []NoticeItem) error
+	// QueueNotice saves the email to the company's privacy contact (or its owner), already resolved by the caller.
+	QueueNotice(ctx context.Context, tenantID string, now time.Time, to, company string, items []NoticeItem) error
 }
 
 // Storage is object storage as the retention task uses it.
 type Storage interface {
-	Remove(ctx context.Context, key string) error
+	Delete(ctx context.Context, key string) error
 }
 
 // Sweeper runs the retention task over a region.
 type Sweeper struct {
 	Tenants func(ctx context.Context) ([]string, error)
 	Store   Store
+	// Jobs says which jobs have closed, names the jobs in the notice and finds where the notice goes.
+	Jobs    appjobs.RegionalJobs
 	Storage Storage
 	Now     func() time.Time
 	Logger  *slog.Logger
@@ -106,7 +111,11 @@ func (w *Sweeper) company(ctx context.Context, tid string, now time.Time, res *R
 			w.Logger.Error("retention: "+what, "error", err)
 		}
 	}
-	n, err := w.Store.ShortenForClosedJobs(ctx, tid, now)
+	n := 0
+	closed, err := w.Jobs.ClosedJobs(ctx, tid, now)
+	if err == nil && len(closed) > 0 {
+		n, err = w.Store.ShortenForClosedJobs(ctx, tid, closed)
+	}
 	if err != nil {
 		fail("shorten retention for closed jobs", err)
 	}
@@ -119,8 +128,16 @@ func (w *Sweeper) company(ctx context.Context, tid string, now time.Time, res *R
 			fail("list due applications", err)
 			break
 		}
+		labels, err := w.labels(ctx, tid, list)
+		if err != nil {
+			fail("name jobs of due applications", err)
+			break
+		}
 		failed := 0
 		for _, d := range list {
+			if l, ok := labels[d.JobID]; ok {
+				d.JobCode, d.JobTitle = l.Code, l.Title
+			}
 			if err := w.delete(ctx, tid, d, now); err != nil {
 				failed++
 				fail("delete application "+d.ID, err)
@@ -154,7 +171,12 @@ func (w *Sweeper) company(ctx context.Context, tid string, now time.Time, res *R
 			items = append(items, *it)
 		}
 		sort.Slice(items, func(i, j int) bool { return items[i].JobCode < items[j].JobCode })
-		if err := w.Store.QueueNotice(ctx, tid, now, items); err != nil {
+		to, company, err := w.Jobs.NoticeRecipient(ctx, tid)
+		if err != nil {
+			fail("find notice recipient", err)
+			return
+		}
+		if err := w.Store.QueueNotice(ctx, tid, now, to, company, items); err != nil {
 			fail("queue notice to the company", err)
 			return
 		}
@@ -162,12 +184,28 @@ func (w *Sweeper) company(ctx context.Context, tid string, now time.Time, res *R
 	}
 }
 
+// labels names the jobs of a page of due applications.
+func (w *Sweeper) labels(ctx context.Context, tid string, list []Due) (map[string]appjobs.JobLabel, error) {
+	seen := map[string]bool{}
+	var ids []string
+	for _, d := range list {
+		if !seen[d.JobID] {
+			seen[d.JobID] = true
+			ids = append(ids, d.JobID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	return w.Jobs.JobLabels(ctx, tid, ids)
+}
+
 // delete removes the files first. A file that is already gone is fine; a file that cannot be removed stops the
 // deletion of this application, so no row ever outlives the pointer needed to find its object.
 func (w *Sweeper) delete(ctx context.Context, tid string, d Due, now time.Time) error {
 	for _, id := range d.FileIDs {
 		for _, key := range []string{uploads.StagingKey(tid, d.JobID, id), uploads.FinalKey(tid, d.JobID, id)} {
-			if err := w.Storage.Remove(ctx, key); err != nil {
+			if err := w.Storage.Delete(ctx, key); err != nil {
 				return fmt.Errorf("remove file %s: %w", id, err)
 			}
 		}

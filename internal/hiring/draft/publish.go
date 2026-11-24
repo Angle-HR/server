@@ -14,18 +14,37 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/lifecycle"
-	"github.com/Angle-HR/server/internal/rbac"
 	"github.com/Angle-HR/server/pkg/formschema/screening"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 // CompanyState is what the publish checks need to know about the company. It lives in the account tables
 // (company verification, accepted agreements, settings), so the service reads it through an interface.
 type CompanyState = hiringtypes.CompanyState
 
+type regionCtxKey struct{}
+
+// WithRegion carries the caller's region to a Company implementation that lives in another service: the org
+// service reads the company from the region's database and needs it as call context.
+func WithRegion(ctx context.Context, region string) context.Context {
+	return context.WithValue(ctx, regionCtxKey{}, region)
+}
+
+// RegionFrom returns the region set by WithRegion, or "".
+func RegionFrom(ctx context.Context) string {
+	r, _ := ctx.Value(regionCtxKey{}).(string)
+	return r
+}
+
 // Company reads the CompanyState of an organization.
 type Company interface {
 	State(ctx context.Context, orgID string) (CompanyState, error)
 }
+
+// ErrCompanyUnavailable means the company's publish readiness could not be established (the org service is
+// unreachable, too slow or failed). Publishing fails closed on it; the HTTP layer answers 503 so the caller can
+// retry. Nothing that does not read the readiness (drafting, editing, the form) is affected.
+var ErrCompanyUnavailable = errors.New("draft: company readiness unavailable")
 
 // BlockedError means the publish checks failed. It carries the whole report so the page can show every issue.
 type BlockedError struct{ Report *gates.Report }
@@ -58,6 +77,15 @@ type environment struct {
 }
 
 func (s *Service) loadEnv(ctx context.Context, c Caller) (*environment, error) {
+	return s.loadEnvOpt(ctx, c, true)
+}
+
+// loadEnvWithout is loadEnv without the company's readiness (every company check then fails).
+func (s *Service) loadEnvWithout(ctx context.Context, c Caller) (*environment, error) {
+	return s.loadEnvOpt(ctx, c, false)
+}
+
+func (s *Service) loadEnvOpt(ctx context.Context, c Caller, withCompany bool) (*environment, error) {
 	cat, err := s.catalog(ctx)
 	if err != nil {
 		return nil, err
@@ -71,8 +99,8 @@ func (s *Service) loadEnv(ctx context.Context, c Caller) (*environment, error) {
 		return nil, err
 	}
 	env := &environment{cat: cat, gateList: gl, settings: settings}
-	if s.Company != nil { // no company reader: every company check fails, which is the safe side
-		if env.company, err = s.Company.State(ctx, c.OrgID); err != nil {
+	if withCompany && s.Company != nil { // no company reader: every company check fails, which is the safe side
+		if env.company, err = s.Company.State(WithRegion(ctx, c.Region), c.OrgID); err != nil {
 			return nil, err
 		}
 	}
@@ -101,6 +129,10 @@ func (s *Service) checkInput(rec *hiringtypes.JobRecord, env *environment) *gate
 
 // PublishCheck is the dry run: the same checks publish enforces, with nothing written.
 func (s *Service) PublishCheck(ctx context.Context, c Caller, id string) (*gates.Report, error) {
+	return s.publishCheck(ctx, c, id, true)
+}
+
+func (s *Service) publishCheck(ctx context.Context, c Caller, id string, withCompany bool) (*gates.Report, error) {
 	if !c.can(rbac.JobEditDraft) && !c.can(rbac.JobPublishExternal) {
 		return nil, forbidden("you cannot check jobs for publishing")
 	}
@@ -108,7 +140,7 @@ func (s *Service) PublishCheck(ctx context.Context, c Caller, id string) (*gates
 	if err != nil {
 		return nil, err
 	}
-	env, err := s.loadEnv(ctx, c)
+	env, err := s.loadEnvOpt(ctx, c, withCompany)
 	if err != nil {
 		return nil, err
 	}
@@ -258,6 +290,10 @@ func (s *Service) newPublicID() string {
 // Compliance lists the gates that apply to a job with where each stands.
 func (s *Service) Compliance(ctx context.Context, c Caller, id string) ([]gates.State, error) {
 	r, err := s.PublishCheck(ctx, c, id)
+	if errors.Is(err, ErrCompanyUnavailable) {
+		// The gate list does not depend on the company's readiness: show it while org is unreachable.
+		r, err = s.publishCheck(ctx, c, id, false)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +315,12 @@ func (s *Service) ConfirmGate(
 	if rec.Job.Status == jobs.StatusArchived {
 		return nil, ErrNotEditable
 	}
+	// Which gates apply and whether they are automatic does not depend on the company's readiness, so confirming
+	// a gate keeps working while the org service is down.
 	env, err := s.loadEnv(ctx, c)
+	if errors.Is(err, ErrCompanyUnavailable) {
+		env, err = s.loadEnvWithout(ctx, c)
+	}
 	if err != nil {
 		return nil, err
 	}

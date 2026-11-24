@@ -10,9 +10,9 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
 	"github.com/Angle-HR/server/internal/hiring/lifecycle"
-	"github.com/Angle-HR/server/internal/rbac"
 	"github.com/Angle-HR/server/pkg/formschema"
 	"github.com/Angle-HR/server/pkg/formschema/screening"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 // ---- hiring team (the Permissions step) ----

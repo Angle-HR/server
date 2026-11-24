@@ -24,36 +24,22 @@ var (
 )
 
 // NoticeVersion identifies the wording of the applicant privacy notice an application acknowledged. The text is
-// generated in notice.go and is a draft until counsel signs it off.
-const NoticeVersion = "2026-10-draft"
+// generated in notice.go and is a draft until counsel signs it off. The constant lives in formschema.
+const NoticeVersion = formschema.NoticeVersion
 
-// State is what a candidate may do with a job right now.
-type State string
+// State is what a candidate may do with a job right now. It is defined in formschema.
+type State = formschema.State
 
 // Job states as a candidate sees them.
 const (
-	StateOpen   State = "open"   // published and before the closing date: applications are accepted
-	StatePaused State = "paused" // visible, but not accepting applications for now
-	StateClosed State = "closed" // closed or expired: the page says so and search engines are told to drop it
+	StateOpen   = formschema.StateOpen
+	StatePaused = formschema.StatePaused
+	StateClosed = formschema.StateClosed
 )
 
-// StateOf derives the candidate-facing state. The closing date is the last day to apply, so a published job
-// stays open through it (UTC). The hourly expiry task catches up later; this makes the page correct before it
-// runs. The second result is false for statuses that are not public (draft, pending approval) and for archived
-// jobs, which the caller reports as not found or gone.
+// StateOf derives the candidate-facing state; see formschema.StateOf.
 func StateOf(status, closingDate string, now time.Time) (State, bool) {
-	switch status {
-	case jobs.StatusPublished:
-		if closingDate != "" && closingDate < now.UTC().Format("2006-01-02") {
-			return StateClosed, true
-		}
-		return StateOpen, true
-	case jobs.StatusPaused:
-		return StatePaused, true
-	case jobs.StatusClosed, jobs.StatusExpired:
-		return StateClosed, true
-	}
-	return "", false
+	return formschema.StateOf(status, closingDate, now)
 }
 
 // OpenJob is one row of the sitemap.

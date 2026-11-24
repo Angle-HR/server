@@ -3,6 +3,8 @@ package public
 import (
 	"net/url"
 	"strings"
+
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 // ShareLink is one ready-made link of the Share Kit.
@@ -18,26 +20,9 @@ type ShareKit struct {
 	Links  []ShareLink `json:"links"`
 }
 
-// shareChannels fixes the order and labels. Each channel's job link carries ?src=<channel>, so the application
-// can record which link brought the candidate.
-var shareChannels = []struct{ key, label string }{
-	{"whatsapp", "WhatsApp"}, {"x", "X"}, {"facebook", "Facebook"}, {"linkedin", "LinkedIn"},
-	{"telegram", "Telegram"}, {"email", "Email"},
-}
-
-// ValidSource reports whether src is a share channel the kit issues (or "direct"), so a stored source is always
-// one of a small known set instead of free text from the internet.
-func ValidSource(src string) bool {
-	if src == "direct" {
-		return true
-	}
-	for _, c := range shareChannels {
-		if c.key == src {
-			return true
-		}
-	}
-	return false
-}
+// ValidSource reports whether src is a share channel the kit issues (or "direct"). It lives in formschema so the
+// application side does not import this package.
+func ValidSource(src string) bool { return formschema.ValidSource(src) }
 
 // BuildShareKit builds the share links for a published job. siteURL has no trailing slash.
 func BuildShareKit(siteURL, publicID, title, company string) ShareKit {
@@ -47,10 +32,10 @@ func BuildShareKit(siteURL, publicID, title, company string) ShareKit {
 		text = title + " at " + company
 	}
 	kit := ShareKit{JobURL: base}
-	for _, c := range shareChannels {
-		link := base + "?src=" + c.key
+	for _, c := range formschema.ShareChannels {
+		link := base + "?src=" + c.Key
 		var u string
-		switch c.key {
+		switch c.Key {
 		case "whatsapp":
 			u = "https://wa.me/?text=" + url.QueryEscape(text+" "+link)
 		case "x":
@@ -64,7 +49,7 @@ func BuildShareKit(siteURL, publicID, title, company string) ShareKit {
 		case "email":
 			u = "mailto:?subject=" + url.PathEscape(text) + "&body=" + url.PathEscape(link)
 		}
-		kit.Links = append(kit.Links, ShareLink{Channel: c.key, Label: c.label, URL: u})
+		kit.Links = append(kit.Links, ShareLink{Channel: c.Key, Label: c.Label, URL: u})
 	}
 	return kit
 }

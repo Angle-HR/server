@@ -8,6 +8,9 @@ import (
 	"github.com/Angle-HR/server/pkg/formschema/screening"
 )
 
+// MarketOther is the market recorded for an applicant of an "anywhere" job whose country no launch market covers.
+const MarketOther = "OTHER"
+
 // MarketFor maps a candidate's country (ISO 3166-1 alpha-2) to the hiring market that covers it. The United
 // Kingdom is its own market (GB); the EU market covers its member states; every other launch market is one
 // country. The second result is false for a country no market covers.

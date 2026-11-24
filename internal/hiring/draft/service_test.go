@@ -10,8 +10,8 @@ import (
 	"github.com/Angle-HR/server/internal/hiring/drafttest"
 	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
 	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/rbac"
 	"github.com/Angle-HR/server/pkg/formschema"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 const dept = "44444444-4444-4444-8444-444444444444"

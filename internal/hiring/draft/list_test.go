@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Angle-HR/server/internal/rbac"
+	"github.com/Angle-HR/server/pkg/rbac"
 )
 
 func TestListFiltersNarrowTheList(t *testing.T) {

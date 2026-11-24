@@ -24,11 +24,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Angle-HR/server/internal/hiring/appjobs"
 	"github.com/Angle-HR/server/internal/hiring/apply"
-	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
-	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/public"
+	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/formschema"
+	"github.com/Angle-HR/server/pkg/platform/blob"
 )
 
 // Limits.
@@ -50,30 +50,11 @@ const (
 	statusRejected = "rejected"
 )
 
-// Storage is object storage as the upload step uses it. Implementations live in the r2 subpackage.
-type Storage interface {
-	// PresignPut returns a URL that accepts one PUT of the given content type until ttl has passed.
-	PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (PutTarget, error)
-	// Stat returns the size of an object, or ErrObjectNotFound.
-	Stat(ctx context.Context, key string) (int64, error)
-	// Open reads an object. The caller closes it.
-	Open(ctx context.Context, key string) (io.ReadCloser, error)
-	// Put writes an object from r.
-	Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) error
-	// PresignGet returns a short-lived download link. The browser saves the object under filename.
-	PresignGet(ctx context.Context, key string, ttl time.Duration, filename, contentType string) (string, error)
-	// Remove deletes an object; removing a missing object is not an error.
-	Remove(ctx context.Context, key string) error
-}
-
-// PutTarget is where and how the browser uploads.
-type PutTarget struct {
-	URL     string
-	Headers map[string]string
-}
+// Storage is object storage as the upload step uses it: the platform blob port. Adapters live in pkg/platform/blob.
+type Storage = blob.BlobStore
 
 // ErrObjectNotFound is returned by Storage.Stat and Open for a missing object.
-var ErrObjectNotFound = errors.New("uploads: object not found")
+var ErrObjectNotFound = blob.ErrNotFound
 
 // Record is one row of hiring.application_files.
 type Record struct {
@@ -97,9 +78,8 @@ type Record struct {
 
 // Store is one region's database as the upload step uses it.
 type Store interface {
-	LoadForApply(ctx context.Context, tenantID, publicID string) (*apply.Target, error)
 	InsertUpload(ctx context.Context, tenantID string, r *Record) error
-	// GetUpload returns hiringtypes.ErrNotFound when the id is unknown for the company.
+	// GetUpload returns apperror.ErrNotFound when the id is unknown for the company.
 	GetUpload(ctx context.Context, tenantID, id string) (*Record, error)
 	MarkUploadClean(ctx context.Context, tenantID, id string, size int64, sha256hex string) error
 	RejectUpload(ctx context.Context, tenantID, id string) error
@@ -113,7 +93,8 @@ type Directory interface {
 
 // Service issues upload URLs and claims uploads. It implements apply.Uploads.
 type Service struct {
-	Registry  public.Registry
+	// Jobs finds a job by public id and reads it with its frozen form.
+	Jobs      appjobs.JobSource
 	Directory Directory
 	Scanner   Scanner // used for every region without its own entry in Scanners; one of the two is required
 	// Scanners holds a scanner per region (registry region name), so a file is scanned where it is stored.
@@ -214,7 +195,7 @@ func (s *Service) Presign(ctx context.Context, in PresignInput) (*Presigned, err
 	}); err != nil {
 		return nil, err
 	}
-	entry, err := s.Registry.LookupJob(ctx, in.PublicID)
+	entry, err := s.Jobs.LookupJob(ctx, in.PublicID)
 	if err != nil {
 		return nil, err
 	}
@@ -225,17 +206,21 @@ func (s *Service) Presign(ctx context.Context, in PresignInput) (*Presigned, err
 	if err != nil {
 		return nil, fmt.Errorf("uploads: region %q: %w", entry.Region, err)
 	}
-	t, err := store.LoadForApply(ctx, entry.OrganizationID, in.PublicID)
+	rj, err := s.Jobs.Regional(entry.Region)
+	if err != nil {
+		return nil, fmt.Errorf("uploads: region %q: %w", entry.Region, err)
+	}
+	t, err := rj.LoadForApply(ctx, entry.OrganizationID, in.PublicID)
 	if err != nil {
 		return nil, err
 	}
-	state, ok := public.StateOf(t.Status, t.ClosingDate, s.now())
+	state, ok := formschema.StateOf(t.Status, t.ClosingDate, s.now())
 	switch {
-	case t.Status == jobs.StatusArchived:
+	case t.Status == formschema.StatusArchived:
 		return nil, apply.ErrGone
 	case !ok:
 		return nil, apply.ErrNotFound
-	case state != public.StateOpen:
+	case state != formschema.StateOpen:
 		return nil, apply.ErrNotAccepting
 	}
 
@@ -293,12 +278,14 @@ func (s *Service) Presign(ctx context.Context, in PresignInput) (*Presigned, err
 	if err != nil {
 		return nil, fmt.Errorf("uploads: storage for %q: %w", entry.Region, err)
 	}
-	put, err := st.PresignPut(ctx, StagingKey(rec.TenantID, rec.JobID, id), rec.ContentType, PresignTTL)
+	put, err := st.PresignPut(ctx, StagingKey(rec.TenantID, rec.JobID, id), blob.PutOptions{
+		ContentType: rec.ContentType, MaxBytes: maxBytes, TTL: PresignTTL,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("uploads: presign: %w", err)
 	}
 	return &Presigned{
-		Token: id, Method: "PUT", URL: put.URL, Headers: put.Headers,
+		Token: id, Method: put.Method, URL: put.URL, Headers: put.Headers,
 		ExpiresAt: now.Add(PresignTTL), MaxBytes: maxBytes,
 	}, nil
 }
@@ -334,7 +321,7 @@ func (s *Service) Claim(ctx context.Context, req apply.ClaimRequest) (apply.File
 		return apply.File{}, fmt.Errorf("uploads: region %q: %w", req.Region, err)
 	}
 	rec, err := store.GetUpload(ctx, req.TenantID, req.Token)
-	if errors.Is(err, hiringtypes.ErrNotFound) {
+	if errors.Is(err, apperror.ErrNotFound) {
 		return apply.File{}, rejected("unknown token")
 	}
 	if err != nil {
@@ -362,7 +349,7 @@ func (s *Service) Claim(ctx context.Context, req apply.ClaimRequest) (apply.File
 	stage := StagingKey(rec.TenantID, rec.JobID, rec.ID)
 
 	reject := func(why string) (apply.File, error) {
-		if err := st.Remove(ctx, stage); err != nil && s.Logger != nil {
+		if err := st.Delete(ctx, stage); err != nil && s.Logger != nil {
 			s.Logger.Warn("uploads: remove rejected object", "error", err)
 		}
 		if err := store.RejectUpload(ctx, rec.TenantID, rec.ID); err != nil && s.Logger != nil {
@@ -426,7 +413,7 @@ func (s *Service) Claim(ctx context.Context, req apply.ClaimRequest) (apply.File
 	if err = store.MarkUploadClean(ctx, rec.TenantID, rec.ID, int64(len(data)), hexSum); err != nil {
 		return apply.File{}, fmt.Errorf("uploads: mark clean: %w", err)
 	}
-	if err = st.Remove(ctx, stage); err != nil && s.Logger != nil {
+	if err = st.Delete(ctx, stage); err != nil && s.Logger != nil {
 		s.Logger.Warn("uploads: remove staging object", "error", err)
 	}
 	return apply.File{ID: rec.ID, QuestionID: rec.QuestionID, SizeBytes: int64(len(data)), SHA256: hexSum}, nil

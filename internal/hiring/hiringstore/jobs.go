@@ -201,6 +201,7 @@ func (s *Store) UpdateJob(
 		if ifMatch != 0 && cur.Job.Revision != ifMatch {
 			return &StaleRevisionError{Current: cur.Job.Revision}
 		}
+		from := cur.Job.Status
 		res, err := fn(cur)
 		if err != nil {
 			return err
@@ -208,7 +209,13 @@ func (s *Store) UpdateJob(
 		if res == nil {
 			return nil
 		}
-		return applyUpdate(ctx, tx, tenantID, actorID, id, res)
+		if err = applyUpdate(ctx, tx, tenantID, actorID, id, res); err != nil {
+			return err
+		}
+		if err = s.emitJobEvents(ctx, tx, tenantID, id, from, res); err != nil {
+			return err
+		}
+		return s.emitMembersChanged(ctx, tx, tenantID, id, res)
 	})
 	if err != nil {
 		return nil, err
@@ -559,6 +566,9 @@ func loadDeclarations(ctx context.Context, tx pgx.Tx, id string) ([]formschema.D
 
 // listJobsSQL is the jobs list query. The two %s are the sort column and the keyset direction, both picked from
 // fixed lists in ListJobs, never from user text.
+// NOTE: job_applicant_counts belongs to the applications side. The list no longer reads it: the two trailing
+// columns are zero placeholders and draft.Service fills the counters of the page through draft.ApplicantCounts
+// (applicantcounts.DB reads the table, applicantcounts.GRPC calls ApplicationsService.GetApplicantCounts).
 const listJobsSQL = `
 SELECT j.id::text, j.job_number, j.status, COALESCE(j.title, ''), COALESCE(d.name, ''),
        COALESCE(j.employment_type, ''), COALESCE(j.location_mode, ''), j.current_step, j.revision,
@@ -570,15 +580,9 @@ SELECT j.id::text, j.job_number, j.status, COALESCE(j.title, ''), COALESCE(d.nam
        COALESCE(j.workplace_type, ''),
        COALESCE(to_char(j.published_at AT TIME ZONE 'UTC', '` + tsLayout + `'), ''),
        COALESCE(to_char(j.closing_date, 'YYYY-MM-DD'), ''),
-       COALESCE((SELECT array_agg(jm.user_id::text ORDER BY jm.user_id)
-                 FROM hiring.job_members jm JOIN accounts.users u ON u.id = jm.user_id AND u.deleted_at IS NULL
-                 WHERE jm.job_id = j.id AND jm.role = 'hiring_manager'), '{}'),
-       COALESCE((SELECT array_agg(COALESCE(NULLIF(trim(concat_ws(' ', u.first_name, u.last_name)), ''),
-                                           u.legal_full_name, '') ORDER BY jm.user_id)
-                 FROM hiring.job_members jm JOIN accounts.users u ON u.id = jm.user_id AND u.deleted_at IS NULL
-                 WHERE jm.job_id = j.id AND jm.role = 'hiring_manager'), '{}'),
-       COALESCE((SELECT c.applicant_count FROM hiring.job_applicant_counts c WHERE c.job_id = j.id), 0),
-       COALESCE((SELECT c.new_applicant_count FROM hiring.job_applicant_counts c WHERE c.job_id = j.id), 0)
+       %[4]s,
+       %[5]s,
+       0, 0 -- applicant counters are filled in by draft.ApplicantCounts (db or ApplicationsService.GetApplicantCounts)
 FROM hiring.job_postings j
 LEFT JOIN hiring.departments d ON d.id = j.department_id
 WHERE j.tenant_id = $1::uuid AND j.deleted_at IS NULL
@@ -603,7 +607,7 @@ ORDER BY j.%[1]s %[3]s, j.id %[3]s
 LIMIT $8`
 
 // listSQL fills in the sort column and direction. Anything not on the fixed lists falls back to newest updated.
-func listSQL(sortKey string, ascending bool) string {
+func listSQL(sortKey string, ascending bool, remoteUsers bool) string {
 	col := "updated_at"
 	if sortKey == SortCreated {
 		col = "created_at"
@@ -612,7 +616,19 @@ func listSQL(sortKey string, ascending bool) string {
 	if ascending {
 		cmp, dir = ">", "ASC"
 	}
-	return fmt.Sprintf(listJobsSQL, col, cmp, dir)
+	ids := `COALESCE((SELECT array_agg(jm.user_id::text ORDER BY jm.user_id)
+                 FROM hiring.job_members jm JOIN accounts.users u ON u.id = jm.user_id AND u.deleted_at IS NULL
+                 WHERE jm.job_id = j.id AND jm.role = 'hiring_manager'), '{}')`
+	names := `COALESCE((SELECT array_agg(COALESCE(NULLIF(trim(concat_ws(' ', u.first_name, u.last_name)), ''),
+                                           u.legal_full_name, '') ORDER BY jm.user_id)
+                 FROM hiring.job_members jm JOIN accounts.users u ON u.id = jm.user_id AND u.deleted_at IS NULL
+                 WHERE jm.job_id = j.id AND jm.role = 'hiring_manager'), '{}')`
+	if remoteUsers { // IDENTITY_USERS=grpc: ids only; names and the active filter come from identity afterwards
+		ids = `COALESCE((SELECT array_agg(jm.user_id::text ORDER BY jm.user_id)
+                 FROM hiring.job_members jm WHERE jm.job_id = j.id AND jm.role = 'hiring_manager'), '{}')`
+		names = `'{}'::text[]`
+	}
+	return fmt.Sprintf(listJobsSQL, col, cmp, dir, ids, names)
 }
 
 // SortCreated and SortUpdated mirror the sort keys of hiringtypes so callers in this package read plainly.
@@ -667,7 +683,7 @@ func (s *Store) ListJobs(ctx context.Context, tenantID string, f *ListFilter) ([
 		}
 		curTS, curID = &ts, &id
 	}
-	query := listSQL(f.Sort, f.Ascending)
+	query := listSQL(f.Sort, f.Ascending, s.Users != nil)
 
 	var items []ListItem
 	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
@@ -717,6 +733,11 @@ func (s *Store) ListJobs(ctx context.Context, tenantID string, f *ListFilter) ([
 	}
 	if items == nil {
 		items = []ListItem{}
+	}
+	if s.Users != nil {
+		if err := s.fillManagerNames(ctx, items); err != nil {
+			return nil, "", err
+		}
 	}
 	return items, next, nil
 }
@@ -857,4 +878,37 @@ func (s *Store) CountJobs(ctx context.Context, tenantID string, f *ListFilter) (
 		return rows.Err()
 	})
 	return out, err
+}
+
+// fillManagerNames resolves the hiring managers' names through identity (IDENTITY_USERS=grpc) in one batch for the
+// whole page. A manager identity does not return (deactivated) is dropped, as the accounts.users join did.
+func (s *Store) fillManagerNames(ctx context.Context, items []ListItem) error {
+	seen := map[string]bool{}
+	var ids []string
+	for _, it := range items {
+		for _, m := range it.Managers {
+			if !seen[m.UserID] {
+				seen[m.UserID] = true
+				ids = append(ids, m.UserID)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	names, err := s.Users.Names(ctx, s.Region, ids)
+	if err != nil {
+		return fmt.Errorf("hiringstore: manager names: %w", err)
+	}
+	for i := range items {
+		kept := items[i].Managers[:0]
+		for _, m := range items[i].Managers {
+			if n, ok := names[m.UserID]; ok {
+				m.Name = n
+				kept = append(kept, m)
+			}
+		}
+		items[i].Managers = kept
+	}
+	return nil
 }

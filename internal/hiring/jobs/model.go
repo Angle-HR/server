@@ -7,17 +7,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/Angle-HR/server/pkg/formschema"
 )
 
 // Job statuses. Phase 1 only creates and edits drafts.
 const (
-	StatusDraft           = "draft"
-	StatusPendingApproval = "pending_approval"
-	StatusPublished       = "published"
-	StatusPaused          = "paused"
-	StatusClosed          = "closed"
-	StatusArchived        = "archived"
-	StatusExpired         = "expired"
+	StatusDraft           = formschema.StatusDraft
+	StatusPendingApproval = formschema.StatusPendingApproval
+	StatusPublished       = formschema.StatusPublished
+	StatusPaused          = formschema.StatusPaused
+	StatusClosed          = formschema.StatusClosed
+	StatusArchived        = formschema.StatusArchived
+	StatusExpired         = formschema.StatusExpired
 )
 
 // Data sections a draft is tracked by (the PRD steps and the Figma screens both save into these).
@@ -81,7 +83,7 @@ var DescriptionKeys = []string{
 }
 
 // DefaultRetentionMonths is the retention period of a new job.
-const DefaultRetentionMonths = 6
+const DefaultRetentionMonths = formschema.DefaultRetentionMonths
 
 // Sections is the structured job description: the rich-text editor's JSON, one document per key.
 type Sections map[string]json.RawMessage
@@ -178,10 +180,7 @@ type Job struct {
 func JobCode(n int) string { return fmt.Sprintf("JB-%d", n) }
 
 // FieldError points at the part of a request that is wrong, e.g. markets[1].timezone.
-type FieldError struct {
-	Path    string `json:"path"`
-	Message string `json:"message"`
-}
+type FieldError = formschema.FieldError
 
 // Warning is advice shown next to a field; it never blocks a save.
 type Warning struct {

@@ -10,25 +10,33 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Angle-HR/server/internal/hiring/appjobs"
 	"github.com/Angle-HR/server/internal/hiring/apply"
-	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
-	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/public"
 	"github.com/Angle-HR/server/internal/sensitive"
 	"github.com/Angle-HR/server/pkg/formschema"
 	"github.com/Angle-HR/server/pkg/formschema/screening"
 )
 
-type fakeRegistry struct{}
+// fakeJobs is the JobSource: a registry that knows one job and a region whose job comes from the fake store.
+type fakeJobs struct{ st *fakeStore }
 
-func (fakeRegistry) LookupJob(_ context.Context, id string) (hiringtypes.RegistryEntry, error) {
+func (fakeJobs) LookupJob(_ context.Context, id string) (appjobs.Ref, error) {
 	if id != "jabcdefghijkl" {
-		return hiringtypes.RegistryEntry{}, apply.ErrNotFound
+		return appjobs.Ref{}, apply.ErrNotFound
 	}
-	return hiringtypes.RegistryEntry{PublicID: id, Region: "uk", OrganizationID: "org-1"}, nil
+	return appjobs.Ref{PublicID: id, Region: "uk", OrganizationID: "org-1"}, nil
 }
 
-func (fakeRegistry) ListOpenJobs(context.Context, int) ([]public.OpenJob, error) { return nil, nil }
+func (j fakeJobs) Regional(string) (appjobs.RegionalJobs, error) { return regionalJobs{st: j.st}, nil }
+
+type regionalJobs struct {
+	appjobs.RegionalJobs // methods the apply step does not call
+	st                   *fakeStore
+}
+
+func (r regionalJobs) LoadForApply(ctx context.Context, tenantID, publicID string) (*apply.Target, error) {
+	return r.st.LoadForApply(ctx, tenantID, publicID)
+}
 
 type fakeStore struct {
 	mu      sync.Mutex
@@ -131,7 +139,7 @@ func options() json.RawMessage {
 
 func target() *apply.Target {
 	return &apply.Target{
-		JobID: "job-1", JobCode: "JB-1", Status: jobs.StatusPublished, ClosingDate: "2026-11-30",
+		JobID: "job-1", JobCode: "JB-1", Status: formschema.StatusPublished, ClosingDate: "2026-11-30",
 		LawfulBasis: "legitimate_interests", RetentionMonths: 6, Markets: []string{"UK", "EU"},
 		FormID: "form-1", FormVersion: 2,
 		Questions: []formschema.FormQuestion{
@@ -146,7 +154,7 @@ func target() *apply.Target {
 
 func service(st *fakeStore, lim apply.Limiter) *apply.Service {
 	return &apply.Service{
-		Registry: fakeRegistry{}, Directory: fakeDir{s: st}, Limiter: lim,
+		Jobs: fakeJobs{st}, Directory: fakeDir{s: st}, Limiter: lim,
 		Now: func() time.Time { return now },
 	}
 }
@@ -193,7 +201,7 @@ func TestSubmitStoresAValidApplication(t *testing.T) {
 	if a.FormID != "form-1" || a.FormVersion != 2 || a.JobID != "job-1" {
 		t.Errorf("job/form: %+v", a)
 	}
-	if a.NoticeVersion != public.NoticeVersion || a.NoticeAcknowledgedAt.IsZero() || a.ConsentAt != nil {
+	if a.NoticeVersion != formschema.NoticeVersion || a.NoticeAcknowledgedAt.IsZero() || a.ConsentAt != nil {
 		t.Errorf("notice/consent: %+v", a)
 	}
 	// Closing date 30 Nov is the last day to apply: retention counts from the day after, plus 6 months.
@@ -279,6 +287,43 @@ func TestCountryMustBelongToAMarketOfTheJob(t *testing.T) {
 	}
 }
 
+func TestAnywhereJobAcceptsEveryValidCountry(t *testing.T) {
+	tg := target()
+	tg.Markets, tg.Anywhere = []string{}, true
+	st := &fakeStore{target: tg}
+	svc := service(st, nil)
+	want := map[string]string{"GB": "UK", "KE": "KE", "FR": "EU", "BR": "OTHER", "JP": "OTHER"}
+	for country, market := range want {
+		in := input()
+		in.CandidateCountry = country
+		in.Answers["mail"] = json.RawMessage(`"` + country + `@example.com"`)
+		if _, err := svc.Submit(context.Background(), in); err != nil {
+			t.Errorf("%s should be accepted: %v", country, err)
+			continue
+		}
+		if got := st.saved[len(st.saved)-1]; got.Country != country || got.Market != market {
+			t.Errorf("%s stored as %s/%s, want market %s", country, got.Country, got.Market, market)
+		}
+	}
+	// The code itself is still validated.
+	for _, bad := range []string{"", "ZZ", "GBR", "1"} {
+		in := input()
+		in.CandidateCountry = bad
+		if f := fields(t, mustErr(t, svc, in)); f["candidate_country"] == "" {
+			t.Errorf("%q must be refused: %v", bad, f)
+		}
+	}
+}
+
+func mustErr(t *testing.T, svc *apply.Service, in apply.Input) error {
+	t.Helper()
+	_, err := svc.Submit(context.Background(), in)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	return err
+}
+
 func TestConsentRequiredWhenLawfulBasisIsConsent(t *testing.T) {
 	tg := target()
 	tg.LawfulBasis = "consent"
@@ -302,12 +347,12 @@ func TestOnlyOpenJobsAcceptApplications(t *testing.T) {
 		status, closing string
 		want            error
 	}{
-		{jobs.StatusPaused, "2026-11-30", apply.ErrNotAccepting},
-		{jobs.StatusClosed, "", apply.ErrNotAccepting},
-		{jobs.StatusExpired, "", apply.ErrNotAccepting},
-		{jobs.StatusPublished, "2026-10-15", apply.ErrNotAccepting}, // closing date passed
-		{jobs.StatusArchived, "", apply.ErrGone},
-		{jobs.StatusDraft, "", apply.ErrNotFound},
+		{formschema.StatusPaused, "2026-11-30", apply.ErrNotAccepting},
+		{formschema.StatusClosed, "", apply.ErrNotAccepting},
+		{formschema.StatusExpired, "", apply.ErrNotAccepting},
+		{formschema.StatusPublished, "2026-10-15", apply.ErrNotAccepting}, // closing date passed
+		{formschema.StatusArchived, "", apply.ErrGone},
+		{formschema.StatusDraft, "", apply.ErrNotFound},
 	}
 	for _, c := range cases {
 		tg := target()
@@ -764,7 +809,7 @@ func TestRetentionUntil(t *testing.T) {
 		t.Errorf("closing date in the past starts from now: %v want %v", got, want)
 	}
 	if got := apply.RetentionUntil(n, "", 0); !got.Equal(time.Date(2027, 4, 16, 12, 0, 0, 0, time.UTC)) {
-		t.Errorf("months default to %d: %v", jobs.DefaultRetentionMonths, got)
+		t.Errorf("months default to %d: %v", formschema.DefaultRetentionMonths, got)
 	}
 }
 

@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Angle-HR/server/internal/hiring/appjobs"
 	"github.com/Angle-HR/server/internal/hiring/apply"
-	"github.com/Angle-HR/server/internal/hiring/hiringtypes"
-	"github.com/Angle-HR/server/internal/hiring/jobs"
-	"github.com/Angle-HR/server/internal/hiring/public"
 	"github.com/Angle-HR/server/internal/hiring/uploads"
+	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/formschema"
+	"github.com/Angle-HR/server/pkg/platform/blob"
 )
 
 var now = time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
@@ -32,8 +32,15 @@ type fakeStorage struct {
 
 func newStorage() *fakeStorage { return &fakeStorage{objects: map[string][]byte{}} }
 
-func (f *fakeStorage) PresignPut(_ context.Context, key, ct string, ttl time.Duration) (uploads.PutTarget, error) {
-	return uploads.PutTarget{URL: "https://r2.test/" + key + "?ttl=" + ttl.String(), Headers: map[string]string{"Content-Type": ct}}, nil
+func (f *fakeStorage) PresignPut(_ context.Context, key string, o blob.PutOptions) (blob.PutTarget, error) {
+	return blob.PutTarget{
+		URL: "https://r2.test/" + key + "?ttl=" + o.TTL.String(), Method: "PUT",
+		Headers: map[string]string{"Content-Type": o.ContentType},
+	}, nil
+}
+func (f *fakeStorage) Exists(ctx context.Context, key string) (bool, error) {
+	_, err := f.Stat(ctx, key)
+	return err == nil, nil
 }
 func (f *fakeStorage) Stat(_ context.Context, key string) (int64, error) {
 	f.mu.Lock()
@@ -61,10 +68,10 @@ func (f *fakeStorage) Put(_ context.Context, key string, r io.Reader, _ int64, _
 	f.puts = append(f.puts, key)
 	return nil
 }
-func (f *fakeStorage) PresignGet(_ context.Context, key string, _ time.Duration, _, _ string) (string, error) {
+func (f *fakeStorage) PresignGet(_ context.Context, key string, _ blob.GetOptions) (string, error) {
 	return "https://r2.test/" + key, nil
 }
-func (f *fakeStorage) Remove(_ context.Context, key string) error {
+func (f *fakeStorage) Delete(_ context.Context, key string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	delete(f.objects, key)
@@ -81,9 +88,6 @@ func newStore(t *apply.Target) *fakeStore {
 	return &fakeStore{target: t, rows: map[string]*uploads.Record{}}
 }
 
-func (f *fakeStore) LoadForApply(context.Context, string, string) (*apply.Target, error) {
-	return f.target, nil
-}
 func (f *fakeStore) InsertUpload(_ context.Context, _ string, r *uploads.Record) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -96,7 +100,7 @@ func (f *fakeStore) GetUpload(_ context.Context, _, id string) (*uploads.Record,
 	defer f.mu.Unlock()
 	r, ok := f.rows[id]
 	if !ok {
-		return nil, hiringtypes.ErrNotFound
+		return nil, apperror.ErrNotFound
 	}
 	c := *r
 	return &c, nil
@@ -123,15 +127,26 @@ type dir struct {
 func (d dir) Store(string) (uploads.Store, error)     { return d.st, nil }
 func (d dir) Storage(string) (uploads.Storage, error) { return d.sg, nil }
 
-type registry struct{}
+// jobSource knows one job and serves it from the fake store.
+type jobSource struct{ st *fakeStore }
 
-func (registry) LookupJob(_ context.Context, id string) (hiringtypes.RegistryEntry, error) {
+func (jobSource) LookupJob(_ context.Context, id string) (appjobs.Ref, error) {
 	if id != "jabc" {
-		return hiringtypes.RegistryEntry{}, hiringtypes.ErrNotFound
+		return appjobs.Ref{}, apperror.ErrNotFound
 	}
-	return hiringtypes.RegistryEntry{Region: "uk", OrganizationID: "org-1"}, nil
+	return appjobs.Ref{Region: "uk", OrganizationID: "org-1"}, nil
 }
-func (registry) ListOpenJobs(context.Context, int) ([]public.OpenJob, error) { return nil, nil }
+
+func (j jobSource) Regional(string) (appjobs.RegionalJobs, error) { return regionalJobs{st: j.st}, nil }
+
+type regionalJobs struct {
+	appjobs.RegionalJobs // methods the upload step does not call
+	st                   *fakeStore
+}
+
+func (r regionalJobs) LoadForApply(context.Context, string, string) (*apply.Target, error) {
+	return r.st.target, nil
+}
 
 type fakeScanner struct {
 	verdict uploads.Verdict
@@ -154,7 +169,7 @@ func (l *fakeLimiter) Allow(context.Context, string, int, time.Duration) (bool, 
 
 func target() *apply.Target {
 	return &apply.Target{
-		JobID: "job-1", Status: jobs.StatusPublished, ClosingDate: "2026-11-30", LawfulBasis: "legitimate_interests",
+		JobID: "job-1", Status: formschema.StatusPublished, ClosingDate: "2026-11-30", LawfulBasis: "legitimate_interests",
 		Questions: []formschema.FormQuestion{
 			{ID: "cv", Type: "autofill_resume", Config: []byte(`{"max_mb":5,"accept":["pdf"]}`)},
 			{ID: "photo", Type: "image_upload", Config: []byte(`{}`)},
@@ -174,7 +189,7 @@ type env struct {
 func setup(t *apply.Target) env {
 	st, sg, sc := newStore(t), newStorage(), &fakeScanner{verdict: uploads.Verdict{Clean: true}}
 	return env{
-		svc: &uploads.Service{Registry: registry{}, Directory: dir{st, sg}, Scanner: sc, Now: func() time.Time { return now }},
+		svc: &uploads.Service{Jobs: jobSource{st}, Directory: dir{st, sg}, Scanner: sc, Now: func() time.Time { return now }},
 		st:  st, sg: sg, sc: sc,
 	}
 }
@@ -270,15 +285,15 @@ func TestPresignRefusals(t *testing.T) {
 	if _, err := e.svc.Presign(context.Background(), in(func(p *uploads.PresignInput) { p.QuestionID = "health" })); !errors.Is(err, apply.ErrSensitiveUnavailable) {
 		t.Errorf("special category file: %v", err)
 	}
-	if _, err := e.svc.Presign(context.Background(), in(func(p *uploads.PresignInput) { p.PublicID = "nope" })); !errors.Is(err, hiringtypes.ErrNotFound) {
+	if _, err := e.svc.Presign(context.Background(), in(func(p *uploads.PresignInput) { p.PublicID = "nope" })); !errors.Is(err, apperror.ErrNotFound) {
 		t.Errorf("unknown job: %v", err)
 	}
 }
 
 func TestPresignJobStates(t *testing.T) {
 	for status, want := range map[string]error{
-		jobs.StatusPaused: apply.ErrNotAccepting, jobs.StatusClosed: apply.ErrNotAccepting, jobs.StatusExpired: apply.ErrNotAccepting,
-		jobs.StatusArchived: apply.ErrGone, jobs.StatusDraft: apply.ErrNotFound,
+		formschema.StatusPaused: apply.ErrNotAccepting, formschema.StatusClosed: apply.ErrNotAccepting, formschema.StatusExpired: apply.ErrNotAccepting,
+		formschema.StatusArchived: apply.ErrGone, formschema.StatusDraft: apply.ErrNotFound,
 	} {
 		tg := target()
 		tg.Status = status

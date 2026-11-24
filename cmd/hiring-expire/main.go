@@ -13,11 +13,16 @@ import (
 
 	"github.com/joho/godotenv"
 
+	orgv1 "github.com/Angle-HR/server/gen/openhr/org/v1"
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/hiring/draft"
 	"github.com/Angle-HR/server/internal/hiring/expiry"
 	"github.com/Angle-HR/server/internal/hiring/hiringstore"
+	"github.com/Angle-HR/server/internal/hiring/jobevents"
+	"github.com/Angle-HR/server/internal/hiring/orgclient"
+	"github.com/Angle-HR/server/internal/hiringsvc"
 	"github.com/Angle-HR/server/pkg/db"
+	"github.com/Angle-HR/server/pkg/events/outbox"
 	"github.com/Angle-HR/server/pkg/logger"
 )
 
@@ -60,16 +65,35 @@ func run() error {
 	}
 	defer router.Close()
 
+	var orgClient orgclient.OrgClient
+	if os.Getenv("ORG_TENANTS") == "grpc" {
+		addr := os.Getenv("ORG_GRPC_ADDR")
+		if addr == "" {
+			return errors.New("ORG_TENANTS=grpc requires ORG_GRPC_ADDR")
+		}
+		conn, derr := hiringsvc.Dial(addr, orgclient.DefaultTimeout)
+		if derr != nil {
+			return fmt.Errorf("dial org: %w", derr)
+		}
+		defer func() { _ = conn.Close() }()
+		orgClient = orgv1.NewOrgServiceClient(conn)
+	}
 	failed := false
+	pools := map[string]outbox.DB{}
 	for _, reg := range dbrouter.Regions() {
 		pool, err := router.DB(reg)
 		if err != nil {
 			slogger.Warn("hiring expire: region skipped", "region", string(reg), "error", err)
 			continue
 		}
-		store := &hiringstore.Store{DB: pool}
+		pools[string(reg)] = pool
+		store := &hiringstore.Store{DB: pool, Region: string(reg)}
+		tenants := store.TenantIDs
+		if os.Getenv("ORG_TENANTS") == "grpc" { // ListCompanies instead of reading accounts.organizations
+			tenants = (&orgclient.GRPCTenants{Client: orgClient, Region: string(reg)}).TenantIDs
+		}
 		sweeper := &expiry.Sweeper{
-			Tenants: store.TenantIDs,
+			Tenants: tenants,
 			Expirer: &draft.Service{Store: store, Ref: &hiringstore.Global{DB: global}},
 			Logger:  slogger,
 		}
@@ -81,6 +105,11 @@ func run() error {
 			continue
 		}
 		slogger.Info("hiring expire done", attrs...)
+	}
+	if jobevents.Enabled() { // the job has no long-running relay: publish what the run left in the outboxes
+		if err := drainOutboxes(ctx, slogger, pools); err != nil {
+			return fmt.Errorf("hiring expire: drain outbox: %w", err)
+		}
 	}
 	if failed {
 		return errors.New("hiring expire: one or more regions failed")

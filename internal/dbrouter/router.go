@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -129,8 +131,8 @@ func newPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("parse postgres config: %w", err)
 	}
 
-	cfg.MaxConns = 10
-	cfg.MinConns = 2
+	cfg.MaxConns = poolSize("DB_POOL_MAX_CONNS", 10)
+	cfg.MinConns = poolSize("DB_POOL_MIN_CONNS", 2)
 	cfg.MaxConnLifetime = time.Hour
 	cfg.HealthCheckPeriod = poolHealthCheckPeriod
 	if cfg.ConnConfig.RuntimeParams == nil {
@@ -248,4 +250,14 @@ func (r *DBRouter) Close() {
 		}
 		delete(r.pools, reg)
 	}
+}
+
+// poolSize reads a pool bound from the environment (DB_POOL_MAX_CONNS, DB_POOL_MIN_CONNS), the same variables the
+// global pool honours. Small deployments (one shared Postgres instance behind several services) lower them.
+func poolSize(key string, fallback int32) int32 {
+	n, err := strconv.ParseInt(os.Getenv(key), 10, 32)
+	if err != nil || n < 0 {
+		return fallback
+	}
+	return int32(n)
 }

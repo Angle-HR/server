@@ -17,17 +17,12 @@ RUN test -n "$SERVICE" || { echo "build arg SERVICE is required" >&2; exit 1; }
 RUN test -d "cmd/$SERVICE" || { echo "cmd/$SERVICE does not exist yet: this service has not been extracted" >&2; exit 1; }
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/service "./cmd/$SERVICE"
-# Operator one-offs shipped in every service image (they use the service's own environment and network):
-#   docker compose run --rm --entrypoint totp-rekey identity -dry-run
-RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/totp-rekey ./cmd/totp-rekey
 
 FROM alpine:3.21
 ARG SERVICE
 RUN apk add --no-cache ca-certificates wget tzdata \
     && addgroup -S -g 10001 app && adduser -S -u 10001 -G app app
 COPY --from=builder /out/service /usr/local/bin/service
-COPY --from=builder /out/totp-rekey /usr/local/bin/totp-rekey
 
 ENV SERVICE_NAME=$SERVICE \
     HTTP_ADDR=:8080 \

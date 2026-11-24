@@ -9,7 +9,7 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /server ./cmd/server
 RUN CGO_ENABLED=0 GOOS=linux go build -o /email-worker ./cmd/email-worker
-RUN for job in applications-jobmodel-rebuild hiring-expire hiring-jobs-backfill hiring-outbox hiring-retention hiring-uploads-sweep kyb-sweep org-backfill-individuals totp-rekey; do \
+RUN for job in hiring-expire hiring-outbox hiring-retention hiring-uploads-sweep kyb-sweep; do \
 		CGO_ENABLED=0 GOOS=linux go build -o /jobs/$job ./cmd/$job || exit 1; \
 	done
 

@@ -23,16 +23,8 @@ Anything else (development, test, unset) keeps the development default. Note: `c
 2. Set `TOTP_ENCRYPTION_KEY=<new>` and `TOTP_ENCRYPTION_KEY_PREVIOUS=<old>` (the old value is the old
    `TOTP_ENCRYPTION_KEY`, or the old `JWT_SECRET` if it was relying on the fallback). Deploy every service that decrypts
    secrets. Nothing breaks: old secrets still open, new ones are written under the new key.
-3. Re-encrypt the stored secrets: `make totp-rekey-dry-run` (equivalent to `go run ./cmd/totp-rekey -dry-run`) reports
-   counts per region; then run `go run ./cmd/totp-rekey` with the same environment, which needs
-   `ANGLEHR_<REGION>_POSTGRES_DSN` for the regions to process. Each row is updated with a compare-and-swap on the old
-   ciphertext, so a concurrent enrolment is never overwritten and the command is safe to re-run. It exits non-zero and
-   lists the user ids when a secret opens with none of the configured keys (leave those: they need the missing key).
-4. Re-run the dry run until it reports `rekeyed=0 unreadable=0`, then remove `TOTP_ENCRYPTION_KEY_PREVIOUS` and
-   `JWT_SECRET` from the environment and redeploy.
-
-The command is not in the container images; run it as a one-off task with the `jobs` image's Go toolchain, or from a
-workstation that can reach the databases.
+3. Rotation has no re-encrypt job: old secrets stay readable through `TOTP_ENCRYPTION_KEY_PREVIOUS` until users re-enrol,
+   so keep the previous key for as long as old secrets exist.
 
 ## 2. Request logging
 
@@ -173,12 +165,6 @@ first if one ever needs to be. Side effect of wait-for-ready: a TLS misconfigura
 Live check (all-remote stack, `GRPC_AUTH=mtls`): `docker compose up -d --force-recreate --no-deps applications` while
 `GET /jobs` through the BFF ran every 0.5 s (hiring reads applicant counters from applications over gRPC): 101 of 101 requests
 returned 200, the slowest took 1.05 s (the call that waited for the new container), the rest took under 100 ms.
-
-## 9. totp-rekey as a one-off container
-
-`cmd/totp-rekey` is built into the job image (`Dockerfile`, target `jobs`: command `/usr/local/bin/totp-rekey`) and into every
-local service image (`deploy/local/Dockerfile.service`). Locally, with the service's own environment and network:
-`docker compose run --rm --entrypoint totp-rekey identity -dry-run`, then without `-dry-run`.
 
 ## 10. Lint in CI
 

@@ -59,7 +59,7 @@ type Config struct {
 	AdminBootstrapName     string
 	// TOTPEncryptionKey encrypts TOTP secrets at rest (TOTP_ENCRYPTION_KEY). It is the only key new secrets are
 	// written with. TOTPEncryptionKeyPrevious (TOTP_ENCRYPTION_KEY_PREVIOUS, comma separated) lists retired keys
-	// that can still decrypt existing secrets while the key is being rotated (see cmd/totp-rekey).
+	// that can still decrypt existing secrets while the key is being rotated.
 	TOTPEncryptionKey string
 	// AdminTOTPRequired (ADMIN_TOTP_REQUIRED) forces every admin to enrol an authenticator: a password-only admin
 	// session can then do nothing but enrol. Unset it defaults to true in production-like environments (production,

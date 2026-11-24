@@ -113,11 +113,13 @@ are denylists, not an architecture checker, and a deny of `internal/app` is impo
 also hit `internal/applicationsvc`. Known gap: `internal/hiring/hiringhttp` imports applications packages today, so the
 reverse rule is not listed.
 
-**Caveat.** golangci-lint panics on the Go 1.26/1.27 mismatch of this workstation, so neither the new depguard rules nor
-the existing lint config were run. The rules were checked against the real import graph (`go list -test`), where none
-fires, but their glob syntax has not been exercised by depguard. Run `golangci-lint run` on a supported toolchain
-(a lint job in `go.yml` is the natural next step once the pinned golangci-lint version supports Go 1.26) and fix any
-pattern that does not match.
+**Verification.** The prebuilt golangci-lint release binaries panic on this toolchain; building golangci-lint v2.15.0 from
+source with the module's Go (`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0`) works. Running
+it exercised the rules: they fire on injected violations in `pkg/`, `internal/bff/` and `internal/hiring/`, and found two
+real problems in the config, now fixed: prefix matching made `internal/admin` deny `internal/adminbff` (carved back out with
+`list-mode: lax` plus an allow entry), and `internal/bff/identity_test.go` deliberately imports monolith handlers to check
+routing (tests are exempt from `bff-no-domain`). The `lint` job in `go.yml` gates on `--enable-only depguard`; the other
+linters report only.
 
 ## 6. Hermetic tests
 

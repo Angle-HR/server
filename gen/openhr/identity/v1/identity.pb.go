@@ -894,10 +894,12 @@ func (x *CommitRegionMoveRequest) GetTargetRegion() string {
 type CommitRegionMoveResponse struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Region string                 `protobuf:"bytes,1,opt,name=region,proto3" json:"region,omitempty"`
-	// New tokens: the ones the caller holds carry the stale pre-move region.
-	Tokens        *TokenPair `protobuf:"bytes,2,opt,name=tokens,proto3" json:"tokens,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// Not issued (always empty): the caller rotates its session instead.
+	Tokens *TokenPair `protobuf:"bytes,2,opt,name=tokens,proto3" json:"tokens,omitempty"`
+	// True when the move had already been committed (retry).
+	AlreadyCommitted bool `protobuf:"varint,3,opt,name=already_committed,json=alreadyCommitted,proto3" json:"already_committed,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *CommitRegionMoveResponse) Reset() {
@@ -944,6 +946,110 @@ func (x *CommitRegionMoveResponse) GetTokens() *TokenPair {
 	return nil
 }
 
+func (x *CommitRegionMoveResponse) GetAlreadyCommitted() bool {
+	if x != nil {
+		return x.AlreadyCommitted
+	}
+	return false
+}
+
+type AbortRegionMoveRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	TargetRegion  string                 `protobuf:"bytes,2,opt,name=target_region,json=targetRegion,proto3" json:"target_region,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AbortRegionMoveRequest) Reset() {
+	*x = AbortRegionMoveRequest{}
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AbortRegionMoveRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AbortRegionMoveRequest) ProtoMessage() {}
+
+func (x *AbortRegionMoveRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AbortRegionMoveRequest.ProtoReflect.Descriptor instead.
+func (*AbortRegionMoveRequest) Descriptor() ([]byte, []int) {
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *AbortRegionMoveRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *AbortRegionMoveRequest) GetTargetRegion() string {
+	if x != nil {
+		return x.TargetRegion
+	}
+	return ""
+}
+
+type AbortRegionMoveResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// True when a copied row was removed; false when there was nothing to undo.
+	Removed       bool `protobuf:"varint,1,opt,name=removed,proto3" json:"removed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AbortRegionMoveResponse) Reset() {
+	*x = AbortRegionMoveResponse{}
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AbortRegionMoveResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AbortRegionMoveResponse) ProtoMessage() {}
+
+func (x *AbortRegionMoveResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AbortRegionMoveResponse.ProtoReflect.Descriptor instead.
+func (*AbortRegionMoveResponse) Descriptor() ([]byte, []int) {
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *AbortRegionMoveResponse) GetRemoved() bool {
+	if x != nil {
+		return x.Removed
+	}
+	return false
+}
+
 type CreateOrgInviteRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Email         string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
@@ -954,7 +1060,7 @@ type CreateOrgInviteRequest struct {
 
 func (x *CreateOrgInviteRequest) Reset() {
 	*x = CreateOrgInviteRequest{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[16]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -966,7 +1072,7 @@ func (x *CreateOrgInviteRequest) String() string {
 func (*CreateOrgInviteRequest) ProtoMessage() {}
 
 func (x *CreateOrgInviteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[16]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -979,7 +1085,7 @@ func (x *CreateOrgInviteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOrgInviteRequest.ProtoReflect.Descriptor instead.
 func (*CreateOrgInviteRequest) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{16}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CreateOrgInviteRequest) GetEmail() string {
@@ -1006,7 +1112,7 @@ type CreateOrgInviteResponse struct {
 
 func (x *CreateOrgInviteResponse) Reset() {
 	*x = CreateOrgInviteResponse{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[17]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1018,7 +1124,7 @@ func (x *CreateOrgInviteResponse) String() string {
 func (*CreateOrgInviteResponse) ProtoMessage() {}
 
 func (x *CreateOrgInviteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[17]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1031,7 +1137,7 @@ func (x *CreateOrgInviteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOrgInviteResponse.ProtoReflect.Descriptor instead.
 func (*CreateOrgInviteResponse) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{17}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CreateOrgInviteResponse) GetInviteId() string {
@@ -1059,7 +1165,7 @@ type AcceptOrgInviteRequest struct {
 
 func (x *AcceptOrgInviteRequest) Reset() {
 	*x = AcceptOrgInviteRequest{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[18]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1071,7 +1177,7 @@ func (x *AcceptOrgInviteRequest) String() string {
 func (*AcceptOrgInviteRequest) ProtoMessage() {}
 
 func (x *AcceptOrgInviteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[18]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1084,7 +1190,7 @@ func (x *AcceptOrgInviteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptOrgInviteRequest.ProtoReflect.Descriptor instead.
 func (*AcceptOrgInviteRequest) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{18}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *AcceptOrgInviteRequest) GetToken() string {
@@ -1119,7 +1225,7 @@ type AcceptOrgInviteResponse struct {
 
 func (x *AcceptOrgInviteResponse) Reset() {
 	*x = AcceptOrgInviteResponse{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[19]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1131,7 +1237,7 @@ func (x *AcceptOrgInviteResponse) String() string {
 func (*AcceptOrgInviteResponse) ProtoMessage() {}
 
 func (x *AcceptOrgInviteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[19]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1144,7 +1250,7 @@ func (x *AcceptOrgInviteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptOrgInviteResponse.ProtoReflect.Descriptor instead.
 func (*AcceptOrgInviteResponse) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{19}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *AcceptOrgInviteResponse) GetUser() *User {
@@ -1180,7 +1286,7 @@ type ListUsersRequest struct {
 
 func (x *ListUsersRequest) Reset() {
 	*x = ListUsersRequest{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[20]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1192,7 +1298,7 @@ func (x *ListUsersRequest) String() string {
 func (*ListUsersRequest) ProtoMessage() {}
 
 func (x *ListUsersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[20]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1205,7 +1311,7 @@ func (x *ListUsersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUsersRequest.ProtoReflect.Descriptor instead.
 func (*ListUsersRequest) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{20}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ListUsersRequest) GetQuery() string {
@@ -1246,7 +1352,7 @@ type ListUsersResponse struct {
 
 func (x *ListUsersResponse) Reset() {
 	*x = ListUsersResponse{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[21]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1258,7 +1364,7 @@ func (x *ListUsersResponse) String() string {
 func (*ListUsersResponse) ProtoMessage() {}
 
 func (x *ListUsersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[21]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1271,7 +1377,7 @@ func (x *ListUsersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUsersResponse.ProtoReflect.Descriptor instead.
 func (*ListUsersResponse) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{21}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ListUsersResponse) GetUsers() []*User {
@@ -1298,7 +1404,7 @@ type SetUserActiveRequest struct {
 
 func (x *SetUserActiveRequest) Reset() {
 	*x = SetUserActiveRequest{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[22]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1310,7 +1416,7 @@ func (x *SetUserActiveRequest) String() string {
 func (*SetUserActiveRequest) ProtoMessage() {}
 
 func (x *SetUserActiveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[22]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1323,7 +1429,7 @@ func (x *SetUserActiveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetUserActiveRequest.ProtoReflect.Descriptor instead.
 func (*SetUserActiveRequest) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{22}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *SetUserActiveRequest) GetUserId() string {
@@ -1349,7 +1455,7 @@ type SetUserActiveResponse struct {
 
 func (x *SetUserActiveResponse) Reset() {
 	*x = SetUserActiveResponse{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[23]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1361,7 +1467,7 @@ func (x *SetUserActiveResponse) String() string {
 func (*SetUserActiveResponse) ProtoMessage() {}
 
 func (x *SetUserActiveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[23]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1374,7 +1480,7 @@ func (x *SetUserActiveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetUserActiveResponse.ProtoReflect.Descriptor instead.
 func (*SetUserActiveResponse) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{23}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SetUserActiveResponse) GetUser() *User {
@@ -1394,7 +1500,7 @@ type InviteStaffRequest struct {
 
 func (x *InviteStaffRequest) Reset() {
 	*x = InviteStaffRequest{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[24]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1406,7 +1512,7 @@ func (x *InviteStaffRequest) String() string {
 func (*InviteStaffRequest) ProtoMessage() {}
 
 func (x *InviteStaffRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[24]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1419,7 +1525,7 @@ func (x *InviteStaffRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InviteStaffRequest.ProtoReflect.Descriptor instead.
 func (*InviteStaffRequest) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{24}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *InviteStaffRequest) GetEmail() string {
@@ -1445,7 +1551,7 @@ type InviteStaffResponse struct {
 
 func (x *InviteStaffResponse) Reset() {
 	*x = InviteStaffResponse{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[25]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1457,7 +1563,7 @@ func (x *InviteStaffResponse) String() string {
 func (*InviteStaffResponse) ProtoMessage() {}
 
 func (x *InviteStaffResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[25]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1470,7 +1576,7 @@ func (x *InviteStaffResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InviteStaffResponse.ProtoReflect.Descriptor instead.
 func (*InviteStaffResponse) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{25}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *InviteStaffResponse) GetInviteId() string {
@@ -1491,7 +1597,7 @@ type AdminRole struct {
 
 func (x *AdminRole) Reset() {
 	*x = AdminRole{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[26]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1503,7 +1609,7 @@ func (x *AdminRole) String() string {
 func (*AdminRole) ProtoMessage() {}
 
 func (x *AdminRole) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[26]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1516,7 +1622,7 @@ func (x *AdminRole) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminRole.ProtoReflect.Descriptor instead.
 func (*AdminRole) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{26}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *AdminRole) GetId() string {
@@ -1548,7 +1654,7 @@ type ListAdminRolesRequest struct {
 
 func (x *ListAdminRolesRequest) Reset() {
 	*x = ListAdminRolesRequest{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[27]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1560,7 +1666,7 @@ func (x *ListAdminRolesRequest) String() string {
 func (*ListAdminRolesRequest) ProtoMessage() {}
 
 func (x *ListAdminRolesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[27]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1573,7 +1679,7 @@ func (x *ListAdminRolesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAdminRolesRequest.ProtoReflect.Descriptor instead.
 func (*ListAdminRolesRequest) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{27}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{29}
 }
 
 type ListAdminRolesResponse struct {
@@ -1585,7 +1691,7 @@ type ListAdminRolesResponse struct {
 
 func (x *ListAdminRolesResponse) Reset() {
 	*x = ListAdminRolesResponse{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[28]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1597,7 +1703,7 @@ func (x *ListAdminRolesResponse) String() string {
 func (*ListAdminRolesResponse) ProtoMessage() {}
 
 func (x *ListAdminRolesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[28]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1610,7 +1716,7 @@ func (x *ListAdminRolesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAdminRolesResponse.ProtoReflect.Descriptor instead.
 func (*ListAdminRolesResponse) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{28}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ListAdminRolesResponse) GetRoles() []*AdminRole {
@@ -1630,7 +1736,7 @@ type HasAdminPermissionRequest struct {
 
 func (x *HasAdminPermissionRequest) Reset() {
 	*x = HasAdminPermissionRequest{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[29]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1642,7 +1748,7 @@ func (x *HasAdminPermissionRequest) String() string {
 func (*HasAdminPermissionRequest) ProtoMessage() {}
 
 func (x *HasAdminPermissionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[29]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1655,7 +1761,7 @@ func (x *HasAdminPermissionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HasAdminPermissionRequest.ProtoReflect.Descriptor instead.
 func (*HasAdminPermissionRequest) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{29}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *HasAdminPermissionRequest) GetAdminUserId() string {
@@ -1681,7 +1787,7 @@ type HasAdminPermissionResponse struct {
 
 func (x *HasAdminPermissionResponse) Reset() {
 	*x = HasAdminPermissionResponse{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[30]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1693,7 +1799,7 @@ func (x *HasAdminPermissionResponse) String() string {
 func (*HasAdminPermissionResponse) ProtoMessage() {}
 
 func (x *HasAdminPermissionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[30]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1706,7 +1812,7 @@ func (x *HasAdminPermissionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HasAdminPermissionResponse.ProtoReflect.Descriptor instead.
 func (*HasAdminPermissionResponse) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{30}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *HasAdminPermissionResponse) GetAllowed() bool {
@@ -1730,7 +1836,7 @@ type VerificationQueueItem struct {
 
 func (x *VerificationQueueItem) Reset() {
 	*x = VerificationQueueItem{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[31]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1742,7 +1848,7 @@ func (x *VerificationQueueItem) String() string {
 func (*VerificationQueueItem) ProtoMessage() {}
 
 func (x *VerificationQueueItem) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[31]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1755,7 +1861,7 @@ func (x *VerificationQueueItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerificationQueueItem.ProtoReflect.Descriptor instead.
 func (*VerificationQueueItem) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{31}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *VerificationQueueItem) GetCompanyId() string {
@@ -1804,7 +1910,7 @@ type ListVerificationQueueRequest struct {
 
 func (x *ListVerificationQueueRequest) Reset() {
 	*x = ListVerificationQueueRequest{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[32]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1816,7 +1922,7 @@ func (x *ListVerificationQueueRequest) String() string {
 func (*ListVerificationQueueRequest) ProtoMessage() {}
 
 func (x *ListVerificationQueueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[32]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1829,7 +1935,7 @@ func (x *ListVerificationQueueRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVerificationQueueRequest.ProtoReflect.Descriptor instead.
 func (*ListVerificationQueueRequest) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{32}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ListVerificationQueueRequest) GetRegion() string {
@@ -1863,7 +1969,7 @@ type ListVerificationQueueResponse struct {
 
 func (x *ListVerificationQueueResponse) Reset() {
 	*x = ListVerificationQueueResponse{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[33]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1875,7 +1981,7 @@ func (x *ListVerificationQueueResponse) String() string {
 func (*ListVerificationQueueResponse) ProtoMessage() {}
 
 func (x *ListVerificationQueueResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[33]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1888,7 +1994,7 @@ func (x *ListVerificationQueueResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVerificationQueueResponse.ProtoReflect.Descriptor instead.
 func (*ListVerificationQueueResponse) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{33}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ListVerificationQueueResponse) GetItems() []*VerificationQueueItem {
@@ -1918,7 +2024,7 @@ type ReviewVerificationRequest struct {
 
 func (x *ReviewVerificationRequest) Reset() {
 	*x = ReviewVerificationRequest{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[34]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1930,7 +2036,7 @@ func (x *ReviewVerificationRequest) String() string {
 func (*ReviewVerificationRequest) ProtoMessage() {}
 
 func (x *ReviewVerificationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[34]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1943,7 +2049,7 @@ func (x *ReviewVerificationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviewVerificationRequest.ProtoReflect.Descriptor instead.
 func (*ReviewVerificationRequest) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{34}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ReviewVerificationRequest) GetCompanyId() string {
@@ -1991,7 +2097,7 @@ type ReviewVerificationResponse struct {
 
 func (x *ReviewVerificationResponse) Reset() {
 	*x = ReviewVerificationResponse{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[35]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2003,7 +2109,7 @@ func (x *ReviewVerificationResponse) String() string {
 func (*ReviewVerificationResponse) ProtoMessage() {}
 
 func (x *ReviewVerificationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[35]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2016,7 +2122,7 @@ func (x *ReviewVerificationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReviewVerificationResponse.ProtoReflect.Descriptor instead.
 func (*ReviewVerificationResponse) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{35}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ReviewVerificationResponse) GetStatus() string {
@@ -2039,7 +2145,7 @@ type EnqueueVerificationRequest struct {
 
 func (x *EnqueueVerificationRequest) Reset() {
 	*x = EnqueueVerificationRequest{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[36]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2051,7 +2157,7 @@ func (x *EnqueueVerificationRequest) String() string {
 func (*EnqueueVerificationRequest) ProtoMessage() {}
 
 func (x *EnqueueVerificationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[36]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2064,7 +2170,7 @@ func (x *EnqueueVerificationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnqueueVerificationRequest.ProtoReflect.Descriptor instead.
 func (*EnqueueVerificationRequest) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{36}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *EnqueueVerificationRequest) GetCompanyId() string {
@@ -2103,7 +2209,7 @@ type EnqueueVerificationResponse struct {
 
 func (x *EnqueueVerificationResponse) Reset() {
 	*x = EnqueueVerificationResponse{}
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[37]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2115,7 +2221,7 @@ func (x *EnqueueVerificationResponse) String() string {
 func (*EnqueueVerificationResponse) ProtoMessage() {}
 
 func (x *EnqueueVerificationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_identity_v1_identity_proto_msgTypes[37]
+	mi := &file_openhr_identity_v1_identity_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2128,7 +2234,7 @@ func (x *EnqueueVerificationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnqueueVerificationResponse.ProtoReflect.Descriptor instead.
 func (*EnqueueVerificationResponse) Descriptor() ([]byte, []int) {
-	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{37}
+	return file_openhr_identity_v1_identity_proto_rawDescGZIP(), []int{39}
 }
 
 var File_openhr_identity_v1_identity_proto protoreflect.FileDescriptor
@@ -2193,10 +2299,16 @@ const file_openhr_identity_v1_identity_proto_rawDesc = "" +
 	"\x0falready_present\x18\x01 \x01(\bR\x0ealreadyPresent\"W\n" +
 	"\x17CommitRegionMoveRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12#\n" +
-	"\rtarget_region\x18\x02 \x01(\tR\ftargetRegion\"i\n" +
+	"\rtarget_region\x18\x02 \x01(\tR\ftargetRegion\"\x96\x01\n" +
 	"\x18CommitRegionMoveResponse\x12\x16\n" +
 	"\x06region\x18\x01 \x01(\tR\x06region\x125\n" +
-	"\x06tokens\x18\x02 \x01(\v2\x1d.openhr.identity.v1.TokenPairR\x06tokens\"B\n" +
+	"\x06tokens\x18\x02 \x01(\v2\x1d.openhr.identity.v1.TokenPairR\x06tokens\x12+\n" +
+	"\x11already_committed\x18\x03 \x01(\bR\x10alreadyCommitted\"V\n" +
+	"\x16AbortRegionMoveRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12#\n" +
+	"\rtarget_region\x18\x02 \x01(\tR\ftargetRegion\"3\n" +
+	"\x17AbortRegionMoveResponse\x12\x18\n" +
+	"\aremoved\x18\x01 \x01(\bR\aremoved\"B\n" +
 	"\x16CreateOrgInviteRequest\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\"q\n" +
@@ -2276,7 +2388,7 @@ const file_openhr_identity_v1_identity_proto_rawDesc = "" +
 	"\x06region\x18\x02 \x01(\tR\x06region\x12!\n" +
 	"\fcountry_code\x18\x03 \x01(\tR\vcountryCode\x12\x1b\n" +
 	"\tcase_type\x18\x04 \x01(\tR\bcaseType\"\x1d\n" +
-	"\x1bEnqueueVerificationResponse2\xd4\a\n" +
+	"\x1bEnqueueVerificationResponse2\xc0\b\n" +
 	"\x0fIdentityService\x12v\n" +
 	"\x13ValidateAccessToken\x12..openhr.identity.v1.ValidateAccessTokenRequest\x1a/.openhr.identity.v1.ValidateAccessTokenResponse\x12s\n" +
 	"\x12ValidateAdminToken\x12-.openhr.identity.v1.ValidateAdminTokenRequest\x1a..openhr.identity.v1.ValidateAdminTokenResponse\x12R\n" +
@@ -2285,6 +2397,7 @@ const file_openhr_identity_v1_identity_proto_rawDesc = "" +
 	"\fLookupRegion\x12'.openhr.identity.v1.LookupRegionRequest\x1a(.openhr.identity.v1.LookupRegionResponse\x12p\n" +
 	"\x11PrepareRegionMove\x12,.openhr.identity.v1.PrepareRegionMoveRequest\x1a-.openhr.identity.v1.PrepareRegionMoveResponse\x12m\n" +
 	"\x10CommitRegionMove\x12+.openhr.identity.v1.CommitRegionMoveRequest\x1a,.openhr.identity.v1.CommitRegionMoveResponse\x12j\n" +
+	"\x0fAbortRegionMove\x12*.openhr.identity.v1.AbortRegionMoveRequest\x1a+.openhr.identity.v1.AbortRegionMoveResponse\x12j\n" +
 	"\x0fCreateOrgInvite\x12*.openhr.identity.v1.CreateOrgInviteRequest\x1a+.openhr.identity.v1.CreateOrgInviteResponse\x12j\n" +
 	"\x0fAcceptOrgInvite\x12*.openhr.identity.v1.AcceptOrgInviteRequest\x1a+.openhr.identity.v1.AcceptOrgInviteResponse2\xff\x06\n" +
 	"\x14AdminIdentityService\x12X\n" +
@@ -2310,7 +2423,7 @@ func file_openhr_identity_v1_identity_proto_rawDescGZIP() []byte {
 	return file_openhr_identity_v1_identity_proto_rawDescData
 }
 
-var file_openhr_identity_v1_identity_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
+var file_openhr_identity_v1_identity_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
 var file_openhr_identity_v1_identity_proto_goTypes = []any{
 	(*User)(nil),                          // 0: openhr.identity.v1.User
 	(*TokenPair)(nil),                     // 1: openhr.identity.v1.TokenPair
@@ -2328,45 +2441,47 @@ var file_openhr_identity_v1_identity_proto_goTypes = []any{
 	(*PrepareRegionMoveResponse)(nil),     // 13: openhr.identity.v1.PrepareRegionMoveResponse
 	(*CommitRegionMoveRequest)(nil),       // 14: openhr.identity.v1.CommitRegionMoveRequest
 	(*CommitRegionMoveResponse)(nil),      // 15: openhr.identity.v1.CommitRegionMoveResponse
-	(*CreateOrgInviteRequest)(nil),        // 16: openhr.identity.v1.CreateOrgInviteRequest
-	(*CreateOrgInviteResponse)(nil),       // 17: openhr.identity.v1.CreateOrgInviteResponse
-	(*AcceptOrgInviteRequest)(nil),        // 18: openhr.identity.v1.AcceptOrgInviteRequest
-	(*AcceptOrgInviteResponse)(nil),       // 19: openhr.identity.v1.AcceptOrgInviteResponse
-	(*ListUsersRequest)(nil),              // 20: openhr.identity.v1.ListUsersRequest
-	(*ListUsersResponse)(nil),             // 21: openhr.identity.v1.ListUsersResponse
-	(*SetUserActiveRequest)(nil),          // 22: openhr.identity.v1.SetUserActiveRequest
-	(*SetUserActiveResponse)(nil),         // 23: openhr.identity.v1.SetUserActiveResponse
-	(*InviteStaffRequest)(nil),            // 24: openhr.identity.v1.InviteStaffRequest
-	(*InviteStaffResponse)(nil),           // 25: openhr.identity.v1.InviteStaffResponse
-	(*AdminRole)(nil),                     // 26: openhr.identity.v1.AdminRole
-	(*ListAdminRolesRequest)(nil),         // 27: openhr.identity.v1.ListAdminRolesRequest
-	(*ListAdminRolesResponse)(nil),        // 28: openhr.identity.v1.ListAdminRolesResponse
-	(*HasAdminPermissionRequest)(nil),     // 29: openhr.identity.v1.HasAdminPermissionRequest
-	(*HasAdminPermissionResponse)(nil),    // 30: openhr.identity.v1.HasAdminPermissionResponse
-	(*VerificationQueueItem)(nil),         // 31: openhr.identity.v1.VerificationQueueItem
-	(*ListVerificationQueueRequest)(nil),  // 32: openhr.identity.v1.ListVerificationQueueRequest
-	(*ListVerificationQueueResponse)(nil), // 33: openhr.identity.v1.ListVerificationQueueResponse
-	(*ReviewVerificationRequest)(nil),     // 34: openhr.identity.v1.ReviewVerificationRequest
-	(*ReviewVerificationResponse)(nil),    // 35: openhr.identity.v1.ReviewVerificationResponse
-	(*EnqueueVerificationRequest)(nil),    // 36: openhr.identity.v1.EnqueueVerificationRequest
-	(*EnqueueVerificationResponse)(nil),   // 37: openhr.identity.v1.EnqueueVerificationResponse
-	(*timestamppb.Timestamp)(nil),         // 38: google.protobuf.Timestamp
+	(*AbortRegionMoveRequest)(nil),        // 16: openhr.identity.v1.AbortRegionMoveRequest
+	(*AbortRegionMoveResponse)(nil),       // 17: openhr.identity.v1.AbortRegionMoveResponse
+	(*CreateOrgInviteRequest)(nil),        // 18: openhr.identity.v1.CreateOrgInviteRequest
+	(*CreateOrgInviteResponse)(nil),       // 19: openhr.identity.v1.CreateOrgInviteResponse
+	(*AcceptOrgInviteRequest)(nil),        // 20: openhr.identity.v1.AcceptOrgInviteRequest
+	(*AcceptOrgInviteResponse)(nil),       // 21: openhr.identity.v1.AcceptOrgInviteResponse
+	(*ListUsersRequest)(nil),              // 22: openhr.identity.v1.ListUsersRequest
+	(*ListUsersResponse)(nil),             // 23: openhr.identity.v1.ListUsersResponse
+	(*SetUserActiveRequest)(nil),          // 24: openhr.identity.v1.SetUserActiveRequest
+	(*SetUserActiveResponse)(nil),         // 25: openhr.identity.v1.SetUserActiveResponse
+	(*InviteStaffRequest)(nil),            // 26: openhr.identity.v1.InviteStaffRequest
+	(*InviteStaffResponse)(nil),           // 27: openhr.identity.v1.InviteStaffResponse
+	(*AdminRole)(nil),                     // 28: openhr.identity.v1.AdminRole
+	(*ListAdminRolesRequest)(nil),         // 29: openhr.identity.v1.ListAdminRolesRequest
+	(*ListAdminRolesResponse)(nil),        // 30: openhr.identity.v1.ListAdminRolesResponse
+	(*HasAdminPermissionRequest)(nil),     // 31: openhr.identity.v1.HasAdminPermissionRequest
+	(*HasAdminPermissionResponse)(nil),    // 32: openhr.identity.v1.HasAdminPermissionResponse
+	(*VerificationQueueItem)(nil),         // 33: openhr.identity.v1.VerificationQueueItem
+	(*ListVerificationQueueRequest)(nil),  // 34: openhr.identity.v1.ListVerificationQueueRequest
+	(*ListVerificationQueueResponse)(nil), // 35: openhr.identity.v1.ListVerificationQueueResponse
+	(*ReviewVerificationRequest)(nil),     // 36: openhr.identity.v1.ReviewVerificationRequest
+	(*ReviewVerificationResponse)(nil),    // 37: openhr.identity.v1.ReviewVerificationResponse
+	(*EnqueueVerificationRequest)(nil),    // 38: openhr.identity.v1.EnqueueVerificationRequest
+	(*EnqueueVerificationResponse)(nil),   // 39: openhr.identity.v1.EnqueueVerificationResponse
+	(*timestamppb.Timestamp)(nil),         // 40: google.protobuf.Timestamp
 }
 var file_openhr_identity_v1_identity_proto_depIdxs = []int32{
-	38, // 0: openhr.identity.v1.User.created_at:type_name -> google.protobuf.Timestamp
-	38, // 1: openhr.identity.v1.ValidateAccessTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
-	38, // 2: openhr.identity.v1.ValidateAdminTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
+	40, // 0: openhr.identity.v1.User.created_at:type_name -> google.protobuf.Timestamp
+	40, // 1: openhr.identity.v1.ValidateAccessTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
+	40, // 2: openhr.identity.v1.ValidateAdminTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
 	0,  // 3: openhr.identity.v1.GetUserResponse.user:type_name -> openhr.identity.v1.User
 	0,  // 4: openhr.identity.v1.BatchGetUsersResponse.users:type_name -> openhr.identity.v1.User
 	1,  // 5: openhr.identity.v1.CommitRegionMoveResponse.tokens:type_name -> openhr.identity.v1.TokenPair
-	38, // 6: openhr.identity.v1.CreateOrgInviteResponse.expires_at:type_name -> google.protobuf.Timestamp
+	40, // 6: openhr.identity.v1.CreateOrgInviteResponse.expires_at:type_name -> google.protobuf.Timestamp
 	0,  // 7: openhr.identity.v1.AcceptOrgInviteResponse.user:type_name -> openhr.identity.v1.User
 	1,  // 8: openhr.identity.v1.AcceptOrgInviteResponse.tokens:type_name -> openhr.identity.v1.TokenPair
 	0,  // 9: openhr.identity.v1.ListUsersResponse.users:type_name -> openhr.identity.v1.User
 	0,  // 10: openhr.identity.v1.SetUserActiveResponse.user:type_name -> openhr.identity.v1.User
-	26, // 11: openhr.identity.v1.ListAdminRolesResponse.roles:type_name -> openhr.identity.v1.AdminRole
-	38, // 12: openhr.identity.v1.VerificationQueueItem.submitted_at:type_name -> google.protobuf.Timestamp
-	31, // 13: openhr.identity.v1.ListVerificationQueueResponse.items:type_name -> openhr.identity.v1.VerificationQueueItem
+	28, // 11: openhr.identity.v1.ListAdminRolesResponse.roles:type_name -> openhr.identity.v1.AdminRole
+	40, // 12: openhr.identity.v1.VerificationQueueItem.submitted_at:type_name -> google.protobuf.Timestamp
+	33, // 13: openhr.identity.v1.ListVerificationQueueResponse.items:type_name -> openhr.identity.v1.VerificationQueueItem
 	2,  // 14: openhr.identity.v1.IdentityService.ValidateAccessToken:input_type -> openhr.identity.v1.ValidateAccessTokenRequest
 	4,  // 15: openhr.identity.v1.IdentityService.ValidateAdminToken:input_type -> openhr.identity.v1.ValidateAdminTokenRequest
 	6,  // 16: openhr.identity.v1.IdentityService.GetUser:input_type -> openhr.identity.v1.GetUserRequest
@@ -2374,35 +2489,37 @@ var file_openhr_identity_v1_identity_proto_depIdxs = []int32{
 	10, // 18: openhr.identity.v1.IdentityService.LookupRegion:input_type -> openhr.identity.v1.LookupRegionRequest
 	12, // 19: openhr.identity.v1.IdentityService.PrepareRegionMove:input_type -> openhr.identity.v1.PrepareRegionMoveRequest
 	14, // 20: openhr.identity.v1.IdentityService.CommitRegionMove:input_type -> openhr.identity.v1.CommitRegionMoveRequest
-	16, // 21: openhr.identity.v1.IdentityService.CreateOrgInvite:input_type -> openhr.identity.v1.CreateOrgInviteRequest
-	18, // 22: openhr.identity.v1.IdentityService.AcceptOrgInvite:input_type -> openhr.identity.v1.AcceptOrgInviteRequest
-	20, // 23: openhr.identity.v1.AdminIdentityService.ListUsers:input_type -> openhr.identity.v1.ListUsersRequest
-	22, // 24: openhr.identity.v1.AdminIdentityService.SetUserActive:input_type -> openhr.identity.v1.SetUserActiveRequest
-	24, // 25: openhr.identity.v1.AdminIdentityService.InviteStaff:input_type -> openhr.identity.v1.InviteStaffRequest
-	27, // 26: openhr.identity.v1.AdminIdentityService.ListAdminRoles:input_type -> openhr.identity.v1.ListAdminRolesRequest
-	29, // 27: openhr.identity.v1.AdminIdentityService.HasAdminPermission:input_type -> openhr.identity.v1.HasAdminPermissionRequest
-	32, // 28: openhr.identity.v1.AdminIdentityService.ListVerificationQueue:input_type -> openhr.identity.v1.ListVerificationQueueRequest
-	34, // 29: openhr.identity.v1.AdminIdentityService.ReviewVerification:input_type -> openhr.identity.v1.ReviewVerificationRequest
-	36, // 30: openhr.identity.v1.AdminIdentityService.EnqueueVerification:input_type -> openhr.identity.v1.EnqueueVerificationRequest
-	3,  // 31: openhr.identity.v1.IdentityService.ValidateAccessToken:output_type -> openhr.identity.v1.ValidateAccessTokenResponse
-	5,  // 32: openhr.identity.v1.IdentityService.ValidateAdminToken:output_type -> openhr.identity.v1.ValidateAdminTokenResponse
-	7,  // 33: openhr.identity.v1.IdentityService.GetUser:output_type -> openhr.identity.v1.GetUserResponse
-	9,  // 34: openhr.identity.v1.IdentityService.BatchGetUsers:output_type -> openhr.identity.v1.BatchGetUsersResponse
-	11, // 35: openhr.identity.v1.IdentityService.LookupRegion:output_type -> openhr.identity.v1.LookupRegionResponse
-	13, // 36: openhr.identity.v1.IdentityService.PrepareRegionMove:output_type -> openhr.identity.v1.PrepareRegionMoveResponse
-	15, // 37: openhr.identity.v1.IdentityService.CommitRegionMove:output_type -> openhr.identity.v1.CommitRegionMoveResponse
-	17, // 38: openhr.identity.v1.IdentityService.CreateOrgInvite:output_type -> openhr.identity.v1.CreateOrgInviteResponse
-	19, // 39: openhr.identity.v1.IdentityService.AcceptOrgInvite:output_type -> openhr.identity.v1.AcceptOrgInviteResponse
-	21, // 40: openhr.identity.v1.AdminIdentityService.ListUsers:output_type -> openhr.identity.v1.ListUsersResponse
-	23, // 41: openhr.identity.v1.AdminIdentityService.SetUserActive:output_type -> openhr.identity.v1.SetUserActiveResponse
-	25, // 42: openhr.identity.v1.AdminIdentityService.InviteStaff:output_type -> openhr.identity.v1.InviteStaffResponse
-	28, // 43: openhr.identity.v1.AdminIdentityService.ListAdminRoles:output_type -> openhr.identity.v1.ListAdminRolesResponse
-	30, // 44: openhr.identity.v1.AdminIdentityService.HasAdminPermission:output_type -> openhr.identity.v1.HasAdminPermissionResponse
-	33, // 45: openhr.identity.v1.AdminIdentityService.ListVerificationQueue:output_type -> openhr.identity.v1.ListVerificationQueueResponse
-	35, // 46: openhr.identity.v1.AdminIdentityService.ReviewVerification:output_type -> openhr.identity.v1.ReviewVerificationResponse
-	37, // 47: openhr.identity.v1.AdminIdentityService.EnqueueVerification:output_type -> openhr.identity.v1.EnqueueVerificationResponse
-	31, // [31:48] is the sub-list for method output_type
-	14, // [14:31] is the sub-list for method input_type
+	16, // 21: openhr.identity.v1.IdentityService.AbortRegionMove:input_type -> openhr.identity.v1.AbortRegionMoveRequest
+	18, // 22: openhr.identity.v1.IdentityService.CreateOrgInvite:input_type -> openhr.identity.v1.CreateOrgInviteRequest
+	20, // 23: openhr.identity.v1.IdentityService.AcceptOrgInvite:input_type -> openhr.identity.v1.AcceptOrgInviteRequest
+	22, // 24: openhr.identity.v1.AdminIdentityService.ListUsers:input_type -> openhr.identity.v1.ListUsersRequest
+	24, // 25: openhr.identity.v1.AdminIdentityService.SetUserActive:input_type -> openhr.identity.v1.SetUserActiveRequest
+	26, // 26: openhr.identity.v1.AdminIdentityService.InviteStaff:input_type -> openhr.identity.v1.InviteStaffRequest
+	29, // 27: openhr.identity.v1.AdminIdentityService.ListAdminRoles:input_type -> openhr.identity.v1.ListAdminRolesRequest
+	31, // 28: openhr.identity.v1.AdminIdentityService.HasAdminPermission:input_type -> openhr.identity.v1.HasAdminPermissionRequest
+	34, // 29: openhr.identity.v1.AdminIdentityService.ListVerificationQueue:input_type -> openhr.identity.v1.ListVerificationQueueRequest
+	36, // 30: openhr.identity.v1.AdminIdentityService.ReviewVerification:input_type -> openhr.identity.v1.ReviewVerificationRequest
+	38, // 31: openhr.identity.v1.AdminIdentityService.EnqueueVerification:input_type -> openhr.identity.v1.EnqueueVerificationRequest
+	3,  // 32: openhr.identity.v1.IdentityService.ValidateAccessToken:output_type -> openhr.identity.v1.ValidateAccessTokenResponse
+	5,  // 33: openhr.identity.v1.IdentityService.ValidateAdminToken:output_type -> openhr.identity.v1.ValidateAdminTokenResponse
+	7,  // 34: openhr.identity.v1.IdentityService.GetUser:output_type -> openhr.identity.v1.GetUserResponse
+	9,  // 35: openhr.identity.v1.IdentityService.BatchGetUsers:output_type -> openhr.identity.v1.BatchGetUsersResponse
+	11, // 36: openhr.identity.v1.IdentityService.LookupRegion:output_type -> openhr.identity.v1.LookupRegionResponse
+	13, // 37: openhr.identity.v1.IdentityService.PrepareRegionMove:output_type -> openhr.identity.v1.PrepareRegionMoveResponse
+	15, // 38: openhr.identity.v1.IdentityService.CommitRegionMove:output_type -> openhr.identity.v1.CommitRegionMoveResponse
+	17, // 39: openhr.identity.v1.IdentityService.AbortRegionMove:output_type -> openhr.identity.v1.AbortRegionMoveResponse
+	19, // 40: openhr.identity.v1.IdentityService.CreateOrgInvite:output_type -> openhr.identity.v1.CreateOrgInviteResponse
+	21, // 41: openhr.identity.v1.IdentityService.AcceptOrgInvite:output_type -> openhr.identity.v1.AcceptOrgInviteResponse
+	23, // 42: openhr.identity.v1.AdminIdentityService.ListUsers:output_type -> openhr.identity.v1.ListUsersResponse
+	25, // 43: openhr.identity.v1.AdminIdentityService.SetUserActive:output_type -> openhr.identity.v1.SetUserActiveResponse
+	27, // 44: openhr.identity.v1.AdminIdentityService.InviteStaff:output_type -> openhr.identity.v1.InviteStaffResponse
+	30, // 45: openhr.identity.v1.AdminIdentityService.ListAdminRoles:output_type -> openhr.identity.v1.ListAdminRolesResponse
+	32, // 46: openhr.identity.v1.AdminIdentityService.HasAdminPermission:output_type -> openhr.identity.v1.HasAdminPermissionResponse
+	35, // 47: openhr.identity.v1.AdminIdentityService.ListVerificationQueue:output_type -> openhr.identity.v1.ListVerificationQueueResponse
+	37, // 48: openhr.identity.v1.AdminIdentityService.ReviewVerification:output_type -> openhr.identity.v1.ReviewVerificationResponse
+	39, // 49: openhr.identity.v1.AdminIdentityService.EnqueueVerification:output_type -> openhr.identity.v1.EnqueueVerificationResponse
+	32, // [32:50] is the sub-list for method output_type
+	14, // [14:32] is the sub-list for method input_type
 	14, // [14:14] is the sub-list for extension type_name
 	14, // [14:14] is the sub-list for extension extendee
 	0,  // [0:14] is the sub-list for field type_name
@@ -2423,7 +2540,7 @@ func file_openhr_identity_v1_identity_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_openhr_identity_v1_identity_proto_rawDesc), len(file_openhr_identity_v1_identity_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   38,
+			NumMessages:   40,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

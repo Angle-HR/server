@@ -87,6 +87,25 @@ Implemented: `CreateDraft`, `GetJob`, `ListJobs`, `PublishJob` (blocked checks c
 - Industries on the public page (`public.Catalog`) read the global table.
 - Applicant counts on the job list are still read from `job_applicant_counts`.
 - `hiring.job_registry` writes, audit and compliance rows are hiring's own tables.
+
+## Audit trail read path
+
+`GET /jobs/audit` (hiring routes, so `bff.HiringPath` already sends it to this service; the BFF tests cover it) pages the
+company's audit events, newest first. It merges `hiring.audit_events` (`source: "hiring"`) and `hiring.app_audit_events`
+(`source: "applications"`: received, viewed, file_downloaded, status_changed) in one tenant transaction, so row level
+security applies on top of the `tenant_id` predicate. Rows carry ids, the action and the stored `diff` as written; they
+hold no candidate data and no IP address (only `admin.audit_logs` stores IPs, see identity.md).
+
+| Item | |
+|---|---|
+| Permission | `job.audit.view` (`rbac.JobAudit`; founder and legal by the default matrix), checked in `draft.Service.AuditTrail` before any read: 403 otherwise |
+| Filters | `job_id` (the entity), `actor_id`, `action` (exact), `from` (inclusive) and `to` (exclusive), RFC 3339 or `YYYY-MM-DD`; a date `to` covers that whole day |
+| Paging | `limit` (default 50, max 100) and `cursor` = `meta.next_cursor` of the previous page (opaque; position is `(created_at, source, id)`, so pages stay stable while rows are added). `meta.has_more` says whether another page follows |
+| Errors | 400 with `details.fields` for a bad id, time, cursor or limit; 503 when the process has no audit reader |
+
+Row shape: `{source, id, job_id, actor_id, action, diff, created_at}`. Compliance logs (`hiring.compliance_log`,
+`hiring.app_compliance_log`) are not included. Hiring reads the applications-owned table directly, like
+`job_applicant_counts`; when applications gets its own database, replace `hiringstore.Store.AuditEvents` with a call.
 - `cmd/hiring-expire` stays a separate one-shot job (run it on a schedule); `ORG_TENANTS=grpc` makes it use org.
 - `tools/orgfake` (`go run ./cmd/tools/orgfake`) is a stand-in OrgService over the shared DBs (readiness, membership,
   industries, companies) until org-svc lands; `tools/hiringprobe` calls the hiring gRPC API.

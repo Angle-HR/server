@@ -47,7 +47,10 @@ type AdminHandler struct {
 	// verification routes answer 503.
 	Org OrgReview
 	// Users is the directory used to activate and deactivate accounts.
-	Users    *userdir.Directory
+	Users *userdir.Directory
+	// OrgReads reads the onboarding progress and company name of the user detail from org (ORG_ONBOARDING=grpc).
+	// Nil keeps the accounts tables.
+	OrgReads *OrgReads
 	validate *validator.Validate
 }
 
@@ -119,6 +122,7 @@ func (h *AdminHandler) RegisterProtectedRoutes(r chi.Router, mw *auth.AdminMiddl
 		Post("/verification/{organizationID}/review", h.reviewVerification)
 
 	r.With(mw.RequirePermission(admin.PermCompaniesDelete)).Delete("/companies/{id}", h.deleteCompany)
+	r.With(mw.RequirePermission(admin.PermCompaniesDelete)).Post("/companies/{id}/reactivate", h.reactivateCompany)
 }
 
 func (h *AdminHandler) audit(r *http.Request, action, resourceType, resourceID string, meta map[string]any) {

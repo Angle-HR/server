@@ -118,6 +118,8 @@ type Service struct {
 	// Applicants fills the applicant counters of the job list. Nil leaves what the store returned (zero for the real
 	// store, which no longer reads the applications tables).
 	Applicants ApplicantCounts
+	// Audit reads the company's job audit trail (Service.AuditTrail). Nil answers ErrAuditUnavailable.
+	Audit AuditReader
 }
 
 // ApplicantCount is the per-job counters the list shows: everyone who applied, and how many of them nobody on the
@@ -384,14 +386,20 @@ func (s *Service) List(ctx context.Context, c Caller, q ListQuery) ([]hiringtype
 	}
 	counts, cerr := s.Applicants.ApplicantCounts(ctx, c, ids)
 	if cerr != nil {
-		// The list stays usable when applications is unreachable; the counters show zero until it is back.
+		// The list stays usable when applications is unreachable; the counters are reported as unavailable (null and
+		// applicant_counts_available=false), never as zero.
 		slog.WarnContext(ctx, "applicant counts unavailable", "error", cerr)
+		for i := range items {
+			items[i].ApplicantCount, items[i].NewApplicantCount, items[i].ApplicantCountsAvailable = nil, nil, false
+		}
 		return items, next, nil
 	}
 	for i := range items {
+		total, fresh := 0, 0
 		if n, ok := counts[items[i].ID]; ok {
-			items[i].ApplicantCount, items[i].NewApplicantCount = n.Total, n.New
+			total, fresh = n.Total, n.New
 		}
+		items[i].ApplicantCount, items[i].NewApplicantCount, items[i].ApplicantCountsAvailable = &total, &fresh, true
 	}
 	return items, next, nil
 }

@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- Region-migration saga (`REGION_MOVE=saga`, default `inline`): org drives the move of an onboarding account out of the global holding area through `IdentityService.PrepareRegionMove` / `CommitRegionMove` / new `AbortRegionMove` over gRPC, with persisted state (`accounts.region_move_sagas`, migration `global_registry/000018`, which also drops the cross-service foreign keys from the pending organization and progress tables), idempotent steps, compensation before the commit and a resumer. `OrgService.CompleteRegionOnboarding` is implemented (no tokens: sessions rotate). New events `org.region.moved.v1`, `org.company.reactivated.v1` (`AdminOrgService.ReactivateCompany`, `POST /admin/companies/{id}/reactivate`) and `identity.staff.deactivated.v1`; consumers behind `APPLICATIONS_ORG_EVENTS`, `HIRING_ORG_EVENTS` and `IDENTITY_EVENTS`. See `docs/microservices/org.md` and `scripts/e2e-region-saga.sh`.
 - Individual accounts can hire: finishing individual onboarding creates a personal organization (`accounts.organizations.kind = 'individual'`), reviewed through the admin verification queue (`case_type: individual`). The compliance step asks individuals for the industry only; `POST /onboarding/complete` returns `organization`; `GET /organization/verification` returns `kind`. `cmd/org-backfill-individuals` migrates existing accounts. `org.*` events carry `company_kind`. See `docs/microservices/individual-accounts.md`.
 
 ### Changed (small fixes)

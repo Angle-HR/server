@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -74,5 +75,26 @@ func TestFromEnv(t *testing.T) {
 	}
 	if _, ok := c.(DB); !ok {
 		t.Fatalf("default must be db, got %T", c)
+	}
+}
+
+// An applications service that is down yields an error (never an empty map that would read as zero applicants), which
+// draft.Service reports as unavailable counters.
+func TestGRPCDownReturnsError(t *testing.T) {
+	lis := bufconn.Listen(1 << 20)
+	_ = lis.Close()
+	conn, err := grpc.NewClient("passthrough:///bufnet",
+		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return lis.Dial() }),
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	g := GRPC{Client: applicationsv1.NewApplicationsServiceClient(conn)}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	got, err := g.ApplicantCounts(ctx, draft.Caller{OrgID: "c1", Region: "uk"}, []string{"j1"})
+	if err == nil || got != nil {
+		t.Fatalf("want an error and no counts, got %v, %v", got, err)
 	}
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/Angle-HR/server/internal/auth"
+	"github.com/Angle-HR/server/internal/identityevents"
 	"github.com/Angle-HR/server/pkg/apperror"
 	"github.com/Angle-HR/server/pkg/besteffort"
 )
@@ -431,6 +432,15 @@ func (s *Store) UpdateStaff(
 		if err != nil {
 			return StaffMember{}, err
 		}
+		// identity.staff.deactivated.v1 in the same transaction (no-op unless IDENTITY_EVENTS=on). Only the
+		// active -> inactive transition emits it, so repeating the request does not.
+		if currentActive && !willBeActive {
+			if evErr := identityevents.EnqueueStaffDeactivated(ctx, tx, identityevents.StaffDeactivated{
+				StaffID: id.String(), DeactivatedAt: time.Now(),
+			}); evErr != nil {
+				return StaffMember{}, fmt.Errorf("enqueue staff deactivated event: %w", evErr)
+			}
+		}
 	}
 
 	if roleSlugs != nil {
@@ -520,7 +530,18 @@ func (s *Store) WriteAudit(
 	return err
 }
 
-// ListAuditLogs returns audit logs with optional filters.
+// MaxAuditPage is the largest page of audit rows.
+const MaxAuditPage = 100
+
+// AuditQuery filters admin.audit_logs. Empty fields do not filter; From is inclusive, To exclusive.
+type AuditQuery struct {
+	ActorID                          *uuid.UUID
+	Action, ResourceType, ResourceID string
+	From, To                         *time.Time
+	Limit, Offset                    int
+}
+
+// ListAuditLogs returns audit logs with optional filters, newest first.
 func (s *Store) ListAuditLogs(
 	ctx context.Context,
 	actorID *uuid.UUID,
@@ -530,8 +551,20 @@ func (s *Store) ListAuditLogs(
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	if offset < 0 {
-		offset = 0
+	return s.ListAudit(ctx, AuditQuery{ActorID: actorID, Action: action, ResourceType: resourceType, Limit: limit, Offset: offset})
+}
+
+// ListAudit returns up to q.Limit audit logs matching q, newest first (ties by id, so pages are stable). The ip is
+// returned exactly as stored: the writer stores the bare address and nothing is rewritten on read.
+func (s *Store) ListAudit(ctx context.Context, q AuditQuery) ([]AuditLog, error) {
+	if q.Limit <= 0 {
+		q.Limit = 50
+	}
+	if q.Limit > MaxAuditPage+1 { // one extra row lets a caller detect a following page
+		q.Limit = MaxAuditPage + 1
+	}
+	if q.Offset < 0 {
+		q.Offset = 0
 	}
 
 	rows, err := s.DB.Query(ctx, `
@@ -541,9 +574,12 @@ func (s *Store) ListAuditLogs(
 		WHERE ($1::uuid IS NULL OR a.actor_id = $1)
 		  AND ($2 = '' OR a.action = $2)
 		  AND ($3 = '' OR a.resource_type = $3)
-		ORDER BY a.created_at DESC
-		LIMIT $4 OFFSET $5
-	`, actorID, action, resourceType, limit, offset)
+		  AND ($4 = '' OR a.resource_id = $4)
+		  AND ($5::timestamptz IS NULL OR a.created_at >= $5)
+		  AND ($6::timestamptz IS NULL OR a.created_at < $6)
+		ORDER BY a.created_at DESC, a.id DESC
+		LIMIT $7 OFFSET $8
+	`, q.ActorID, q.Action, q.ResourceType, q.ResourceID, q.From, q.To, q.Limit, q.Offset)
 	if err != nil {
 		return nil, err
 	}

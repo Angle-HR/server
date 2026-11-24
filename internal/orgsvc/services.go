@@ -2,9 +2,11 @@ package orgsvc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Angle-HR/server/internal/dbrouter"
@@ -108,4 +110,24 @@ func (g globalCatalog) IndustryExists(ctx context.Context, slug string) (bool, e
 		return false, fmt.Errorf("orgsvc: validate industry: %w", err)
 	}
 	return ok, nil
+}
+
+// globalCountries answers which region serves a country (global catalog).
+type globalCountries struct {
+	DB interface {
+		QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	}
+}
+
+// CountryRegion implements CountryResolver. An unknown or inactive country is region.RegionUnknown.
+func (g globalCountries) CountryRegion(ctx context.Context, countryID uuid.UUID) (region.Region, error) {
+	var reg string
+	err := g.DB.QueryRow(ctx, `SELECT region FROM waitlist.countries WHERE id = $1 AND is_active`, countryID).Scan(&reg)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return region.RegionUnknown, nil
+	}
+	if err != nil {
+		return region.RegionUnknown, fmt.Errorf("orgsvc: country region: %w", err)
+	}
+	return region.Region(reg), nil
 }

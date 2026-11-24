@@ -426,6 +426,52 @@ func contains(list []string, v string) bool {
 const deleteCompanySQL = `
 UPDATE accounts.organizations SET deleted_at = now() WHERE id = $1::uuid AND deleted_at IS NULL RETURNING deleted_at`
 
+const reactivateCompanySQL = `
+UPDATE accounts.organizations SET deleted_at = NULL WHERE id = $1::uuid AND deleted_at IS NOT NULL RETURNING now()`
+
+// ReactivateCompany undoes DeleteCompany and emits org.company.reactivated.v1 in the same transaction (when
+// ORG_EVENTS=on). Reactivating a company that is not deleted is a no-op that reports alreadyActive; an unknown one
+// is ErrNotFound. What the consumers removed when the company was deleted does not come back.
+func (s *Store) ReactivateCompany(ctx context.Context, reg region.Region, companyID, reason string) (at time.Time, alreadyActive bool, err error) {
+	d, err := s.db(reg)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	tx, err := d.Begin(ctx)
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("orgstore: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	err = tx.QueryRow(ctx, reactivateCompanySQL, companyID).Scan(&at)
+	if errors.Is(err, pgx.ErrNoRows) {
+		var one int
+		err = tx.QueryRow(ctx, `SELECT 1 FROM accounts.organizations WHERE id = $1::uuid`, companyID).Scan(&one)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return time.Time{}, false, ErrNotFound
+		}
+		if err != nil {
+			return time.Time{}, false, fmt.Errorf("orgstore: reactivate company: %w", err)
+		}
+		return time.Now().UTC(), true, nil
+	}
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("orgstore: reactivate company: %w", err)
+	}
+	kind, err := orgevents.KindOf(ctx, tx, companyID)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	if err = orgevents.EnqueueReactivated(ctx, tx, orgevents.CompanyReactivated{
+		CompanyKind: kind, CompanyID: companyID, Region: string(reg), ReactivatedAt: at.UTC(), Reason: reason,
+	}); err != nil {
+		return time.Time{}, false, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return time.Time{}, false, fmt.Errorf("orgstore: commit: %w", err)
+	}
+	return at, false, nil
+}
+
 // DeleteCompany marks a company deleted and emits org.company.deleted.v1 in the same transaction (when ORG_EVENTS=on).
 // Deleting a deleted company is a no-op that reports alreadyDeleted; an unknown one is ErrNotFound. From then on the
 // company no longer resolves, lists or answers readiness; its data is removed by the consumers of the event

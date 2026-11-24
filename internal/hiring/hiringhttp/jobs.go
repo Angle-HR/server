@@ -29,6 +29,7 @@ func (h *HiringHandler) RegisterProtectedRoutes(r chi.Router) {
 		r.Get("/", h.listJobs)
 		r.Post("/", h.createJob)
 		r.Get("/counts", h.jobCounts)
+		r.Get("/audit", h.auditTrail)
 		h.registerPublishJobRoutes(r)
 		r.Route("/{id}", func(r chi.Router) {
 			h.registerPublishItemRoutes(r)

@@ -109,6 +109,28 @@ type pendingOrganization struct {
 	CompanyRoleID uuid.UUID
 }
 
+// RegionMover moves an account out of the global holding area into target's regional database and returns the
+// region. Callers rotate the session afterwards. The default is the inline migrateUserToRegion; REGION_MOVE=saga
+// installs regionsaga.Coordinator (Deps.Mover).
+type RegionMover interface {
+	Move(ctx context.Context, userID uuid.UUID, target region.Region) (region.Region, error)
+}
+
+// moveUser runs the mover, or the inline migration when none is set.
+func moveUser(
+	ctx context.Context,
+	mover RegionMover,
+	router *dbrouter.DBRouter,
+	global globalDB,
+	userID uuid.UUID,
+	target region.Region,
+) (region.Region, error) {
+	if mover != nil {
+		return mover.Move(ctx, userID, target)
+	}
+	return migrateUserToRegion(ctx, router, global, userID, target)
+}
+
 // migrateUserToRegion moves an account out of the global holding area
 // (accounts.pending_users / pending_organizations / pending_onboarding_progress
 // in the global database) into target's real regional database, preserving

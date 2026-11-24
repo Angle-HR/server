@@ -96,3 +96,46 @@ func TestEventsCarryCompanyKind(t *testing.T) {
 		}
 	}
 }
+
+func TestReactivatedAndRegionMovedEvents(t *testing.T) {
+	r1, err := ReactivatedEvent(CompanyReactivated{CompanyID: "c1", Region: "uk", CompanyKind: KindBusiness, ReactivatedAt: t0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2, _ := ReactivatedEvent(CompanyReactivated{CompanyID: "c1", Region: "uk", CompanyKind: KindBusiness, ReactivatedAt: t0})
+	r3, _ := ReactivatedEvent(CompanyReactivated{CompanyID: "c1", Region: "uk", CompanyKind: KindBusiness, ReactivatedAt: t0.Add(time.Hour)})
+	if r1.Type != "org.company.reactivated.v1" || r1.ID != r2.ID || r1.ID == r3.ID || r1.PartitionKey != "c1" {
+		t.Fatalf("%+v", r1)
+	}
+	if err = r1.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Two saga attempts for the same user and region emit the same event id: the outbox drops the second.
+	m1, err := RegionMovedEvent(RegionMoved{SagaID: "s1", UserID: "u1", CompanyID: "c1", CompanyKind: KindBusiness, FromRegion: "global", ToRegion: "eu", MovedAt: t0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m2, _ := RegionMovedEvent(RegionMoved{SagaID: "s2", UserID: "u1", FromRegion: "global", ToRegion: "eu", MovedAt: t0.Add(time.Minute)})
+	if m1.Type != "org.region.moved.v1" || m1.ID != m2.ID || m1.PartitionKey != "u1" || m1.Subject != "u1" || m1.Region != "eu" || m1.CompanyID != "c1" || m2.CompanyID != "" {
+		t.Fatalf("%+v %+v", m1, m2)
+	}
+	if err = m1.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(m1)
+	for _, banned := range []string{"@", "email", "password", "legal_name"} {
+		if strings.Contains(string(raw), banned) {
+			t.Fatalf("payload leaks %q: %s", banned, raw)
+		}
+	}
+
+	tx := &fakeTx{}
+	t.Setenv(EnvVar, "on")
+	if err = EnqueueRegionMoved(context.Background(), tx, RegionMoved{UserID: "u1", FromRegion: "global", MovedAt: t0}); err != ErrNoRegion {
+		t.Fatalf("no region must fail closed: %v", err)
+	}
+	if err = EnqueueReactivated(context.Background(), tx, CompanyReactivated{CompanyID: "c1", Region: "uk", ReactivatedAt: t0}); err != nil || len(tx.args) != 1 {
+		t.Fatalf("%v", err)
+	}
+}

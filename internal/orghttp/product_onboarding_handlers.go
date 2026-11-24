@@ -39,6 +39,8 @@ var _ = apidoc.ErrorEnvelope{}
 
 // ProductOnboardingHandler handles product onboarding endpoints.
 type ProductOnboardingHandler struct {
+	// Mover moves a still-global account into its region; nil runs the inline migration (REGION_MOVE).
+	Mover           RegionMover
 	Router          *dbrouter.DBRouter
 	GlobalDB        globalDB
 	Enqueuer        jobEnqueuer
@@ -446,7 +448,7 @@ func (h *ProductOnboardingHandler) moveToCountryRegion(
 	if err != nil || !region.Valid(target) || target == region.RegionGlobal {
 		return region.RegionUnknown, apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID)
 	}
-	newReg, err := migrateUserToRegion(ctx, h.Router, h.GlobalDB, userID, target)
+	newReg, err := moveUser(ctx, h.Mover, h.Router, h.GlobalDB, userID, target)
 	if err != nil {
 		return region.RegionUnknown, fmt.Errorf("move account to country region: %w", err)
 	}

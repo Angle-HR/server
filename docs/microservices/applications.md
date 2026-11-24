@@ -34,7 +34,11 @@ longer reads `job_applicant_counts`. Implementations in `internal/hiring/applica
 | `db` (default) | reads `hiring.job_applicant_counts` of the caller's region (`hiringstore.Store.ApplicantCounts`) |
 | `grpc` | `ApplicationsService.GetApplicantCounts` at `APPLICATIONS_GRPC_ADDR`, with company, region and user as CallContext metadata |
 
-If the applications service is unreachable the list still works and the counters show zero (warning logged).
+If the counter source cannot be reached the list still works (warning logged) and each row says so explicitly instead
+of showing zero: `applicant_count` and `new_applicant_count` are `null` and `applicant_counts_available` is `false`.
+When the source answers, `applicant_counts_available` is `true` and a job without applications is a real `0`. Clients
+should show "unavailable" (or hide the badge) for `null` and never treat it as zero. The same applies to
+`APPLICANT_COUNTS=db` when its read fails. (`internal/hiring/draft/service.go`, field docs in `hiringtypes.ListItem`.)
 
 ## Audit and compliance trail
 
@@ -56,7 +60,8 @@ SELECT 'applications_compliance', created_at, actor_id, gate_id || ':' || event,
 ORDER BY created_at;
 ```
 
-There is no HTTP read path yet.
+Read path: `GET /jobs/audit` on the hiring routes (see [hiring.md](hiring.md#audit-trail-read-path)) returns the first two
+sources of the UNION above as one stream; the compliance logs are not part of it.
 
 ## gRPC contract
 
@@ -110,8 +115,8 @@ failure is retried and repeats safely.
   adapter, because no event carries them (see `applications-jobmodel.md`).
 - **Region data**: the service and the monolith share the same regional databases locally; `job_applicant_counts`,
   `org_settings` and the audit tables are still in the `hiring` schema.
-- The `grpc` applicant counts mode needs applications to be up for non-zero counters; there is no cached fallback.
-- `org.company.deleted.v1` has no producer yet; the audit trail has no HTTP read path.
+- The `grpc` applicant counts mode needs applications to be up for counters; when it is down the list reports them as unavailable (`null` plus `applicant_counts_available=false`), there is no cached fallback.
+- `org.company.deleted.v1` has no producer yet. The audit trail is read through hiring (`GET /jobs/audit`), which reads `hiring.app_audit_events` of the shared regional database directly until applications serves its own rows.
 - Azure presigned URLs have no separate public endpoint setting.
 
 

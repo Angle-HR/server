@@ -36,13 +36,19 @@ service OrgService {
 
   // CompleteRegionOnboarding drives the region-migration saga. Org copies its pending
   // organization and onboarding progress into the target region between
-  // identity.PrepareRegionMove and identity.CommitRegionMove, and returns the tokens
-  // identity issued so the BFF can swap them.
+  // identity.PrepareRegionMove and identity.CommitRegionMove (compensating with
+  // identity.AbortRegionMove before the commit), persisting the saga so a crash resumes.
+  // It issues no tokens (the BFF rotates the session); the token fields stay empty.
   rpc CompleteRegionOnboarding(CompleteRegionOnboardingRequest) returns (CompleteRegionOnboardingResponse);
 
   // SubmitKyb starts or re-runs business verification for the caller's company.
   rpc SubmitKyb(SubmitKybRequest) returns (SubmitKybResponse);
   rpc GetKybStatus(GetKybStatusRequest) returns (GetKybStatusResponse);
+
+  // GetOnboardingProgress returns the onboarding step and completed steps of a user in a company region (region from
+  // the call context; a user still in the global holding area is FailedPrecondition). found=false: no progress row yet.
+  // Identity calls it for /auth/me and the admin user detail (ORG_ONBOARDING=grpc).
+  rpc GetOnboardingProgress(GetOnboardingProgressRequest) returns (GetOnboardingProgressResponse);
 }
 
 // AdminOrgService is the staff-facing review surface (admin-bff).
@@ -56,6 +62,10 @@ service AdminOrgService {
   // same transaction. Downstream services remove the company's data when they consume it. The identity admin
   // route DELETE /admin/companies/{id} (superadmin only) calls it.
   rpc DeleteCompany(DeleteCompanyRequest) returns (DeleteCompanyResponse);
+  // ReactivateCompany undoes DeleteCompany (idempotent) and emits org.company.reactivated.v1 through the outbox in
+  // the same transaction. Data that consumers removed on deletion does not come back; the company starts empty
+  // again. The identity admin route POST /admin/companies/{id}/reactivate (superadmin only) calls it.
+  rpc ReactivateCompany(ReactivateCompanyRequest) returns (ReactivateCompanyResponse);
 }
 
 enum KybStatus {
@@ -253,6 +263,19 @@ message DeleteCompanyResponse {
   bool already_deleted = 2;
 }
 
+message ReactivateCompanyRequest {
+  string company_id = 1;
+  string region = 2;
+  string admin_id = 3;
+  string reason = 4;
+}
+
+message ReactivateCompanyResponse {
+  google.protobuf.Timestamp reactivated_at = 1;
+  // True when the company was not deleted (nothing changed).
+  bool already_active = 2;
+}
+
 message ApplyKybDecisionRequest {
   string company_id = 1;
   string region = 2;
@@ -271,4 +294,14 @@ message GetCompanyByOwnerRequest {
 
 message GetCompanyByOwnerResponse {
   Company company = 1;
+}
+
+message GetOnboardingProgressRequest {
+  string user_id = 1;
+}
+
+message GetOnboardingProgressResponse {
+  bool found = 1;
+  string current_step = 2;
+  repeated string completed_steps = 3;
 }

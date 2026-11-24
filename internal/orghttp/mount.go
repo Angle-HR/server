@@ -40,6 +40,9 @@ type Deps struct {
 	// serves those paths there until ORG_REMOTE is on.
 	Company  CompanyStore
 	Identify Identify
+	// Mover moves a still-global account into its country's region (the region-migration saga). Nil keeps the
+	// inline migration.
+	Mover RegionMover
 }
 
 // Handlers are the org HTTP handlers.
@@ -57,6 +60,7 @@ func New(d Deps) *Handlers {
 	product := NewProductOnboardingHandler(d.Router, d.Global, d.Enqueuer, d.Sessions)
 	WireAddressProviders(product, d.Config)
 	product.QueueFor = d.Queue
+	product.Mover = d.Mover
 	kybHandler := NewKYBHandler(d.Router, d.Global, NewKYBRegistry(d.Config))
 	kybHandler.NotifierFor = NewKYBNotifierFactory(d.Router, d.Global, d.Enqueuer)
 	kybHandler.Formats = onboarding.RegistrationNumberFormatOK
@@ -68,6 +72,8 @@ func New(d Deps) *Handlers {
 		Business:   NewBusinessOnboardingHandler(d.Router, d.Global, d.Sessions),
 		KYB:        kybHandler,
 	}
+	h.Individual.Mover = d.Mover
+	h.Business.Mover = d.Mover
 	if d.Company != nil {
 		h.Company = &CompanyHandler{Store: d.Company, Identify: d.Identify}
 	}

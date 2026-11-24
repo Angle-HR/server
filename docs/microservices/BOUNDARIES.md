@@ -98,6 +98,8 @@ Target: each service writes an `EmailRequested` event from its own transaction (
 
 ### 4.1 Onboarding region migration with token swap
 
+> Implemented as `REGION_MOVE=saga` (`internal/regionsaga`, [org.md](org.md#region-migration-saga)). Differences from the plan below: sessions are server-side, so no `TokenPair` is issued or swapped (the handler rotates the session); identity gained `AbortRegionMove` for compensation; the saga state is persisted in `accounts.region_move_sagas`; org emits `org.region.moved.v1` (identity does not emit `identity.user.region_moved`).
+
 Today `migrateUserToRegion` (`handler/region_pending.go:125`) does, in one call: read `accounts.pending_users` (global), `pending_organizations`, `pending_onboarding_progress` (`:179-246`); write `users`, `organizations`, `onboarding_progress` into the target region's DB (`copyAccountToRegion`, `:250`, `ON CONFLICT DO NOTHING`); then update `users_registry` and delete the pending rows (`releasePendingAccount`, `:297`). Callers (`individual_onboarding.go:207`, `business_onboarding.go:217`, `product_onboarding_handlers.go:419`) then re-issue JWTs because the `region` claim is stale (`auth/jwt.go:67`, `IssuePair`, called at `individual_onboarding.go:147`, `business_onboarding.go:149`, `product_onboarding_handlers.go:73`).
 
 It straddles two services: users and the registry are identity; organizations and progress are org. The FK `organizations.owner_user_id -> users.id` forces user-before-org order. The function is already safely re-runnable, which is the property a saga needs.

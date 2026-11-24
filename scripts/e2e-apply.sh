@@ -8,7 +8,9 @@
 #
 # UPLOADS=on (needs the clamav profile and CLAMAV_ADDR on the applications service, and the object store's public
 # endpoint, see R2_PUBLIC_ENDPOINT) also runs: presign -> PUT from the host -> scan and claim on submit -> the company
-# downloads the file through its presigned link and compares the bytes; the EICAR string declared as a PDF is refused (ClamAV does not flag EICAR behind a PDF header, so the malware verdict path itself is only covered by unit tests and a direct clamdscan); a special
+# downloads the file through its presigned link and compares the bytes; the EICAR string declared as a PDF is refused (wrong magic bytes); the EICAR string inside a well-formed PDF stream (passes the
+# format check, flagged by ClamAV) is refused as malware, the service logs the verdict and neither the staging nor the final
+# object is left in the bucket (see OBJECT_BUCKET); a special
 # category answer (health, sealed) is accepted; a knockout answer flags the application; a rejected candidate who
 # applies again inside the block window is ignored (reapply block, evidenced by the applications service log).
 # Without UPLOADS=on the script only checks that uploads fail closed with 503 when no scanner is configured.
@@ -34,6 +36,8 @@
 #   UPLOADS       on to run the upload, special category, knockout and reapply steps (default off)
 #   APPS_LOG_CMD  command printing the applications service log (default: docker compose -p $COMPOSE_PROJECT_NAME
 #                 logs applications, project openhr-local when unset); used to see the reapply block fire
+#   OBJECT_BUCKET bucket the CVs land in, checked through the object store's S3 API with curl --aws-sigv4 (default openhr-uk;
+#                 MINIO_ROOT_USER/MINIO_ROOT_PASSWORD are the credentials, default minioadmin)
 #   STATE_FILE    write the ids this run created (company, job, public id, credentials) for scripts/e2e-couplings.sh
 #   KYB_COUNTRY   country with no automated registry, so verification goes to manual review (default KE)
 #
@@ -275,6 +279,10 @@ if [ "$UPLOADS" = on ]; then
   { printf '%%PDF-1.4\n%% e2e test cv\n'; head -c 3000 /dev/zero | tr '\0' 'x'; printf '\n%%%%EOF\n'; } >"$CVFILE"
   { printf '%s' 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'; } >"$EVIL"
   upload_cv "$EVIL"; EVIL_TOKEN="$CV_TOKEN"
+  # EICAR as the content of a stream object in a PDF: it has the %PDF- magic, so only the scanner can refuse it.
+  MALWARE="$(mktemp)"; EICAR="$(cat "$EVIL")"
+  printf '%%PDF-1.4\n1 0 obj\n<< /Length %d >>\nstream\n%s\nendstream\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%%%EOF\n' "${#EICAR}" "$EICAR" >"$MALWARE"
+  upload_cv "$MALWARE"; MALWARE_TOKEN="$CV_TOKEN"
   upload_cv "$CVFILE"
   ok "presigned PUT from the host worked (token $CV_TOKEN)"
 fi
@@ -285,6 +293,16 @@ if [ "$UPLOADS" = on ]; then
   EVIL_APPLY="$(jq -c --arg cv "$Q_CV" --arg t "$EVIL_TOKEN" --arg e "evil-$CANDIDATE" --arg m "$Q_MAIL" '.answers[$cv]=$t | .answers[$m]=$e' <<<"$APPLY")"
   anon POST "/public/jobs/$PUBLIC_ID/applications" "$EVIL_APPLY"
   case "$LAST_STATUS" in 4??) ok "the EICAR file declared as a PDF is refused (HTTP $LAST_STATUS)" ;; *) fail "the EICAR file was accepted (HTTP $LAST_STATUS)" ;; esac
+  MALWARE_APPLY="$(jq -c --arg cv "$Q_CV" --arg t "$MALWARE_TOKEN" --arg m "$Q_MAIL" --arg e "malware-$CANDIDATE" '.answers[$cv]=$t | .answers[$m]=$e' <<<"$APPLY")"
+  MAL_BEFORE="$(eval "$APPS_LOG_CMD" 2>&1 | grep -c 'uploads: malware found' || true)"
+  anon POST "/public/jobs/$PUBLIC_ID/applications" "$MALWARE_APPLY"
+  case "$LAST_STATUS" in 4??) ok "the EICAR file inside a PDF is refused (HTTP $LAST_STATUS): $(jq -c '.error // .' <<<"$LAST_BODY" | cut -c1-200)" ;; *) fail "the malware file was accepted (HTTP $LAST_STATUS)" ;; esac
+  grep -q -i "malware" <<<"$LAST_BODY" || ok "note: the response does not name malware (the reason stays server side)"
+  MAL_AFTER="$(eval "$APPS_LOG_CMD" 2>&1 | grep -c 'uploads: malware found' || true)"
+  [ "$MAL_AFTER" -gt "$MAL_BEFORE" ] || fail "the applications log gained no 'uploads: malware found' line (is CLAMAV_ADDR set on the applications service?)"
+  ok "the applications service logged the malware verdict"
+  anon POST "/public/jobs/$PUBLIC_ID/applications" "$MALWARE_APPLY"
+  case "$LAST_STATUS" in 4??) ok "the rejected token cannot be used again (HTTP $LAST_STATUS)" ;; *) fail "the rejected token was accepted again (HTTP $LAST_STATUS)" ;; esac
 fi
 
 step "9. anonymous: apply, retry with the same idempotency key, apply again"
@@ -334,6 +352,16 @@ if [ "$UPLOADS" = on ]; then
   DL="$(mktemp)"; curl -fsS "$(jq -r '.data.url' <<<"$LAST_BODY")" -o "$DL" || fail "download through the presigned link failed"
   cmp -s "$DL" "$CVFILE" || fail "downloaded bytes differ from the uploaded CV"
   ok "the CV downloaded through the company-side link is byte-identical"
+  # Nothing of the rejected files is stored: list the bucket (S3 API, SigV4) and look for the upload ids. The accepted
+  # CV is the control: its final object must be listed, so a wrong bucket or a failing listing cannot pass vacuously.
+  OBJECT_BUCKET="${OBJECT_BUCKET:-openhr-uk}"
+  LISTING="$(curl -fsS --aws-sigv4 "aws:amz:us-east-1:s3" --user "${MINIO_ROOT_USER:-minioadmin}:${MINIO_ROOT_PASSWORD:-minioadmin}" \
+    "http://localhost:$MINIO_API_PORT/$OBJECT_BUCKET?list-type=2&max-keys=1000")" || fail "listing bucket $OBJECT_BUCKET failed"
+  grep -q "f/[^<]*$CV_TOKEN" <<<"$LISTING" || fail "control: the accepted CV ($CV_TOKEN) is not stored under f/ in $OBJECT_BUCKET"
+  for t in "$MALWARE_TOKEN" "$EVIL_TOKEN"; do
+    ! grep -q "$t" <<<"$LISTING" || fail "a rejected upload ($t) is still stored in $OBJECT_BUCKET"
+  done
+  ok "no staging or final object exists for the EICAR uploads (control: the clean CV is stored)"
   printf '%s' "$LAST_BODY" >/dev/null
   api GET "/jobs/$JOB/applications/$APP"; expect "open application"
   echo "answers of the application: $(jq -c '[.data.answers[] | {question_id, label}]' <<<"$LAST_BODY" | cut -c1-300)"

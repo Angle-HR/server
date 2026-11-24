@@ -1963,6 +1963,127 @@ func (x *DeleteCompanyResponse) GetAlreadyDeleted() bool {
 	return false
 }
 
+type ReactivateCompanyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CompanyId     string                 `protobuf:"bytes,1,opt,name=company_id,json=companyId,proto3" json:"company_id,omitempty"`
+	Region        string                 `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
+	AdminId       string                 `protobuf:"bytes,3,opt,name=admin_id,json=adminId,proto3" json:"admin_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReactivateCompanyRequest) Reset() {
+	*x = ReactivateCompanyRequest{}
+	mi := &file_openhr_org_v1_org_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReactivateCompanyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReactivateCompanyRequest) ProtoMessage() {}
+
+func (x *ReactivateCompanyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_openhr_org_v1_org_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReactivateCompanyRequest.ProtoReflect.Descriptor instead.
+func (*ReactivateCompanyRequest) Descriptor() ([]byte, []int) {
+	return file_openhr_org_v1_org_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *ReactivateCompanyRequest) GetCompanyId() string {
+	if x != nil {
+		return x.CompanyId
+	}
+	return ""
+}
+
+func (x *ReactivateCompanyRequest) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *ReactivateCompanyRequest) GetAdminId() string {
+	if x != nil {
+		return x.AdminId
+	}
+	return ""
+}
+
+func (x *ReactivateCompanyRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type ReactivateCompanyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ReactivatedAt *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=reactivated_at,json=reactivatedAt,proto3" json:"reactivated_at,omitempty"`
+	// True when the company was not deleted (nothing changed).
+	AlreadyActive bool `protobuf:"varint,2,opt,name=already_active,json=alreadyActive,proto3" json:"already_active,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReactivateCompanyResponse) Reset() {
+	*x = ReactivateCompanyResponse{}
+	mi := &file_openhr_org_v1_org_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReactivateCompanyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReactivateCompanyResponse) ProtoMessage() {}
+
+func (x *ReactivateCompanyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_openhr_org_v1_org_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReactivateCompanyResponse.ProtoReflect.Descriptor instead.
+func (*ReactivateCompanyResponse) Descriptor() ([]byte, []int) {
+	return file_openhr_org_v1_org_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *ReactivateCompanyResponse) GetReactivatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ReactivatedAt
+	}
+	return nil
+}
+
+func (x *ReactivateCompanyResponse) GetAlreadyActive() bool {
+	if x != nil {
+		return x.AlreadyActive
+	}
+	return false
+}
+
 type ApplyKybDecisionRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	CompanyId       string                 `protobuf:"bytes,1,opt,name=company_id,json=companyId,proto3" json:"company_id,omitempty"`
@@ -1976,7 +2097,7 @@ type ApplyKybDecisionRequest struct {
 
 func (x *ApplyKybDecisionRequest) Reset() {
 	*x = ApplyKybDecisionRequest{}
-	mi := &file_openhr_org_v1_org_proto_msgTypes[35]
+	mi := &file_openhr_org_v1_org_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1988,7 +2109,7 @@ func (x *ApplyKybDecisionRequest) String() string {
 func (*ApplyKybDecisionRequest) ProtoMessage() {}
 
 func (x *ApplyKybDecisionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_org_v1_org_proto_msgTypes[35]
+	mi := &file_openhr_org_v1_org_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2001,7 +2122,7 @@ func (x *ApplyKybDecisionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyKybDecisionRequest.ProtoReflect.Descriptor instead.
 func (*ApplyKybDecisionRequest) Descriptor() ([]byte, []int) {
-	return file_openhr_org_v1_org_proto_rawDescGZIP(), []int{35}
+	return file_openhr_org_v1_org_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ApplyKybDecisionRequest) GetCompanyId() string {
@@ -2048,7 +2169,7 @@ type ApplyKybDecisionResponse struct {
 
 func (x *ApplyKybDecisionResponse) Reset() {
 	*x = ApplyKybDecisionResponse{}
-	mi := &file_openhr_org_v1_org_proto_msgTypes[36]
+	mi := &file_openhr_org_v1_org_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2060,7 +2181,7 @@ func (x *ApplyKybDecisionResponse) String() string {
 func (*ApplyKybDecisionResponse) ProtoMessage() {}
 
 func (x *ApplyKybDecisionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_org_v1_org_proto_msgTypes[36]
+	mi := &file_openhr_org_v1_org_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2073,7 +2194,7 @@ func (x *ApplyKybDecisionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyKybDecisionResponse.ProtoReflect.Descriptor instead.
 func (*ApplyKybDecisionResponse) Descriptor() ([]byte, []int) {
-	return file_openhr_org_v1_org_proto_rawDescGZIP(), []int{36}
+	return file_openhr_org_v1_org_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ApplyKybDecisionResponse) GetStatus() KybStatus {
@@ -2092,7 +2213,7 @@ type GetCompanyByOwnerRequest struct {
 
 func (x *GetCompanyByOwnerRequest) Reset() {
 	*x = GetCompanyByOwnerRequest{}
-	mi := &file_openhr_org_v1_org_proto_msgTypes[37]
+	mi := &file_openhr_org_v1_org_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2104,7 +2225,7 @@ func (x *GetCompanyByOwnerRequest) String() string {
 func (*GetCompanyByOwnerRequest) ProtoMessage() {}
 
 func (x *GetCompanyByOwnerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_org_v1_org_proto_msgTypes[37]
+	mi := &file_openhr_org_v1_org_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2117,7 +2238,7 @@ func (x *GetCompanyByOwnerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCompanyByOwnerRequest.ProtoReflect.Descriptor instead.
 func (*GetCompanyByOwnerRequest) Descriptor() ([]byte, []int) {
-	return file_openhr_org_v1_org_proto_rawDescGZIP(), []int{37}
+	return file_openhr_org_v1_org_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *GetCompanyByOwnerRequest) GetOwnerUserId() string {
@@ -2136,7 +2257,7 @@ type GetCompanyByOwnerResponse struct {
 
 func (x *GetCompanyByOwnerResponse) Reset() {
 	*x = GetCompanyByOwnerResponse{}
-	mi := &file_openhr_org_v1_org_proto_msgTypes[38]
+	mi := &file_openhr_org_v1_org_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2148,7 +2269,7 @@ func (x *GetCompanyByOwnerResponse) String() string {
 func (*GetCompanyByOwnerResponse) ProtoMessage() {}
 
 func (x *GetCompanyByOwnerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_org_v1_org_proto_msgTypes[38]
+	mi := &file_openhr_org_v1_org_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2161,12 +2282,116 @@ func (x *GetCompanyByOwnerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCompanyByOwnerResponse.ProtoReflect.Descriptor instead.
 func (*GetCompanyByOwnerResponse) Descriptor() ([]byte, []int) {
-	return file_openhr_org_v1_org_proto_rawDescGZIP(), []int{38}
+	return file_openhr_org_v1_org_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *GetCompanyByOwnerResponse) GetCompany() *Company {
 	if x != nil {
 		return x.Company
+	}
+	return nil
+}
+
+type GetOnboardingProgressRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOnboardingProgressRequest) Reset() {
+	*x = GetOnboardingProgressRequest{}
+	mi := &file_openhr_org_v1_org_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOnboardingProgressRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOnboardingProgressRequest) ProtoMessage() {}
+
+func (x *GetOnboardingProgressRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_openhr_org_v1_org_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOnboardingProgressRequest.ProtoReflect.Descriptor instead.
+func (*GetOnboardingProgressRequest) Descriptor() ([]byte, []int) {
+	return file_openhr_org_v1_org_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *GetOnboardingProgressRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+type GetOnboardingProgressResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Found          bool                   `protobuf:"varint,1,opt,name=found,proto3" json:"found,omitempty"`
+	CurrentStep    string                 `protobuf:"bytes,2,opt,name=current_step,json=currentStep,proto3" json:"current_step,omitempty"`
+	CompletedSteps []string               `protobuf:"bytes,3,rep,name=completed_steps,json=completedSteps,proto3" json:"completed_steps,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetOnboardingProgressResponse) Reset() {
+	*x = GetOnboardingProgressResponse{}
+	mi := &file_openhr_org_v1_org_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOnboardingProgressResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOnboardingProgressResponse) ProtoMessage() {}
+
+func (x *GetOnboardingProgressResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_openhr_org_v1_org_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOnboardingProgressResponse.ProtoReflect.Descriptor instead.
+func (*GetOnboardingProgressResponse) Descriptor() ([]byte, []int) {
+	return file_openhr_org_v1_org_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *GetOnboardingProgressResponse) GetFound() bool {
+	if x != nil {
+		return x.Found
+	}
+	return false
+}
+
+func (x *GetOnboardingProgressResponse) GetCurrentStep() string {
+	if x != nil {
+		return x.CurrentStep
+	}
+	return ""
+}
+
+func (x *GetOnboardingProgressResponse) GetCompletedSteps() []string {
+	if x != nil {
+		return x.CompletedSteps
 	}
 	return nil
 }
@@ -2313,7 +2538,16 @@ const file_openhr_org_v1_org_proto_rawDesc = "" +
 	"\x15DeleteCompanyResponse\x129\n" +
 	"\n" +
 	"deleted_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\tdeletedAt\x12'\n" +
-	"\x0falready_deleted\x18\x02 \x01(\bR\x0ealreadyDeleted\"\xae\x01\n" +
+	"\x0falready_deleted\x18\x02 \x01(\bR\x0ealreadyDeleted\"\x84\x01\n" +
+	"\x18ReactivateCompanyRequest\x12\x1d\n" +
+	"\n" +
+	"company_id\x18\x01 \x01(\tR\tcompanyId\x12\x16\n" +
+	"\x06region\x18\x02 \x01(\tR\x06region\x12\x19\n" +
+	"\badmin_id\x18\x03 \x01(\tR\aadminId\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\"\x85\x01\n" +
+	"\x19ReactivateCompanyResponse\x12A\n" +
+	"\x0ereactivated_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\rreactivatedAt\x12%\n" +
+	"\x0ealready_active\x18\x02 \x01(\bR\ralreadyActive\"\xae\x01\n" +
 	"\x17ApplyKybDecisionRequest\x12\x1d\n" +
 	"\n" +
 	"company_id\x18\x01 \x01(\tR\tcompanyId\x12\x16\n" +
@@ -2326,14 +2560,20 @@ const file_openhr_org_v1_org_proto_rawDesc = "" +
 	"\x18GetCompanyByOwnerRequest\x12\"\n" +
 	"\rowner_user_id\x18\x01 \x01(\tR\vownerUserId\"M\n" +
 	"\x19GetCompanyByOwnerResponse\x120\n" +
-	"\acompany\x18\x01 \x01(\v2\x16.openhr.org.v1.CompanyR\acompany*\xa5\x01\n" +
+	"\acompany\x18\x01 \x01(\v2\x16.openhr.org.v1.CompanyR\acompany\"7\n" +
+	"\x1cGetOnboardingProgressRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\x81\x01\n" +
+	"\x1dGetOnboardingProgressResponse\x12\x14\n" +
+	"\x05found\x18\x01 \x01(\bR\x05found\x12!\n" +
+	"\fcurrent_step\x18\x02 \x01(\tR\vcurrentStep\x12'\n" +
+	"\x0fcompleted_steps\x18\x03 \x03(\tR\x0ecompletedSteps*\xa5\x01\n" +
 	"\tKybStatus\x12\x1a\n" +
 	"\x16KYB_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16KYB_STATUS_NOT_STARTED\x10\x01\x12\x16\n" +
 	"\x12KYB_STATUS_PENDING\x10\x02\x12\x18\n" +
 	"\x14KYB_STATUS_IN_REVIEW\x10\x03\x12\x17\n" +
 	"\x13KYB_STATUS_VERIFIED\x10\x04\x12\x15\n" +
-	"\x11KYB_STATUS_FAILED\x10\x052\xb2\v\n" +
+	"\x11KYB_STATUS_FAILED\x10\x052\xa6\f\n" +
 	"\n" +
 	"OrgService\x12f\n" +
 	"\x11ResolveMembership\x12'.openhr.org.v1.ResolveMembershipRequest\x1a(.openhr.org.v1.ResolveMembershipResponse\x12Q\n" +
@@ -2351,11 +2591,13 @@ const file_openhr_org_v1_org_proto_rawDesc = "" +
 	"\x10ValidateIndustry\x12&.openhr.org.v1.ValidateIndustryRequest\x1a'.openhr.org.v1.ValidateIndustryResponse\x12{\n" +
 	"\x18CompleteRegionOnboarding\x12..openhr.org.v1.CompleteRegionOnboardingRequest\x1a/.openhr.org.v1.CompleteRegionOnboardingResponse\x12N\n" +
 	"\tSubmitKyb\x12\x1f.openhr.org.v1.SubmitKybRequest\x1a .openhr.org.v1.SubmitKybResponse\x12W\n" +
-	"\fGetKybStatus\x12\".openhr.org.v1.GetKybStatusRequest\x1a#.openhr.org.v1.GetKybStatusResponse2\xba\x02\n" +
+	"\fGetKybStatus\x12\".openhr.org.v1.GetKybStatusRequest\x1a#.openhr.org.v1.GetKybStatusResponse\x12r\n" +
+	"\x15GetOnboardingProgress\x12+.openhr.org.v1.GetOnboardingProgressRequest\x1a,.openhr.org.v1.GetOnboardingProgressResponse2\xa2\x03\n" +
 	"\x0fAdminOrgService\x12c\n" +
 	"\x10ApplyKybDecision\x12&.openhr.org.v1.ApplyKybDecisionRequest\x1a'.openhr.org.v1.ApplyKybDecisionResponse\x12f\n" +
 	"\x11GetCompanyByOwner\x12'.openhr.org.v1.GetCompanyByOwnerRequest\x1a(.openhr.org.v1.GetCompanyByOwnerResponse\x12Z\n" +
-	"\rDeleteCompany\x12#.openhr.org.v1.DeleteCompanyRequest\x1a$.openhr.org.v1.DeleteCompanyResponseB\xa7\x01\n" +
+	"\rDeleteCompany\x12#.openhr.org.v1.DeleteCompanyRequest\x1a$.openhr.org.v1.DeleteCompanyResponse\x12f\n" +
+	"\x11ReactivateCompany\x12'.openhr.org.v1.ReactivateCompanyRequest\x1a(.openhr.org.v1.ReactivateCompanyResponseB\xa7\x01\n" +
 	"\x11com.openhr.org.v1B\bOrgProtoP\x01Z2github.com/Angle-HR/server/gen/openhr/org/v1;orgv1\xa2\x02\x03OOX\xaa\x02\rOpenhr.Org.V1\xca\x02\rOpenhr\\Org\\V1\xe2\x02\x19Openhr\\Org\\V1\\GPBMetadata\xea\x02\x0fOpenhr::Org::V1b\x06proto3"
 
 var (
@@ -2371,7 +2613,7 @@ func file_openhr_org_v1_org_proto_rawDescGZIP() []byte {
 }
 
 var file_openhr_org_v1_org_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_openhr_org_v1_org_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
+var file_openhr_org_v1_org_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
 var file_openhr_org_v1_org_proto_goTypes = []any{
 	(KybStatus)(0),                           // 0: openhr.org.v1.KybStatus
 	(*Company)(nil),                          // 1: openhr.org.v1.Company
@@ -2409,68 +2651,77 @@ var file_openhr_org_v1_org_proto_goTypes = []any{
 	(*GetKybStatusResponse)(nil),             // 33: openhr.org.v1.GetKybStatusResponse
 	(*DeleteCompanyRequest)(nil),             // 34: openhr.org.v1.DeleteCompanyRequest
 	(*DeleteCompanyResponse)(nil),            // 35: openhr.org.v1.DeleteCompanyResponse
-	(*ApplyKybDecisionRequest)(nil),          // 36: openhr.org.v1.ApplyKybDecisionRequest
-	(*ApplyKybDecisionResponse)(nil),         // 37: openhr.org.v1.ApplyKybDecisionResponse
-	(*GetCompanyByOwnerRequest)(nil),         // 38: openhr.org.v1.GetCompanyByOwnerRequest
-	(*GetCompanyByOwnerResponse)(nil),        // 39: openhr.org.v1.GetCompanyByOwnerResponse
-	(*timestamppb.Timestamp)(nil),            // 40: google.protobuf.Timestamp
+	(*ReactivateCompanyRequest)(nil),         // 36: openhr.org.v1.ReactivateCompanyRequest
+	(*ReactivateCompanyResponse)(nil),        // 37: openhr.org.v1.ReactivateCompanyResponse
+	(*ApplyKybDecisionRequest)(nil),          // 38: openhr.org.v1.ApplyKybDecisionRequest
+	(*ApplyKybDecisionResponse)(nil),         // 39: openhr.org.v1.ApplyKybDecisionResponse
+	(*GetCompanyByOwnerRequest)(nil),         // 40: openhr.org.v1.GetCompanyByOwnerRequest
+	(*GetCompanyByOwnerResponse)(nil),        // 41: openhr.org.v1.GetCompanyByOwnerResponse
+	(*GetOnboardingProgressRequest)(nil),     // 42: openhr.org.v1.GetOnboardingProgressRequest
+	(*GetOnboardingProgressResponse)(nil),    // 43: openhr.org.v1.GetOnboardingProgressResponse
+	(*timestamppb.Timestamp)(nil),            // 44: google.protobuf.Timestamp
 }
 var file_openhr_org_v1_org_proto_depIdxs = []int32{
 	0,  // 0: openhr.org.v1.Company.kyb_status:type_name -> openhr.org.v1.KybStatus
 	1,  // 1: openhr.org.v1.GetCompanyResponse.company:type_name -> openhr.org.v1.Company
 	0,  // 2: openhr.org.v1.GetPublishReadinessResponse.kyb_status:type_name -> openhr.org.v1.KybStatus
-	40, // 3: openhr.org.v1.GetPublishReadinessResponse.dpa_accepted_at:type_name -> google.protobuf.Timestamp
+	44, // 3: openhr.org.v1.GetPublishReadinessResponse.dpa_accepted_at:type_name -> google.protobuf.Timestamp
 	10, // 4: openhr.org.v1.ListMembersResponse.members:type_name -> openhr.org.v1.CompanyMember
 	10, // 5: openhr.org.v1.SetMemberRolesResponse.member:type_name -> openhr.org.v1.CompanyMember
-	40, // 6: openhr.org.v1.AcceptAgreementResponse.accepted_at:type_name -> google.protobuf.Timestamp
+	44, // 6: openhr.org.v1.AcceptAgreementResponse.accepted_at:type_name -> google.protobuf.Timestamp
 	1,  // 7: openhr.org.v1.ListCompaniesResponse.companies:type_name -> openhr.org.v1.Company
 	23, // 8: openhr.org.v1.ListIndustriesResponse.industries:type_name -> openhr.org.v1.Industry
 	0,  // 9: openhr.org.v1.SubmitKybResponse.status:type_name -> openhr.org.v1.KybStatus
 	0,  // 10: openhr.org.v1.GetKybStatusResponse.status:type_name -> openhr.org.v1.KybStatus
-	40, // 11: openhr.org.v1.DeleteCompanyResponse.deleted_at:type_name -> google.protobuf.Timestamp
-	0,  // 12: openhr.org.v1.ApplyKybDecisionResponse.status:type_name -> openhr.org.v1.KybStatus
-	1,  // 13: openhr.org.v1.GetCompanyByOwnerResponse.company:type_name -> openhr.org.v1.Company
-	2,  // 14: openhr.org.v1.OrgService.ResolveMembership:input_type -> openhr.org.v1.ResolveMembershipRequest
-	4,  // 15: openhr.org.v1.OrgService.GetCompany:input_type -> openhr.org.v1.GetCompanyRequest
-	6,  // 16: openhr.org.v1.OrgService.GetCompanyContact:input_type -> openhr.org.v1.GetCompanyContactRequest
-	8,  // 17: openhr.org.v1.OrgService.GetPublishReadiness:input_type -> openhr.org.v1.GetPublishReadinessRequest
-	11, // 18: openhr.org.v1.OrgService.ListMembers:input_type -> openhr.org.v1.ListMembersRequest
-	13, // 19: openhr.org.v1.OrgService.AddMember:input_type -> openhr.org.v1.AddMemberRequest
-	15, // 20: openhr.org.v1.OrgService.SetMemberRoles:input_type -> openhr.org.v1.SetMemberRolesRequest
-	17, // 21: openhr.org.v1.OrgService.AcceptAgreement:input_type -> openhr.org.v1.AcceptAgreementRequest
-	19, // 22: openhr.org.v1.OrgService.SetPrivacyContact:input_type -> openhr.org.v1.SetPrivacyContactRequest
-	21, // 23: openhr.org.v1.OrgService.ListCompanies:input_type -> openhr.org.v1.ListCompaniesRequest
-	24, // 24: openhr.org.v1.OrgService.ListIndustries:input_type -> openhr.org.v1.ListIndustriesRequest
-	26, // 25: openhr.org.v1.OrgService.ValidateIndustry:input_type -> openhr.org.v1.ValidateIndustryRequest
-	28, // 26: openhr.org.v1.OrgService.CompleteRegionOnboarding:input_type -> openhr.org.v1.CompleteRegionOnboardingRequest
-	30, // 27: openhr.org.v1.OrgService.SubmitKyb:input_type -> openhr.org.v1.SubmitKybRequest
-	32, // 28: openhr.org.v1.OrgService.GetKybStatus:input_type -> openhr.org.v1.GetKybStatusRequest
-	36, // 29: openhr.org.v1.AdminOrgService.ApplyKybDecision:input_type -> openhr.org.v1.ApplyKybDecisionRequest
-	38, // 30: openhr.org.v1.AdminOrgService.GetCompanyByOwner:input_type -> openhr.org.v1.GetCompanyByOwnerRequest
-	34, // 31: openhr.org.v1.AdminOrgService.DeleteCompany:input_type -> openhr.org.v1.DeleteCompanyRequest
-	3,  // 32: openhr.org.v1.OrgService.ResolveMembership:output_type -> openhr.org.v1.ResolveMembershipResponse
-	5,  // 33: openhr.org.v1.OrgService.GetCompany:output_type -> openhr.org.v1.GetCompanyResponse
-	7,  // 34: openhr.org.v1.OrgService.GetCompanyContact:output_type -> openhr.org.v1.GetCompanyContactResponse
-	9,  // 35: openhr.org.v1.OrgService.GetPublishReadiness:output_type -> openhr.org.v1.GetPublishReadinessResponse
-	12, // 36: openhr.org.v1.OrgService.ListMembers:output_type -> openhr.org.v1.ListMembersResponse
-	14, // 37: openhr.org.v1.OrgService.AddMember:output_type -> openhr.org.v1.AddMemberResponse
-	16, // 38: openhr.org.v1.OrgService.SetMemberRoles:output_type -> openhr.org.v1.SetMemberRolesResponse
-	18, // 39: openhr.org.v1.OrgService.AcceptAgreement:output_type -> openhr.org.v1.AcceptAgreementResponse
-	20, // 40: openhr.org.v1.OrgService.SetPrivacyContact:output_type -> openhr.org.v1.SetPrivacyContactResponse
-	22, // 41: openhr.org.v1.OrgService.ListCompanies:output_type -> openhr.org.v1.ListCompaniesResponse
-	25, // 42: openhr.org.v1.OrgService.ListIndustries:output_type -> openhr.org.v1.ListIndustriesResponse
-	27, // 43: openhr.org.v1.OrgService.ValidateIndustry:output_type -> openhr.org.v1.ValidateIndustryResponse
-	29, // 44: openhr.org.v1.OrgService.CompleteRegionOnboarding:output_type -> openhr.org.v1.CompleteRegionOnboardingResponse
-	31, // 45: openhr.org.v1.OrgService.SubmitKyb:output_type -> openhr.org.v1.SubmitKybResponse
-	33, // 46: openhr.org.v1.OrgService.GetKybStatus:output_type -> openhr.org.v1.GetKybStatusResponse
-	37, // 47: openhr.org.v1.AdminOrgService.ApplyKybDecision:output_type -> openhr.org.v1.ApplyKybDecisionResponse
-	39, // 48: openhr.org.v1.AdminOrgService.GetCompanyByOwner:output_type -> openhr.org.v1.GetCompanyByOwnerResponse
-	35, // 49: openhr.org.v1.AdminOrgService.DeleteCompany:output_type -> openhr.org.v1.DeleteCompanyResponse
-	32, // [32:50] is the sub-list for method output_type
-	14, // [14:32] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	44, // 11: openhr.org.v1.DeleteCompanyResponse.deleted_at:type_name -> google.protobuf.Timestamp
+	44, // 12: openhr.org.v1.ReactivateCompanyResponse.reactivated_at:type_name -> google.protobuf.Timestamp
+	0,  // 13: openhr.org.v1.ApplyKybDecisionResponse.status:type_name -> openhr.org.v1.KybStatus
+	1,  // 14: openhr.org.v1.GetCompanyByOwnerResponse.company:type_name -> openhr.org.v1.Company
+	2,  // 15: openhr.org.v1.OrgService.ResolveMembership:input_type -> openhr.org.v1.ResolveMembershipRequest
+	4,  // 16: openhr.org.v1.OrgService.GetCompany:input_type -> openhr.org.v1.GetCompanyRequest
+	6,  // 17: openhr.org.v1.OrgService.GetCompanyContact:input_type -> openhr.org.v1.GetCompanyContactRequest
+	8,  // 18: openhr.org.v1.OrgService.GetPublishReadiness:input_type -> openhr.org.v1.GetPublishReadinessRequest
+	11, // 19: openhr.org.v1.OrgService.ListMembers:input_type -> openhr.org.v1.ListMembersRequest
+	13, // 20: openhr.org.v1.OrgService.AddMember:input_type -> openhr.org.v1.AddMemberRequest
+	15, // 21: openhr.org.v1.OrgService.SetMemberRoles:input_type -> openhr.org.v1.SetMemberRolesRequest
+	17, // 22: openhr.org.v1.OrgService.AcceptAgreement:input_type -> openhr.org.v1.AcceptAgreementRequest
+	19, // 23: openhr.org.v1.OrgService.SetPrivacyContact:input_type -> openhr.org.v1.SetPrivacyContactRequest
+	21, // 24: openhr.org.v1.OrgService.ListCompanies:input_type -> openhr.org.v1.ListCompaniesRequest
+	24, // 25: openhr.org.v1.OrgService.ListIndustries:input_type -> openhr.org.v1.ListIndustriesRequest
+	26, // 26: openhr.org.v1.OrgService.ValidateIndustry:input_type -> openhr.org.v1.ValidateIndustryRequest
+	28, // 27: openhr.org.v1.OrgService.CompleteRegionOnboarding:input_type -> openhr.org.v1.CompleteRegionOnboardingRequest
+	30, // 28: openhr.org.v1.OrgService.SubmitKyb:input_type -> openhr.org.v1.SubmitKybRequest
+	32, // 29: openhr.org.v1.OrgService.GetKybStatus:input_type -> openhr.org.v1.GetKybStatusRequest
+	42, // 30: openhr.org.v1.OrgService.GetOnboardingProgress:input_type -> openhr.org.v1.GetOnboardingProgressRequest
+	38, // 31: openhr.org.v1.AdminOrgService.ApplyKybDecision:input_type -> openhr.org.v1.ApplyKybDecisionRequest
+	40, // 32: openhr.org.v1.AdminOrgService.GetCompanyByOwner:input_type -> openhr.org.v1.GetCompanyByOwnerRequest
+	34, // 33: openhr.org.v1.AdminOrgService.DeleteCompany:input_type -> openhr.org.v1.DeleteCompanyRequest
+	36, // 34: openhr.org.v1.AdminOrgService.ReactivateCompany:input_type -> openhr.org.v1.ReactivateCompanyRequest
+	3,  // 35: openhr.org.v1.OrgService.ResolveMembership:output_type -> openhr.org.v1.ResolveMembershipResponse
+	5,  // 36: openhr.org.v1.OrgService.GetCompany:output_type -> openhr.org.v1.GetCompanyResponse
+	7,  // 37: openhr.org.v1.OrgService.GetCompanyContact:output_type -> openhr.org.v1.GetCompanyContactResponse
+	9,  // 38: openhr.org.v1.OrgService.GetPublishReadiness:output_type -> openhr.org.v1.GetPublishReadinessResponse
+	12, // 39: openhr.org.v1.OrgService.ListMembers:output_type -> openhr.org.v1.ListMembersResponse
+	14, // 40: openhr.org.v1.OrgService.AddMember:output_type -> openhr.org.v1.AddMemberResponse
+	16, // 41: openhr.org.v1.OrgService.SetMemberRoles:output_type -> openhr.org.v1.SetMemberRolesResponse
+	18, // 42: openhr.org.v1.OrgService.AcceptAgreement:output_type -> openhr.org.v1.AcceptAgreementResponse
+	20, // 43: openhr.org.v1.OrgService.SetPrivacyContact:output_type -> openhr.org.v1.SetPrivacyContactResponse
+	22, // 44: openhr.org.v1.OrgService.ListCompanies:output_type -> openhr.org.v1.ListCompaniesResponse
+	25, // 45: openhr.org.v1.OrgService.ListIndustries:output_type -> openhr.org.v1.ListIndustriesResponse
+	27, // 46: openhr.org.v1.OrgService.ValidateIndustry:output_type -> openhr.org.v1.ValidateIndustryResponse
+	29, // 47: openhr.org.v1.OrgService.CompleteRegionOnboarding:output_type -> openhr.org.v1.CompleteRegionOnboardingResponse
+	31, // 48: openhr.org.v1.OrgService.SubmitKyb:output_type -> openhr.org.v1.SubmitKybResponse
+	33, // 49: openhr.org.v1.OrgService.GetKybStatus:output_type -> openhr.org.v1.GetKybStatusResponse
+	43, // 50: openhr.org.v1.OrgService.GetOnboardingProgress:output_type -> openhr.org.v1.GetOnboardingProgressResponse
+	39, // 51: openhr.org.v1.AdminOrgService.ApplyKybDecision:output_type -> openhr.org.v1.ApplyKybDecisionResponse
+	41, // 52: openhr.org.v1.AdminOrgService.GetCompanyByOwner:output_type -> openhr.org.v1.GetCompanyByOwnerResponse
+	35, // 53: openhr.org.v1.AdminOrgService.DeleteCompany:output_type -> openhr.org.v1.DeleteCompanyResponse
+	37, // 54: openhr.org.v1.AdminOrgService.ReactivateCompany:output_type -> openhr.org.v1.ReactivateCompanyResponse
+	35, // [35:55] is the sub-list for method output_type
+	15, // [15:35] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_openhr_org_v1_org_proto_init() }
@@ -2484,7 +2735,7 @@ func file_openhr_org_v1_org_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_openhr_org_v1_org_proto_rawDesc), len(file_openhr_org_v1_org_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   39,
+			NumMessages:   43,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

@@ -163,11 +163,21 @@ events now also carry `created_by` and `location_mode`. Together they let `JobAc
 `hiring-jobs-backfill` emits a members snapshot next to every live job's event so a consumer that starts later learns
 the existing teams. The public id index (`hiring.app_job_index`, global DB) is fed by the same projector.
 
-## org.company.deleted.v1 consumers
+## org.company.deleted.v1 / org.company.reactivated.v1 consumers
 
 | Consumer (inbox name) | Service | Effect |
 |---|---|---|
-| `applications-org` | applications (`APPLICATIONS_ORG_EVENTS=on`) | deletes the company's applications data, answer rows, file rows and blob objects, job read model; records a tombstone |
-| `hiring-org` | hiring (`HIRING_ORG_EVENTS=on`) | archives the company's published and paused jobs (closed events, registry status `archived`) |
+| `applications-org` | applications (`APPLICATIONS_ORG_EVENTS=on`) | deleted: deletes the company's applications data, answer rows, file rows and blob objects, job read model; records a tombstone. Reactivated: lifts the tombstone and logs it (removed data does not come back) |
+| `hiring-org` | hiring (`HIRING_ORG_EVENTS=on`) | deleted: archives the company's published and paused jobs (closed events, registry status `archived`). Reactivated: logs only, jobs stay archived |
+
+## Region move, reactivation and staff deactivation
+
+| Type | Producer and switch | Consumers |
+|---|---|---|
+| `org.region.moved.v1` | org, `ORG_EVENTS=on`; written when the region-migration saga completes (`REGION_MOVE=saga`), in the target region's outbox, partition key = user id | none in this repository (cache invalidation for services that remember a user's region) |
+| `org.company.reactivated.v1` | org, `ORG_EVENTS=on`; `AdminOrgService.ReactivateCompany`, partition key = company id | `applications-org`, `hiring-org` (table above) |
+| `identity.staff.deactivated.v1` | identity, `IDENTITY_EVENTS=on`; a platform staff member goes from active to inactive (`PATCH /admin/staff/{id}`), global outbox, in the same transaction, partition key = staff id; repeating the PATCH emits nothing | `identity-staff` (identity itself, `IDENTITY_EVENTS=on`): ends every admin session of the member again, so a Redis failure during the PATCH cannot leave them signed in |
+
+Payloads and the saga: [org.md](org.md), [identity.md](identity.md).
 
 `org.*` payloads also carry `company_kind` (`business` or `individual`, a personal organization); see [individual-accounts.md](individual-accounts.md).

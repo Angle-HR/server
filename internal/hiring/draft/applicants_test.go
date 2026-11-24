@@ -2,6 +2,7 @@ package draft
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -36,11 +37,11 @@ func TestListFillsApplicantCountsInOneBatch(t *testing.T) {
 	for _, it := range items {
 		switch it.ID {
 		case a.ID:
-			if it.ApplicantCount != 5 || it.NewApplicantCount != 2 {
+			if !it.ApplicantCountsAvailable || *it.ApplicantCount != 5 || *it.NewApplicantCount != 2 {
 				t.Fatalf("counts not filled: %+v", it)
 			}
 		case b.ID:
-			if it.ApplicantCount != 0 || it.NewApplicantCount != 0 {
+			if !it.ApplicantCountsAvailable || *it.ApplicantCount != 0 || *it.NewApplicantCount != 0 {
 				t.Fatalf("job without a row must be zero: %+v", it)
 			}
 		}
@@ -55,5 +56,20 @@ func TestListSurvivesApplicantCountsFailure(t *testing.T) {
 	items, _, err := s.List(context.Background(), c, ListQuery{})
 	if err != nil || len(items) != 1 {
 		t.Fatalf("list must still work: items=%d err=%v", len(items), err)
+	}
+	it := items[0]
+	if it.ApplicantCount != nil || it.NewApplicantCount != nil || it.ApplicantCountsAvailable {
+		t.Fatalf("counts must be unavailable, not zero: %+v", it)
+	}
+	raw, err := json.Marshal(it)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err = json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := m["applicant_count"]; !ok || v != nil || m["applicant_counts_available"] != false {
+		t.Fatalf("json = %s", raw)
 	}
 }

@@ -251,6 +251,21 @@ func (h *AdminHandler) loadUserDetail(ctx context.Context, id uuid.UUID) (adminU
 	}
 
 	// Enrichment only: a missing row is normal, other failures are logged.
+	if rd := h.OrgReads.onboarding(); rd != nil && reg != region.RegionGlobal {
+		uid := d.UserID.String()
+		step, completed, found, perr := rd.Progress(ctx, uid, reg)
+		besteffort.Log(ctx, "load onboarding progress (org)", perr)
+		if perr == nil && found {
+			d.OnboardingStep, d.CompletedSteps = &step, completed
+		}
+		name, found, nerr := rd.OwnedCompanyName(ctx, uid, reg)
+		besteffort.Log(ctx, "load organization name (org)", nerr)
+		if nerr == nil && found {
+			d.OrganizationLegalName = &name
+		}
+		return d, nil
+	}
+
 	progressErr := pool.QueryRow(ctx, `
 		SELECT current_step, completed_steps FROM accounts.onboarding_progress WHERE user_id = $1
 	`, *d.UserID).Scan(&d.OnboardingStep, &d.CompletedSteps)

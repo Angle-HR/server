@@ -6,6 +6,7 @@ import (
 	"github.com/Angle-HR/server/internal/apidoc"
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/pkg/apperror"
+	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/response"
 )
 
@@ -38,7 +39,7 @@ func (h *AuthHandler) me(w http.ResponseWriter, r *http.Request) {
 
 	summary, err := h.loadOnboardingSummary(ctx, reg, user)
 	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
+		response.Error(w, r, summaryError(err))
 		return
 	}
 
@@ -49,7 +50,15 @@ func (h *AuthHandler) me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	roles, perms := []string{}, []string{}
-	if h.MeAccess != nil {
+	if m := h.OrgReads.membership(); m != nil {
+		rs, ps, merr := m.Membership(ctx, user.ID.String(), reg)
+		if merr != nil {
+			besteffort.Log(ctx, "org membership", merr)
+			response.Error(w, r, errUnavailable)
+			return
+		}
+		roles, perms = append(roles, rs...), append(perms, ps...)
+	} else if h.MeAccess != nil {
 		if rs, ps := h.MeAccess(ctx, user.ID.String(), reg); rs != nil || ps != nil {
 			roles, perms = append(roles, rs...), append(perms, ps...)
 		}

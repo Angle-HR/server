@@ -697,15 +697,17 @@ func (s *Store) ListJobs(ctx context.Context, tenantID string, f *ListFilter) ([
 		defer rows.Close()
 		for rows.Next() {
 			var it ListItem
-			var number int
+			var number, applicants, newApplicants int
 			var managerIDs, managerNames []string
 			if err = rows.Scan(&it.ID, &number, &it.Status, &it.Title, &it.DepartmentName, &it.EmploymentType,
 				&it.LocationMode, &it.CurrentStep, &it.Revision, &it.CreatedBy, &it.CreatedAt, &it.UpdatedAt,
 				&it.Markets, &it.WorkplaceType, &it.PublishedAt, &it.ClosingDate,
-				&managerIDs, &managerNames, &it.ApplicantCount, &it.NewApplicantCount); err != nil {
+				&managerIDs, &managerNames, &applicants, &newApplicants); err != nil {
 				return fmt.Errorf("hiringstore: scan job: %w", err)
 			}
 			it.JobCode = jobs.JobCode(number)
+			// Placeholders until draft.Service asks the counter source (it marks them unavailable on failure).
+			it.ApplicantCount, it.NewApplicantCount, it.ApplicantCountsAvailable = &applicants, &newApplicants, true
 			it.Managers = make([]ListPerson, 0, len(managerIDs))
 			for i, id := range managerIDs {
 				name := ""

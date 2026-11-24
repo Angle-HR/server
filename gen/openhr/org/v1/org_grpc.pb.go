@@ -34,6 +34,7 @@ const (
 	OrgService_CompleteRegionOnboarding_FullMethodName = "/openhr.org.v1.OrgService/CompleteRegionOnboarding"
 	OrgService_SubmitKyb_FullMethodName                = "/openhr.org.v1.OrgService/SubmitKyb"
 	OrgService_GetKybStatus_FullMethodName             = "/openhr.org.v1.OrgService/GetKybStatus"
+	OrgService_GetOnboardingProgress_FullMethodName    = "/openhr.org.v1.OrgService/GetOnboardingProgress"
 )
 
 // OrgServiceClient is the client API for OrgService service.
@@ -71,12 +72,17 @@ type OrgServiceClient interface {
 	ValidateIndustry(ctx context.Context, in *ValidateIndustryRequest, opts ...grpc.CallOption) (*ValidateIndustryResponse, error)
 	// CompleteRegionOnboarding drives the region-migration saga. Org copies its pending
 	// organization and onboarding progress into the target region between
-	// identity.PrepareRegionMove and identity.CommitRegionMove, and returns the tokens
-	// identity issued so the BFF can swap them.
+	// identity.PrepareRegionMove and identity.CommitRegionMove (compensating with
+	// identity.AbortRegionMove before the commit), persisting the saga so a crash resumes.
+	// It issues no tokens (the BFF rotates the session); the token fields stay empty.
 	CompleteRegionOnboarding(ctx context.Context, in *CompleteRegionOnboardingRequest, opts ...grpc.CallOption) (*CompleteRegionOnboardingResponse, error)
 	// SubmitKyb starts or re-runs business verification for the caller's company.
 	SubmitKyb(ctx context.Context, in *SubmitKybRequest, opts ...grpc.CallOption) (*SubmitKybResponse, error)
 	GetKybStatus(ctx context.Context, in *GetKybStatusRequest, opts ...grpc.CallOption) (*GetKybStatusResponse, error)
+	// GetOnboardingProgress returns the onboarding step and completed steps of a user in a company region (region from
+	// the call context; a user still in the global holding area is FailedPrecondition). found=false: no progress row yet.
+	// Identity calls it for /auth/me and the admin user detail (ORG_ONBOARDING=grpc).
+	GetOnboardingProgress(ctx context.Context, in *GetOnboardingProgressRequest, opts ...grpc.CallOption) (*GetOnboardingProgressResponse, error)
 }
 
 type orgServiceClient struct {
@@ -237,6 +243,16 @@ func (c *orgServiceClient) GetKybStatus(ctx context.Context, in *GetKybStatusReq
 	return out, nil
 }
 
+func (c *orgServiceClient) GetOnboardingProgress(ctx context.Context, in *GetOnboardingProgressRequest, opts ...grpc.CallOption) (*GetOnboardingProgressResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetOnboardingProgressResponse)
+	err := c.cc.Invoke(ctx, OrgService_GetOnboardingProgress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrgServiceServer is the server API for OrgService service.
 // All implementations must embed UnimplementedOrgServiceServer
 // for forward compatibility.
@@ -272,12 +288,17 @@ type OrgServiceServer interface {
 	ValidateIndustry(context.Context, *ValidateIndustryRequest) (*ValidateIndustryResponse, error)
 	// CompleteRegionOnboarding drives the region-migration saga. Org copies its pending
 	// organization and onboarding progress into the target region between
-	// identity.PrepareRegionMove and identity.CommitRegionMove, and returns the tokens
-	// identity issued so the BFF can swap them.
+	// identity.PrepareRegionMove and identity.CommitRegionMove (compensating with
+	// identity.AbortRegionMove before the commit), persisting the saga so a crash resumes.
+	// It issues no tokens (the BFF rotates the session); the token fields stay empty.
 	CompleteRegionOnboarding(context.Context, *CompleteRegionOnboardingRequest) (*CompleteRegionOnboardingResponse, error)
 	// SubmitKyb starts or re-runs business verification for the caller's company.
 	SubmitKyb(context.Context, *SubmitKybRequest) (*SubmitKybResponse, error)
 	GetKybStatus(context.Context, *GetKybStatusRequest) (*GetKybStatusResponse, error)
+	// GetOnboardingProgress returns the onboarding step and completed steps of a user in a company region (region from
+	// the call context; a user still in the global holding area is FailedPrecondition). found=false: no progress row yet.
+	// Identity calls it for /auth/me and the admin user detail (ORG_ONBOARDING=grpc).
+	GetOnboardingProgress(context.Context, *GetOnboardingProgressRequest) (*GetOnboardingProgressResponse, error)
 	mustEmbedUnimplementedOrgServiceServer()
 }
 
@@ -332,6 +353,9 @@ func (UnimplementedOrgServiceServer) SubmitKyb(context.Context, *SubmitKybReques
 }
 func (UnimplementedOrgServiceServer) GetKybStatus(context.Context, *GetKybStatusRequest) (*GetKybStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetKybStatus not implemented")
+}
+func (UnimplementedOrgServiceServer) GetOnboardingProgress(context.Context, *GetOnboardingProgressRequest) (*GetOnboardingProgressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetOnboardingProgress not implemented")
 }
 func (UnimplementedOrgServiceServer) mustEmbedUnimplementedOrgServiceServer() {}
 func (UnimplementedOrgServiceServer) testEmbeddedByValue()                    {}
@@ -624,6 +648,24 @@ func _OrgService_GetKybStatus_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _OrgService_GetOnboardingProgress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOnboardingProgressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrgServiceServer).GetOnboardingProgress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrgService_GetOnboardingProgress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrgServiceServer).GetOnboardingProgress(ctx, req.(*GetOnboardingProgressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // OrgService_ServiceDesc is the grpc.ServiceDesc for OrgService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -691,6 +733,10 @@ var OrgService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetKybStatus",
 			Handler:    _OrgService_GetKybStatus_Handler,
 		},
+		{
+			MethodName: "GetOnboardingProgress",
+			Handler:    _OrgService_GetOnboardingProgress_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "openhr/org/v1/org.proto",
@@ -700,6 +746,7 @@ const (
 	AdminOrgService_ApplyKybDecision_FullMethodName  = "/openhr.org.v1.AdminOrgService/ApplyKybDecision"
 	AdminOrgService_GetCompanyByOwner_FullMethodName = "/openhr.org.v1.AdminOrgService/GetCompanyByOwner"
 	AdminOrgService_DeleteCompany_FullMethodName     = "/openhr.org.v1.AdminOrgService/DeleteCompany"
+	AdminOrgService_ReactivateCompany_FullMethodName = "/openhr.org.v1.AdminOrgService/ReactivateCompany"
 )
 
 // AdminOrgServiceClient is the client API for AdminOrgService service.
@@ -717,6 +764,10 @@ type AdminOrgServiceClient interface {
 	// same transaction. Downstream services remove the company's data when they consume it. The identity admin
 	// route DELETE /admin/companies/{id} (superadmin only) calls it.
 	DeleteCompany(ctx context.Context, in *DeleteCompanyRequest, opts ...grpc.CallOption) (*DeleteCompanyResponse, error)
+	// ReactivateCompany undoes DeleteCompany (idempotent) and emits org.company.reactivated.v1 through the outbox in
+	// the same transaction. Data that consumers removed on deletion does not come back; the company starts empty
+	// again. The identity admin route POST /admin/companies/{id}/reactivate (superadmin only) calls it.
+	ReactivateCompany(ctx context.Context, in *ReactivateCompanyRequest, opts ...grpc.CallOption) (*ReactivateCompanyResponse, error)
 }
 
 type adminOrgServiceClient struct {
@@ -757,6 +808,16 @@ func (c *adminOrgServiceClient) DeleteCompany(ctx context.Context, in *DeleteCom
 	return out, nil
 }
 
+func (c *adminOrgServiceClient) ReactivateCompany(ctx context.Context, in *ReactivateCompanyRequest, opts ...grpc.CallOption) (*ReactivateCompanyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReactivateCompanyResponse)
+	err := c.cc.Invoke(ctx, AdminOrgService_ReactivateCompany_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AdminOrgServiceServer is the server API for AdminOrgService service.
 // All implementations must embed UnimplementedAdminOrgServiceServer
 // for forward compatibility.
@@ -772,6 +833,10 @@ type AdminOrgServiceServer interface {
 	// same transaction. Downstream services remove the company's data when they consume it. The identity admin
 	// route DELETE /admin/companies/{id} (superadmin only) calls it.
 	DeleteCompany(context.Context, *DeleteCompanyRequest) (*DeleteCompanyResponse, error)
+	// ReactivateCompany undoes DeleteCompany (idempotent) and emits org.company.reactivated.v1 through the outbox in
+	// the same transaction. Data that consumers removed on deletion does not come back; the company starts empty
+	// again. The identity admin route POST /admin/companies/{id}/reactivate (superadmin only) calls it.
+	ReactivateCompany(context.Context, *ReactivateCompanyRequest) (*ReactivateCompanyResponse, error)
 	mustEmbedUnimplementedAdminOrgServiceServer()
 }
 
@@ -790,6 +855,9 @@ func (UnimplementedAdminOrgServiceServer) GetCompanyByOwner(context.Context, *Ge
 }
 func (UnimplementedAdminOrgServiceServer) DeleteCompany(context.Context, *DeleteCompanyRequest) (*DeleteCompanyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteCompany not implemented")
+}
+func (UnimplementedAdminOrgServiceServer) ReactivateCompany(context.Context, *ReactivateCompanyRequest) (*ReactivateCompanyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReactivateCompany not implemented")
 }
 func (UnimplementedAdminOrgServiceServer) mustEmbedUnimplementedAdminOrgServiceServer() {}
 func (UnimplementedAdminOrgServiceServer) testEmbeddedByValue()                         {}
@@ -866,6 +934,24 @@ func _AdminOrgService_DeleteCompany_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminOrgService_ReactivateCompany_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReactivateCompanyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminOrgServiceServer).ReactivateCompany(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminOrgService_ReactivateCompany_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminOrgServiceServer).ReactivateCompany(ctx, req.(*ReactivateCompanyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AdminOrgService_ServiceDesc is the grpc.ServiceDesc for AdminOrgService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -884,6 +970,10 @@ var AdminOrgService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteCompany",
 			Handler:    _AdminOrgService_DeleteCompany_Handler,
+		},
+		{
+			MethodName: "ReactivateCompany",
+			Handler:    _AdminOrgService_ReactivateCompany_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

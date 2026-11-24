@@ -26,6 +26,7 @@ const (
 	IdentityService_LookupRegion_FullMethodName        = "/openhr.identity.v1.IdentityService/LookupRegion"
 	IdentityService_PrepareRegionMove_FullMethodName   = "/openhr.identity.v1.IdentityService/PrepareRegionMove"
 	IdentityService_CommitRegionMove_FullMethodName    = "/openhr.identity.v1.IdentityService/CommitRegionMove"
+	IdentityService_AbortRegionMove_FullMethodName     = "/openhr.identity.v1.IdentityService/AbortRegionMove"
 	IdentityService_CreateOrgInvite_FullMethodName     = "/openhr.identity.v1.IdentityService/CreateOrgInvite"
 	IdentityService_AcceptOrgInvite_FullMethodName     = "/openhr.identity.v1.IdentityService/AcceptOrgInvite"
 )
@@ -55,10 +56,16 @@ type IdentityServiceClient interface {
 	// target region (idempotent). Step 1 of the onboarding region-migration saga
 	// driven by the org service.
 	PrepareRegionMove(ctx context.Context, in *PrepareRegionMoveRequest, opts ...grpc.CallOption) (*PrepareRegionMoveResponse, error)
-	// CommitRegionMove repoints users_registry at the target region, releases the
-	// pending row and issues a fresh token pair whose region claim is the new one.
-	// Step 3 of the saga; the org service has copied its own rows in step 2.
+	// CommitRegionMove repoints users_registry at the target region and releases the
+	// pending user row (idempotent). Step 3 of the saga; the org service has copied its
+	// own rows in step 2. It is the point of no return: after it the saga only rolls
+	// forward. It issues no tokens (sessions are server-side and the caller rotates its
+	// session to pick up the new region), so `tokens` stays empty.
 	CommitRegionMove(ctx context.Context, in *CommitRegionMoveRequest, opts ...grpc.CallOption) (*CommitRegionMoveResponse, error)
+	// AbortRegionMove is the compensation of PrepareRegionMove: it removes the user row
+	// copied into the target region while users_registry still says "global"
+	// (idempotent). FailedPrecondition once CommitRegionMove has happened.
+	AbortRegionMove(ctx context.Context, in *AbortRegionMoveRequest, opts ...grpc.CallOption) (*AbortRegionMoveResponse, error)
 	// CreateOrgInvite stores a hashed invite token for a company and asks
 	// notifications to mail it.
 	CreateOrgInvite(ctx context.Context, in *CreateOrgInviteRequest, opts ...grpc.CallOption) (*CreateOrgInviteResponse, error)
@@ -145,6 +152,16 @@ func (c *identityServiceClient) CommitRegionMove(ctx context.Context, in *Commit
 	return out, nil
 }
 
+func (c *identityServiceClient) AbortRegionMove(ctx context.Context, in *AbortRegionMoveRequest, opts ...grpc.CallOption) (*AbortRegionMoveResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AbortRegionMoveResponse)
+	err := c.cc.Invoke(ctx, IdentityService_AbortRegionMove_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *identityServiceClient) CreateOrgInvite(ctx context.Context, in *CreateOrgInviteRequest, opts ...grpc.CallOption) (*CreateOrgInviteResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateOrgInviteResponse)
@@ -190,10 +207,16 @@ type IdentityServiceServer interface {
 	// target region (idempotent). Step 1 of the onboarding region-migration saga
 	// driven by the org service.
 	PrepareRegionMove(context.Context, *PrepareRegionMoveRequest) (*PrepareRegionMoveResponse, error)
-	// CommitRegionMove repoints users_registry at the target region, releases the
-	// pending row and issues a fresh token pair whose region claim is the new one.
-	// Step 3 of the saga; the org service has copied its own rows in step 2.
+	// CommitRegionMove repoints users_registry at the target region and releases the
+	// pending user row (idempotent). Step 3 of the saga; the org service has copied its
+	// own rows in step 2. It is the point of no return: after it the saga only rolls
+	// forward. It issues no tokens (sessions are server-side and the caller rotates its
+	// session to pick up the new region), so `tokens` stays empty.
 	CommitRegionMove(context.Context, *CommitRegionMoveRequest) (*CommitRegionMoveResponse, error)
+	// AbortRegionMove is the compensation of PrepareRegionMove: it removes the user row
+	// copied into the target region while users_registry still says "global"
+	// (idempotent). FailedPrecondition once CommitRegionMove has happened.
+	AbortRegionMove(context.Context, *AbortRegionMoveRequest) (*AbortRegionMoveResponse, error)
 	// CreateOrgInvite stores a hashed invite token for a company and asks
 	// notifications to mail it.
 	CreateOrgInvite(context.Context, *CreateOrgInviteRequest) (*CreateOrgInviteResponse, error)
@@ -230,6 +253,9 @@ func (UnimplementedIdentityServiceServer) PrepareRegionMove(context.Context, *Pr
 }
 func (UnimplementedIdentityServiceServer) CommitRegionMove(context.Context, *CommitRegionMoveRequest) (*CommitRegionMoveResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CommitRegionMove not implemented")
+}
+func (UnimplementedIdentityServiceServer) AbortRegionMove(context.Context, *AbortRegionMoveRequest) (*AbortRegionMoveResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AbortRegionMove not implemented")
 }
 func (UnimplementedIdentityServiceServer) CreateOrgInvite(context.Context, *CreateOrgInviteRequest) (*CreateOrgInviteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateOrgInvite not implemented")
@@ -384,6 +410,24 @@ func _IdentityService_CommitRegionMove_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IdentityService_AbortRegionMove_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AbortRegionMoveRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).AbortRegionMove(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_AbortRegionMove_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).AbortRegionMove(ctx, req.(*AbortRegionMoveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _IdentityService_CreateOrgInvite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateOrgInviteRequest)
 	if err := dec(in); err != nil {
@@ -454,6 +498,10 @@ var IdentityService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CommitRegionMove",
 			Handler:    _IdentityService_CommitRegionMove_Handler,
+		},
+		{
+			MethodName: "AbortRegionMove",
+			Handler:    _IdentityService_AbortRegionMove_Handler,
 		},
 		{
 			MethodName: "CreateOrgInvite",

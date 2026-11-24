@@ -3,6 +3,7 @@ package identitysvc
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/Angle-HR/server/internal/admin"
 	"github.com/Angle-HR/server/internal/identityhttp"
 	"github.com/Angle-HR/server/internal/region"
+	"github.com/Angle-HR/server/internal/regionsaga"
 	"github.com/Angle-HR/server/internal/session"
 	"github.com/Angle-HR/server/internal/userdir"
 	"github.com/Angle-HR/server/internal/verifyqueue"
@@ -33,9 +35,10 @@ import (
 // BatchGetUsers, LookupRegion, ListUsers, SetUserActive, InviteStaff, ListAdminRoles, HasAdminPermission,
 // ListVerificationQueue, ReviewVerification, EnqueueVerification.
 //
-// Unimplemented on purpose (answered with codes.Unimplemented and a message that says why): PrepareRegionMove,
-// CommitRegionMove (the saga still runs inside the onboarding handlers and the contract returns a JWT TokenPair,
-// which no longer exists: sessions rotate instead), CreateOrgInvite, AcceptOrgInvite (the contract has no company
+// PrepareRegionMove, CommitRegionMove and AbortRegionMove are identity's half of the region-migration saga (the org
+// service drives it, see internal/regionsaga); CommitRegionMove issues no tokens, sessions rotate instead.
+//
+// Unimplemented on purpose (answered with codes.Unimplemented and a message that says why): CreateOrgInvite, AcceptOrgInvite (the contract has no company
 // context or session result; invites are served over HTTP).
 type RPC struct {
 	identityv1.UnimplementedIdentityServiceServer
@@ -219,14 +222,80 @@ func (s *RPC) LookupRegion(ctx context.Context, req *identityv1.LookupRegionRequ
 	return &identityv1.LookupRegionResponse{UserId: uid.String(), Region: reg, Found: true}, nil
 }
 
-// PrepareRegionMove is not backed: see the RPC type comment.
-func (s *RPC) PrepareRegionMove(context.Context, *identityv1.PrepareRegionMoveRequest) (*identityv1.PrepareRegionMoveResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "the region move still runs inside the onboarding handlers (org); the saga is not split yet")
+// PrepareRegionMove copies the user out of the holding area into the target region (idempotent).
+func (s *RPC) PrepareRegionMove(ctx context.Context, req *identityv1.PrepareRegionMoveRequest) (*identityv1.PrepareRegionMoveResponse, error) {
+	id, target, err := regionMoveArgs(req.GetUserId(), req.GetTargetRegion())
+	if err != nil {
+		return nil, err
+	}
+	present, err := s.regionMove().Prepare(ctx, id, target)
+	if err != nil {
+		return nil, regionMoveError("PrepareRegionMove", err)
+	}
+	return &identityv1.PrepareRegionMoveResponse{AlreadyPresent: present}, nil
 }
 
-// CommitRegionMove is not backed: see the RPC type comment.
-func (s *RPC) CommitRegionMove(context.Context, *identityv1.CommitRegionMoveRequest) (*identityv1.CommitRegionMoveResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "the region move still runs inside the onboarding handlers (org); sessions rotate instead of a TokenPair")
+// CommitRegionMove repoints users_registry at the target region and releases the pending user (idempotent). No
+// tokens are issued: sessions are server-side and the caller rotates its session.
+func (s *RPC) CommitRegionMove(ctx context.Context, req *identityv1.CommitRegionMoveRequest) (*identityv1.CommitRegionMoveResponse, error) {
+	id, target, err := regionMoveArgs(req.GetUserId(), req.GetTargetRegion())
+	if err != nil {
+		return nil, err
+	}
+	already, err := s.regionMove().Commit(ctx, id, target)
+	if err != nil {
+		return nil, regionMoveError("CommitRegionMove", err)
+	}
+	return &identityv1.CommitRegionMoveResponse{Region: string(target), AlreadyCommitted: already}, nil
+}
+
+// AbortRegionMove is the compensation of PrepareRegionMove (idempotent, refused after the commit).
+func (s *RPC) AbortRegionMove(ctx context.Context, req *identityv1.AbortRegionMoveRequest) (*identityv1.AbortRegionMoveResponse, error) {
+	id, target, err := regionMoveArgs(req.GetUserId(), req.GetTargetRegion())
+	if err != nil {
+		return nil, err
+	}
+	removed, err := s.regionMove().Abort(ctx, id, target)
+	if err != nil {
+		return nil, regionMoveError("AbortRegionMove", err)
+	}
+	return &identityv1.AbortRegionMoveResponse{Removed: removed}, nil
+}
+
+func (s *RPC) regionMove() *regionsaga.IdentitySide {
+	return &regionsaga.IdentitySide{
+		Global: s.Users.Global,
+		Regional: func(reg region.Region) (regionsaga.DB, error) {
+			p, err := s.Users.Router.DB(reg)
+			if err != nil {
+				return nil, err
+			}
+			return p, nil
+		},
+	}
+}
+
+func regionMoveArgs(userID, target string) (uuid.UUID, region.Region, error) {
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return uuid.Nil, "", status.Error(codes.InvalidArgument, "user_id is not a uuid")
+	}
+	reg := region.Region(target)
+	if !region.Valid(reg) || reg == region.RegionGlobal {
+		return uuid.Nil, "", status.Errorf(codes.InvalidArgument, "target_region %q is not a region an account can move to", target)
+	}
+	return id, reg, nil
+}
+
+// regionMoveError maps the saga's permanent failures to FailedPrecondition (no retry helps) and the rest to
+// Unavailable (the caller retries).
+func regionMoveError(op string, err error) error {
+	var perm regionsaga.Permanent
+	if errors.As(err, &perm) {
+		return status.Error(codes.FailedPrecondition, perm.Error())
+	}
+	slog.Error("identity rpc failed", "op", op, "error", err)
+	return status.Error(codes.Unavailable, "region move step failed, retry")
 }
 
 // CreateOrgInvite is not backed: invites are created over HTTP (POST /organizations/invites).
@@ -479,5 +548,8 @@ func (a *adminRPC) EnqueueVerification(ctx context.Context, req *identityv1.Enqu
 
 // identityAllow: only org opens KYB review items (the monolith when org is not extracted).
 var identityAllow = rpc.AllowList{
+	identityv1.IdentityService_PrepareRegionMove_FullMethodName:        {"org", "server"},
+	identityv1.IdentityService_CommitRegionMove_FullMethodName:         {"org", "server"},
+	identityv1.IdentityService_AbortRegionMove_FullMethodName:          {"org", "server"},
 	identityv1.AdminIdentityService_EnqueueVerification_FullMethodName: {"org", "server"},
 }

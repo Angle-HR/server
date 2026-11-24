@@ -3,7 +3,7 @@
 #
 # This workflow only reads the repository. It is separate from the deploy workflows (container-images.yml,
 # migrate.yml), which run on pushes to staging/production and workflow_dispatch; nothing here pushes images or
-# touches AWS. Lint runs non-blocking (see the lint job and docs/microservices/hardening.md).
+# touches AWS. The lint job gates on depguard and reports the rest (see docs/microservices/hardening.md).
 name: Go
 
 on:
@@ -132,14 +132,13 @@ jobs:
           fi
 
   # golangci-lint is installed with `go install` so it is compiled by the Go version in go.mod. The prebuilt release
-  # binaries are built with an older Go and panic when the module needs a newer toolchain. Non-blocking until the
-  # existing findings are triaged: the job always passes and prints the finding count. Drop continue-on-error (and
-  # the `|| true`) to make it a gate.
+  # binaries are built with an older Go and panic when the module needs a newer toolchain.
+  # Two steps: the depguard rules (cloud-SDK and service-boundary rules in .golangci.yml) are a blocking gate and the
+  # tree is clean against them; the remaining linters are a non-blocking report until their findings are triaged.
   lint:
-    name: Lint (golangci-lint, non-blocking)
+    name: Lint (depguard gate, full report)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -150,10 +149,13 @@ jobs:
 
       - name: Install golangci-lint built with the module's Go
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
           golangci-lint version
 
-      - name: golangci-lint
+      - name: Import boundaries (depguard, blocking)
+        run: golangci-lint run --timeout=10m --enable-only depguard
+
+      - name: Other linters (report only)
         continue-on-error: true
         run: |
           golangci-lint run --timeout=10m --output.json.path=lint.json || true

@@ -51,6 +51,9 @@ type AuthHandler struct {
 	Enqueuer        jobEnqueuer
 	// MeAccess adds the caller's company roles and permissions to /auth/me. Optional: nil leaves both empty.
 	MeAccess func(ctx context.Context, userID string, reg region.Region) (roles, permissions []string)
+	// OrgReads reads company data from org over gRPC (ORG_MEMBERSHIP, ORG_ONBOARDING). Nil or an unset field keeps
+	// MeAccess and the accounts tables.
+	OrgReads *OrgReads
 	validate *validator.Validate
 }
 
@@ -1108,6 +1111,18 @@ func (h *AuthHandler) loadOnboardingSummary(
 		}, nil
 	}
 
+	if rd := h.OrgReads.onboarding(); rd != nil && reg != region.RegionGlobal {
+		step, completed, found, rerr := rd.Progress(ctx, user.ID.String(), reg)
+		if rerr != nil {
+			besteffort.Log(ctx, "org onboarding progress", rerr)
+			return OnboardingProgressSummary{}, errUnavailable
+		}
+		if !found {
+			step, completed = onboarding.InitialProgress()
+		}
+		return onboardingSummary(user.OnboardingCompletedAt, step, completed, user.AccountType), nil
+	}
+
 	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
 	if err != nil {
 		return OnboardingProgressSummary{}, err
@@ -1173,7 +1188,7 @@ func (h *AuthHandler) respondSession(
 ) {
 	summary, err := h.loadOnboardingSummary(ctx, reg, user)
 	if err != nil {
-		response.Error(w, r, apperror.ErrInternal)
+		response.Error(w, r, summaryError(err))
 		return
 	}
 
@@ -1269,4 +1284,12 @@ func (h *AuthHandler) insertPendingUser(ctx context.Context, sql string, args []
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// summaryError keeps org's unavailability visible as 503; anything else is an internal error.
+func summaryError(err error) error {
+	if errors.Is(err, errUnavailable) {
+		return errUnavailable
+	}
+	return apperror.ErrInternal
 }

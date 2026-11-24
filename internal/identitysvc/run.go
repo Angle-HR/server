@@ -8,7 +8,7 @@
 //	HTTP_ADDR        default :8080 (/healthz, /readyz, /api/v1/...)
 //	GRPC_ADDR        default :9090
 //	NATS_URL         required: mail requests and identity events leave through the outbox relays
-//	IDENTITY_EVENTS  on to publish identity.user.* and identity.staff.invited through the outbox
+//	IDENTITY_EVENTS  on to publish identity.user.* and identity.staff.* through the outbox, and to consume identity.staff.deactivated
 //	ORG_APPLY        db (default) or grpc: how a KYB decision reaches org
 //	ORG_GRPC_ADDR    org's gRPC address for ORG_APPLY=grpc
 package identitysvc
@@ -30,6 +30,7 @@ import (
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/hiring/callerresolver"
+	"github.com/Angle-HR/server/internal/identityevents"
 	"github.com/Angle-HR/server/internal/identityhttp"
 	"github.com/Angle-HR/server/internal/kyb"
 	"github.com/Angle-HR/server/internal/kyb/kybnotify"
@@ -40,6 +41,7 @@ import (
 	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/config"
 	"github.com/Angle-HR/server/pkg/db"
+	natsbus "github.com/Angle-HR/server/pkg/events/nats"
 	"github.com/Angle-HR/server/pkg/logger"
 	redisclient "github.com/Angle-HR/server/pkg/redis"
 )
@@ -111,6 +113,19 @@ func Run() error {
 	}
 
 	adminStore := admin.NewStore(global)
+	if identityevents.Enabled() {
+		staffBus, berr := natsbus.Connect(notifications.BusConfig(cfg.NATSURL, "identity-staff"))
+		if berr != nil {
+			return fmt.Errorf("connect nats for staff events: %w", berr)
+		}
+		defer func() { _ = staffBus.Close() }()
+		staffSub, serr := SubscribeStaffEvents(ctx, staffBus, &StaffDeactivation{DB: global, Sessions: adminSessions})
+		if serr != nil {
+			return fmt.Errorf("subscribe staff events: %w", serr)
+		}
+		defer func() { _ = staffSub.Stop(context.Background()) }()
+		log.Info("staff deactivation: consuming identity.staff.deactivated events")
+	}
 	if err = bootstrapAdmin(ctx, cfg, adminStore); err != nil {
 		return err
 	}
@@ -141,6 +156,13 @@ func Run() error {
 	}}
 	authHandler.MeAccess = MeAccess(callers)
 	adminHandler := identityhttp.NewAdminHandler(adminStore, router, global, redisClient, adminSessions, emailQueue, review)
+	// ORG_MEMBERSHIP / ORG_ONBOARDING = grpc: /auth/me and the admin user detail read company data from org.
+	orgReads, closeOrgReads, err := identityhttp.OrgReadsFromEnv()
+	if err != nil {
+		return err
+	}
+	defer closeOrgReads()
+	authHandler.OrgReads, adminHandler.OrgReads = orgReads, orgReads
 	adminHandler.UseTOTP(totpCrypto, cfg.AdminTOTPRequired)
 	adminMW := auth.NewAdminMiddleware(adminSessions, adminStore)
 	adminMW.RequireMFA = cfg.AdminTOTPRequired

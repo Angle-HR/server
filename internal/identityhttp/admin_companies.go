@@ -105,3 +105,84 @@ func (h *AdminHandler) deleteCompany(w http.ResponseWriter, r *http.Request) {
 		CompanyID: id, DeletedAt: at.UTC().Format(time.RFC3339), AlreadyDeleted: already,
 	})
 }
+
+// CompanyReactivator is what an OrgReview may also do: undo a deletion in org (AdminOrgService.ReactivateCompany).
+type CompanyReactivator interface {
+	ReactivateCompany(ctx context.Context, companyID string, reg region.Region, adminID, reason string) (time.Time, bool, error)
+}
+
+// ReactivateCompany implements CompanyReactivator over AdminOrgService.
+func (o *OrgGRPC) ReactivateCompany(ctx context.Context, companyID string, reg region.Region, adminID, reason string) (time.Time, bool, error) {
+	resp, err := o.Client.ReactivateCompany(ctx, &orgv1.ReactivateCompanyRequest{
+		CompanyId: companyID, Region: string(reg), AdminId: adminID, Reason: reason,
+	})
+	if err != nil {
+		return time.Time{}, false, grpcToAppError(err)
+	}
+	return resp.GetReactivatedAt().AsTime(), resp.GetAlreadyActive(), nil
+}
+
+// AdminReactivateCompanyData is the answer of POST /admin/companies/{id}/reactivate.
+type AdminReactivateCompanyData struct {
+	CompanyID     string `json:"company_id"`
+	ReactivatedAt string `json:"reactivated_at"`
+	AlreadyActive bool   `json:"already_active"`
+}
+
+// AdminReactivateCompanyEnvelope wraps AdminReactivateCompanyData.
+type AdminReactivateCompanyEnvelope struct {
+	Data AdminReactivateCompanyData `json:"data"`
+}
+
+// reactivateCompany godoc
+//
+//	@Summary		Reactivate a deleted company
+//	@Description	Superadmin only. Org clears the deletion and emits org.company.reactivated.v1. Data applications and hiring removed when the company was deleted does not come back. Repeating it is harmless. Needs ORG_APPLY=grpc.
+//	@Tags			admin/companies
+//	@Accept			json
+//	@Produce		json
+//	@Security		AdminSessionCookie
+//	@Param			id		path		string	true	"Company ID"
+//	@Param			region	query		string	true	"Company region (uk, us, eu, africa, asia)"
+//	@Success		200		{object}	identityhttp.AdminReactivateCompanyEnvelope
+//	@Failure		400		{object}	apidoc.ErrorEnvelope
+//	@Failure		404		{object}	apidoc.ErrorEnvelope
+//	@Router			/admin/companies/{id}/reactivate [post]
+func (h *AdminHandler) reactivateCompany(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := uuid.Parse(id); err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, "invalid company id"))
+		return
+	}
+	reg, err := region.ParseRegion(r.URL.Query().Get("region"))
+	if err != nil || reg == region.RegionGlobal {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, "region is required: uk, us, eu, africa or asia"))
+		return
+	}
+	var body AdminDeleteCompanyRequest
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil {
+			response.Error(w, r, apperror.InvalidBody(err))
+			return
+		}
+	}
+	adminID, _, _, ok := auth.AdminFromContext(r.Context())
+	if !ok {
+		response.Error(w, r, apperror.ErrUnauthorized)
+		return
+	}
+	rea, ok := h.Org.(CompanyReactivator)
+	if !ok {
+		response.Error(w, r, errUnavailable)
+		return
+	}
+	at, already, err := rea.ReactivateCompany(r.Context(), id, reg, adminID.String(), body.Reason)
+	if err != nil {
+		response.Error(w, r, err)
+		return
+	}
+	h.audit(r, "company.reactivate", "company", id, map[string]any{"region": string(reg), "reason": body.Reason, "already_active": already})
+	response.Success(w, r, http.StatusOK, AdminReactivateCompanyData{
+		CompanyID: id, ReactivatedAt: at.UTC().Format(time.RFC3339), AlreadyActive: already,
+	})
+}

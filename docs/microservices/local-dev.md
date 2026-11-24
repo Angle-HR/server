@@ -184,6 +184,15 @@ variables (default `off`; `token` needs no certificates). Verified: `e2e-auth`, 
 mtls, and a gRPC call without credentials is refused. Recreating a peer (`docker compose up -d --force-recreate applications`)
 while traffic runs recovers within seconds (hardening.md section 8). Parallel stack: the cert directory can be shared, or set `GRPC_CERT_DIR`.
 
+## Region-migration saga e2e
+
+`scripts/e2e-region-saga.sh` on the every-service-remote stack above with `REGION_MOVE=saga REGION_MOVE_RESUME_INTERVAL=2s`
+added (and the `notifications` profile; ports remapped for a private project, see below). It checks the happy path (saga
+row, registry, pending rows, regional rows, `org.region.moved.v1` in the outbox and on the ORG stream), idempotent
+repeats, identity stopped mid-move (stalled saga, compensation, then success), crash recovery by the resumer, company
+delete and reactivate (applications tombstone, `hiring-org`), and `identity.staff.deactivated.v1` with its consumer.
+It stops and starts the stack's identity container (`IDENTITY_CONTAINER`, default `<project>-identity-1`).
+
 ## e2e scripts on a second stack
 
 `scripts/e2e-*.sh` default their URLs from the compose port variables (`SERVER_PORT`, `WEB_BFF_PORT`, `ADMIN_BFF_PORT`,

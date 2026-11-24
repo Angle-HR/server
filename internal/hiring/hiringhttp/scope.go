@@ -76,7 +76,7 @@ func (d *PostgresHiringDirectory) Service(reg region.Region) (*draft.Service, er
 	if d.Readiness != nil {
 		company = orgclient.Company{Source: d.Readiness, DPIARecorded: store.DPIARecorded}
 	}
-	svc := &draft.Service{Store: store, Ref: ref, Now: d.Now, Company: company, Applicants: d.Counts}
+	svc := &draft.Service{Store: store, Ref: ref, Now: d.Now, Company: company, Applicants: d.Counts, Audit: store}
 	if svc.Applicants == nil {
 		svc.Applicants = dbCounts{store: store}
 	}
@@ -281,6 +281,8 @@ func hiringError(err error) error {
 		return apperror.NewWithDetails(apperror.CodeServiceUnavailable,
 			"we could not check your company's publishing requirements right now; nothing was published, try again in a moment",
 			map[string]any{apperror.DetailRetryAfterSeconds: companyRetryAfterSeconds, "retryable": true})
+	case errors.Is(err, draft.ErrAuditUnavailable):
+		return apperror.New(apperror.CodeServiceUnavailable, "the audit trail is not available right now")
 	case errors.Is(err, hiringtypes.ErrNotFound):
 		return apperror.New(apperror.CodeNotFound, "not found")
 	case errors.As(err, &blocked):

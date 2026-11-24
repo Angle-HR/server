@@ -12,6 +12,7 @@
 //	NOTIFICATIONS_TRANSPORT   events (needs NATS_URL) or fluvio (default), as the monolith
 //	IDENTITY_QUEUE            db (default) or grpc: how KYB review items reach identity's queue
 //	IDENTITY_GRPC_ADDR        identity's gRPC address, for IDENTITY_QUEUE=grpc
+//	REGION_MOVE               inline (default) or saga: how an onboarding account moves into its region
 //	NATS_URL                  bus for the outbox relays
 package orgsvc
 
@@ -38,6 +39,7 @@ import (
 	"github.com/Angle-HR/server/internal/orghttp"
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/region"
+	"github.com/Angle-HR/server/internal/regionsaga"
 	"github.com/Angle-HR/server/internal/session"
 	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/config"
@@ -130,7 +132,20 @@ func Run() error {
 		Kind: session.KindProduct, IdleTTL: cfg.SessionIdleTTL, AbsoluteTTL: cfg.SessionAbsoluteTTL, Secure: cfg.CookieSecure,
 	})
 	store := regionalStore(router)
+	// REGION_MOVE=saga: the onboarding steps that give the account a country run the region-migration saga
+	// (identity over gRPC) instead of the inline copy.
+	saga, stopSaga, err := regionsaga.Start(ctx, global, regionsaga.Regional(router.DB), log)
+	if err != nil {
+		return fmt.Errorf("region move saga: %w", err)
+	}
+	defer stopSaga()
+	var mover orghttp.RegionMover
+	if saga != nil {
+		mover = saga
+		log.Info("region move: saga", "identity", env(regionsaga.EnvIdentityAddr, "in-process"))
+	}
 	orgHandlers := orghttp.New(orghttp.Deps{
+		Mover:  mover,
 		Router: router, Global: global, Sessions: sessions, Enqueuer: enqueuer, Config: cfg, Queue: queueFor,
 		Company: store,
 		Identify: func(ctx context.Context) (string, region.Region, bool) {
@@ -156,6 +171,7 @@ func Run() error {
 		return fmt.Errorf("listen grpc %s: %w", grpcAddr, err)
 	}
 	grpcSrv := NewGRPCServer(&RPC{
+		Mover: mover, Countries: globalCountries{DB: global},
 		Store: store, Catalog: globalCatalog{DB: global}, Log: log, DPAVersion: orghttp.CurrentDPAVersion,
 		KYB: &kybReviewer{
 			Router: router, Queue: queueFor, Log: log,

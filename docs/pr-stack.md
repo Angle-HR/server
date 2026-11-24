@@ -247,3 +247,12 @@ Adds `docs/pr-stack.md` and `scripts/check-pr-stack.sh`. Not intended to merge t
 do not want it in the history.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+## 13 follow-ups (on top of 12)
+
+Title: `Region-migration saga, org-backed identity reads, audit read paths, lint and ClamAV verification`
+
+- Region saga (`REGION_MOVE=saga`), `org.region.moved.v1`, company reactivation and staff-deactivation events.
+- Identity `/auth/me` and admin user detail read through org gRPC (`ORG_MEMBERSHIP`, `ORG_ONBOARDING`).
+- `GET /jobs/audit`, richer `/admin/audit-logs`, applicant counts report "unavailable" instead of 0.
+- depguard fixes, CI lint gate, `go.mod` tidy, ClamAV reject e2e, OpenHR email branding.

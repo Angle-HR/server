@@ -278,6 +278,25 @@ definitions:
             submitted_at:
                 type: string
         type: object
+    github_com_Angle-HR_server_internal_hiring_draft.AuditEvent:
+        properties:
+            action:
+                type: string
+            actor_id:
+                type: string
+            created_at:
+                type: string
+            diff:
+                items:
+                    type: integer
+                type: array
+            id:
+                type: integer
+            job_id:
+                type: string
+            source:
+                type: string
+        type: object
     github_com_Angle-HR_server_internal_hiring_draft.BulkDone:
         properties:
             after:
@@ -766,8 +785,11 @@ definitions:
             applicant_count:
                 description: |-
                     ApplicantCount is how many people have applied. NewApplicantCount is how many of them nobody on the hiring
-                    team has opened yet.
+                    team has opened yet. Both are null, and ApplicantCountsAvailable is false, when the applications service could
+                    not be reached: the counters are unknown, which is not the same as zero.
                 type: integer
+            applicant_counts_available:
+                type: boolean
             closing_date:
                 type: string
             created_at:
@@ -1455,6 +1477,15 @@ definitions:
         properties:
             version:
                 type: string
+        type: object
+    internal_hiring_hiringhttp.AuditListEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_draft.AuditEvent'
+                type: array
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
         type: object
     internal_hiring_hiringhttp.BulkEnvelope:
         properties:
@@ -3415,6 +3446,7 @@ info:
 paths:
     /admin/audit-logs:
         get:
+            description: Newest first. Filter by actor, action, entity (resource_type and resource_id) and time. The ip is returned as stored. Page with limit and offset; meta.has_more says whether another page follows. Needs audit:read.
             parameters:
                 - description: Actor UUID
                   in: query
@@ -3428,7 +3460,19 @@ paths:
                   in: query
                   name: resource_type
                   type: string
-                - description: Page size
+                - description: Resource id (with resource_type)
+                  in: query
+                  name: resource_id
+                  type: string
+                - description: On or after this time (RFC 3339 or YYYY-MM-DD)
+                  in: query
+                  name: from
+                  type: string
+                - description: Before this time (RFC 3339), or up to the end of this day (YYYY-MM-DD)
+                  in: query
+                  name: to
+                  type: string
+                - description: Page size (default 50, max 100)
                   in: query
                   name: limit
                   type: integer
@@ -3443,6 +3487,10 @@ paths:
                     description: OK
                     schema:
                         $ref: '#/definitions/internal_identityhttp.AdminAuditListEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
             security:
                 - AdminSessionCookie: []
             summary: List admin audit logs
@@ -6689,6 +6737,58 @@ paths:
             security:
                 - SessionCookie: []
             summary: Change a job's status
+            tags:
+                - jobs
+    /jobs/audit:
+        get:
+            description: 'The company''s audit events, newest first: job changes written by hiring (source hiring) and application events written by the applications service (source applications: received, viewed, file_downloaded, status_changed). Needs the job.audit.view permission. Rows carry ids and the stored diff only, never candidate data. Page with next_cursor.'
+            parameters:
+                - description: Only this job (the entity)
+                  in: query
+                  name: job_id
+                  type: string
+                - description: Only events by this user id
+                  in: query
+                  name: actor_id
+                  type: string
+                - description: Exact action, e.g. job.published
+                  in: query
+                  name: action
+                  type: string
+                - description: On or after this time (RFC 3339 or YYYY-MM-DD)
+                  in: query
+                  name: from
+                  type: string
+                - description: Before this time (RFC 3339), or up to the end of this day (YYYY-MM-DD)
+                  in: query
+                  name: to
+                  type: string
+                - description: next_cursor from the previous page
+                  in: query
+                  name: cursor
+                  type: string
+                - description: Page size (default 50, max 100)
+                  in: query
+                  name: limit
+                  type: integer
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.AuditListEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Job audit trail
             tags:
                 - jobs
     /jobs/bulk:

@@ -22,6 +22,7 @@ const docTemplate = `{
                         "AdminSessionCookie": []
                     }
                 ],
+                "description": "Newest first. Filter by actor, action, entity (resource_type and resource_id) and time. The ip is returned as stored. Page with limit and offset; meta.has_more says whether another page follows. Needs audit:read.",
                 "produces": [
                     "application/json"
                 ],
@@ -49,8 +50,26 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "Resource id (with resource_type)",
+                        "name": "resource_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "On or after this time (RFC 3339 or YYYY-MM-DD)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Before this time (RFC 3339), or up to the end of this day (YYYY-MM-DD)",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
-                        "description": "Page size",
+                        "description": "Page size (default 50, max 100)",
                         "name": "limit",
                         "in": "query"
                     },
@@ -66,6 +85,12 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/internal_identityhttp.AdminAuditListEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     }
                 }
@@ -3293,6 +3318,87 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/internal_hiring_hiringhttp.JobEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/audit": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "The company's audit events, newest first: job changes written by hiring (source hiring) and application events written by the applications service (source applications: received, viewed, file_downloaded, status_changed). Needs the job.audit.view permission. Rows carry ids and the stored diff only, never candidate data. Page with next_cursor.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Job audit trail",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Only this job (the entity)",
+                        "name": "job_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Only events by this user id",
+                        "name": "actor_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Exact action, e.g. job.published",
+                        "name": "action",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "On or after this time (RFC 3339 or YYYY-MM-DD)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Before this time (RFC 3339), or up to the end of this day (YYYY-MM-DD)",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "next_cursor from the previous page",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (default 50, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.AuditListEnvelope"
                         }
                     },
                     "400": {
@@ -7246,6 +7352,35 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_Angle-HR_server_internal_hiring_draft.AuditEvent": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "actor_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "diff": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "job_id": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
         "github_com_Angle-HR_server_internal_hiring_draft.BulkDone": {
             "type": "object",
             "properties": {
@@ -7978,8 +8113,11 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "applicant_count": {
-                    "description": "ApplicantCount is how many people have applied. NewApplicantCount is how many of them nobody on the hiring\nteam has opened yet.",
+                    "description": "ApplicantCount is how many people have applied. NewApplicantCount is how many of them nobody on the hiring\nteam has opened yet. Both are null, and ApplicantCountsAvailable is false, when the applications service could\nnot be reached: the counters are unknown, which is not the same as zero.",
                     "type": "integer"
+                },
+                "applicant_counts_available": {
+                    "type": "boolean"
                 },
                 "closing_date": {
                     "type": "string"
@@ -9027,6 +9165,20 @@ const docTemplate = `{
             "properties": {
                 "version": {
                     "type": "string"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.AuditListEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_draft.AuditEvent"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
                 }
             }
         },

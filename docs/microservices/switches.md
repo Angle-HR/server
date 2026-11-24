@@ -27,9 +27,10 @@ to hiring, `/organizations/invites` to identity. Set a `*_REMOTE` flag and its `
 | --- | --- | --- | --- |
 | `APPLICATIONS_JOBSOURCE` | `db` | applications | `db`: read hiring tables; `events`: local read model fed by `hiring.job.*` |
 | `CALLER_RESOLVER` | `db` | applications | company and roles of the caller: `db` (accounts tables) or `grpc` (`OrgService.ResolveMembership`) |
-| `APPLICANT_COUNTS` | `db` | monolith, hiring | applicant counters on the job list: `db` or `grpc` (`ApplicationsService.GetApplicantCounts`) |
+| `APPLICANT_COUNTS` | `db` | monolith, hiring | applicant counters on the job list: `db` or `grpc` (`ApplicationsService.GetApplicantCounts`). A failing source gives `applicant_count`/`new_applicant_count` = `null` and `applicant_counts_available=false`, not zero |
 | `ORG_READINESS` | `db` | hiring | publish readiness from accounts tables or `OrgService.GetPublishReadiness` (fails closed with 503) |
-| `ORG_MEMBERSHIP` | `db` | hiring | caller membership from accounts tables or `OrgService.ResolveMembership` |
+| `ORG_MEMBERSHIP` | `db` | hiring, identity, monolith | caller membership from accounts tables or `OrgService.ResolveMembership`. In identity (`/auth/me` roles and permissions) `grpc` fails closed: org down answers 503, never empty roles; no database fallback |
+| `ORG_ONBOARDING` | `db` | identity, monolith | onboarding progress on `/auth/me` and progress plus owned company name on `GET /admin/users/{id}` from accounts tables or `OrgService.GetOnboardingProgress` / `AdminOrgService.GetCompanyByOwner`. `grpc`: `/auth/me` and login answer 503 while org is down; the admin detail leaves the two fields out (logged). Accounts still in the global holding region keep reading their own pending progress |
 | `ORG_INDUSTRIES` | `db` | hiring | industry catalog from the global DB or `OrgService.ListIndustries` |
 | `ORG_TENANTS` | `db` | hiring-expire, applications (`APPLICATIONS_JOBSOURCE=events`) | companies to sweep: `db` or `OrgService.ListCompanies` |
 | `ORG_NOTICE` | `db` | applications (events source) | retention notice recipient: `db` (privacy contact from job events, else hiring/accounts tables) or `OrgService.GetCompanyContact` (first choice; events value if org fails) |
@@ -37,6 +38,8 @@ to hiring, `/organizations/invites` to identity. Set a `*_REMOTE` flag and its `
 | `ORG_COMPANY` | `db` | hiring | company row of the public page and job events (`OrgService.GetCompany`, 60 s cache, stale on error), settings page (`GetPublishReadiness`), accept DPA (`AcceptAgreement`), privacy contact (`SetPrivacyContact`). Org down and cold cache: 503 / the job write fails closed |
 | `IDENTITY_USERS` | `db` | hiring | hiring managers' names on the job list via `IdentityService.BatchGetUsers` at `IDENTITY_GRPC_ADDR` (deactivated users dropped). Team lists (`/hiring/people`) stay with the BFF composition |
 | `ORG_APPLY` | `db` | identity, monolith | also required for `DELETE /admin/companies/{id}` (`AdminOrgService.DeleteCompany`, 503 otherwise). KYB decision reaches org by writing regional tables (`db`) or `AdminOrgService.ApplyKybDecision` (`grpc`). With `grpc`, `GET /admin/verification/{id}` falls back to identity's own read of the queue item because the contract has no case-details RPC |
+| `REGION_MOVE` | `inline` | org, monolith (while it serves org) | `inline`: the onboarding step moves the account out of the global holding area inside the handler. `saga`: the persisted, resumable region-migration saga (org drives, identity over `IDENTITY_GRPC_ADDR`, in-process when unset); needs migration `global_registry/000018`. See org.md |
+| `REGION_MOVE_RESUME_INTERVAL` | `30s` | org, monolith | how often stalled sagas are resumed (a saga idle for a minute is picked up) |
 | `IDENTITY_QUEUE` | `db` | org | KYB review items: write `admin.verification_queue` (`db`) or `EnqueueVerification` (`grpc`) |
 | `GRPC_AUTH` | `off` | all gRPC services and clients | `off`, `token` or `mtls`; see hardening.md section 7. Companions: `GRPC_AUTH_SECRET(_FILE)`, `GRPC_TLS_CERT/KEY/CA(_FILE)`, `GRPC_SERVICE_NAME`. Compose passes them through; certificates from `make local-grpc-certs` |
 | `*_GRPC_ADDR` | compose: `<service>:9090` | all | `IDENTITY_`, `ORG_`, `HIRING_`, `APPLICATIONS_`, `NOTIFICATIONS_` gRPC address; `ORG_GRPC_TIMEOUT` (3s) bounds each call |
@@ -49,10 +52,10 @@ to hiring, `/organizations/invites` to identity. Set a `*_REMOTE` flag and its `
 | `NOTIFICATIONS_TRANSPORT` | `fluvio` (compose: `events`) | monolith, org, identity | email requests through Fluvio or the events outbox |
 | `HIRING_EVENTS` | `off` | hiring (monolith while it serves hiring) | emit `hiring.job.*` and `members_changed` through the outbox. Compose: `SERVER_HIRING_EVENTS=off` turns it off on the monolith when `HIRING_REMOTE=on` |
 | `APPLICATIONS_EVENTS` | `off` | applications | emit `applications.application.*` |
-| `APPLICATIONS_ORG_EVENTS` | `off` | applications | consume `org.company.deleted.v1` and delete that company's applications data |
-| `HIRING_ORG_EVENTS` | `off` | hiring | consume `org.company.deleted.v1` (inbox consumer `hiring-org`) and archive the company's live jobs |
-| `ORG_EVENTS` | `off` | org (monolith unless `ORG_REMOTE=on`) | emit `org.*` |
-| `IDENTITY_EVENTS` | `off` | identity (monolith unless `IDENTITY_REMOTE=on`) | emit `identity.*` |
+| `APPLICATIONS_ORG_EVENTS` | `off` | applications | consume `org.company.deleted.v1` and delete that company's applications data; `org.company.reactivated.v1` lifts the tombstone |
+| `HIRING_ORG_EVENTS` | `off` | hiring | consume `org.company.deleted.v1` (inbox consumer `hiring-org`) and archive the company's live jobs; `org.company.reactivated.v1` is logged only |
+| `ORG_EVENTS` | `off` | org (monolith unless `ORG_REMOTE=on`) | emit `org.*`, including `org.company.reactivated.v1` and `org.region.moved.v1` |
+| `IDENTITY_EVENTS` | `off` | identity (monolith unless `IDENTITY_REMOTE=on`) | emit `identity.*` (including `identity.staff.deactivated.v1`) and, in the identity service, consume that event (`identity-staff`: revoke the member's admin sessions) |
 | `NOTIFICATIONS_STREAM_MAX_AGE` | stream default | every process touching the notifications stream | JetStream retention, 5m to 168h; must be identical everywhere |
 | `NOTIFICATIONS_DB_URL` | global DB (compose: `openhr_notifications`) | notifications | database of the events inbox |
 
@@ -79,3 +82,9 @@ to hiring, `/organizations/invites` to identity. Set a `*_REMOTE` flag and its `
 | `ADMIN_APP_URL` | compose: `http://localhost:3001` | the admin console origin, the only source of the admin invite link (`/admin/accept-invite?token=`). Same validation and requirement as `APP_URL` |
 | `ANGLEHR_<REGION>_R2_BUCKET` | `openhr-<region>` | per-region bucket the regional router requires, also on services that store no files |
 | `AUTH_MODE` (scripts) | `cookie` | `scripts/e2e-auth.sh`: `cookie` or `bearer` |
+
+## Public job link (`PUBLIC_SITE_URL`)
+
+The publish dialog's share link and the candidate privacy-notice link are built from `PUBLIC_SITE_URL`, falling
+back to `PUBLIC_API_URL`. Set it to the origin that serves `/j/{public_id}` (the web BFF in the split, or the
+careers site), for example `https://tryopenhr.com`. Left empty, links point at the API origin.

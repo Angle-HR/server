@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -15,6 +16,7 @@ import (
 	"github.com/Angle-HR/server/internal/kyb"
 	"github.com/Angle-HR/server/internal/orgstore"
 	"github.com/Angle-HR/server/internal/region"
+	"github.com/Angle-HR/server/internal/regionsaga"
 	"github.com/Angle-HR/server/pkg/rpc"
 )
 
@@ -22,6 +24,16 @@ import (
 type Catalog interface {
 	Industries(ctx context.Context) ([]Industry, error)
 	IndustryExists(ctx context.Context, slug string) (bool, error)
+}
+
+// RegionMover is the region-migration saga (regionsaga.Coordinator).
+type RegionMover interface {
+	Move(ctx context.Context, userID uuid.UUID, target region.Region) (region.Region, error)
+}
+
+// CountryResolver says which region serves a country.
+type CountryResolver interface {
+	CountryRegion(ctx context.Context, countryID uuid.UUID) (region.Region, error)
 }
 
 // Industry is one onboarding industry.
@@ -42,17 +54,22 @@ type KYBReviewer interface {
 // SetMemberRoles, AcceptAgreement, SetPrivacyContact, ListCompanies, ListIndustries, ValidateIndustry,
 // GetKybStatus, and AdminOrgService.ApplyKybDecision, GetCompanyByOwner and DeleteCompany.
 //
+// CompleteRegionOnboarding runs the region-migration saga (REGION_MOVE=saga, else Unimplemented) and
+// AdminOrgService.ReactivateCompany undoes DeleteCompany.
+//
 // Unimplemented, with the reason in the status message: SubmitKyb (the request has no legal name or address, which
-// the verification needs; use the HTTP flow) and CompleteRegionOnboarding (the region-migration saga is not
-// extracted yet, see docs/microservices/org.md).
+// the verification needs; use the HTTP flow).
 type RPC struct {
 	orgv1.UnimplementedOrgServiceServer
 	orgv1.UnimplementedAdminOrgServiceServer
 
 	Store   *orgstore.Store
 	Catalog Catalog
-	KYB     KYBReviewer
-	Log     *slog.Logger
+	// Mover and Countries serve CompleteRegionOnboarding (REGION_MOVE=saga); without them it is Unimplemented.
+	Mover     RegionMover
+	Countries CountryResolver
+	KYB       KYBReviewer
+	Log       *slog.Logger
 	// DPAVersion is the agreement version that counts as current when a request names none.
 	DPAVersion string
 }
@@ -153,6 +170,25 @@ func (s *RPC) ResolveMembership(ctx context.Context, req *orgv1.ResolveMembershi
 		HasCompany: true, CompanyId: m.CompanyID, LegalName: m.LegalName, RegisteredAddress: m.Address,
 		IsOwner: m.IsOwner, Roles: m.Roles, Permissions: orgstore.PermissionList(m.Perms),
 	}, nil
+}
+
+// GetOnboardingProgress returns the user's onboarding step and completed steps (found=false when no row exists).
+func (s *RPC) GetOnboardingProgress(ctx context.Context, req *orgv1.GetOnboardingProgressRequest) (*orgv1.GetOnboardingProgressResponse, error) {
+	reg, err := callRegion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req.GetUserId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+	p, err := s.Store.Progress(ctx, reg, req.GetUserId())
+	if errors.Is(err, orgstore.ErrNotFound) {
+		return &orgv1.GetOnboardingProgressResponse{}, nil
+	}
+	if err != nil {
+		return nil, s.internal("GetOnboardingProgress", err)
+	}
+	return &orgv1.GetOnboardingProgressResponse{Found: true, CurrentStep: p.CurrentStep, CompletedSteps: p.CompletedSteps}, nil
 }
 
 // GetCompany returns the company row.
@@ -362,11 +398,6 @@ func (s *RPC) SubmitKyb(context.Context, *orgv1.SubmitKybRequest) (*orgv1.Submit
 	return nil, status.Error(codes.Unimplemented, "SubmitKyb: the request lacks legal name and address; use POST /organization/verification")
 }
 
-// CompleteRegionOnboarding is the region-migration saga; it is not extracted (see docs/microservices/org.md).
-func (s *RPC) CompleteRegionOnboarding(context.Context, *orgv1.CompleteRegionOnboardingRequest) (*orgv1.CompleteRegionOnboardingResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "CompleteRegionOnboarding: the region-migration saga is not extracted; onboarding steps migrate the account inline")
-}
-
 // ApplyKybDecision records a reviewer's decision on a company's KYB case (identity calls it after closing the
 // queue item). The company's region comes from the request.
 func (s *RPC) ApplyKybDecision(ctx context.Context, req *orgv1.ApplyKybDecisionRequest) (*orgv1.ApplyKybDecisionResponse, error) {
@@ -411,6 +442,60 @@ func (s *RPC) DeleteCompany(ctx context.Context, req *orgv1.DeleteCompanyRequest
 	return &orgv1.DeleteCompanyResponse{DeletedAt: timestamppb.New(at), AlreadyDeleted: already}, nil
 }
 
+// ReactivateCompany undoes DeleteCompany and emits org.company.reactivated.v1 (see orgstore.ReactivateCompany).
+func (s *RPC) ReactivateCompany(ctx context.Context, req *orgv1.ReactivateCompanyRequest) (*orgv1.ReactivateCompanyResponse, error) {
+	reg := region.Region(req.GetRegion())
+	if reg == region.RegionGlobal || !region.Valid(reg) {
+		return nil, status.Errorf(codes.InvalidArgument, "region %q is not a company region", req.GetRegion())
+	}
+	if req.GetCompanyId() == "" || req.GetAdminId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "company_id and admin_id are required")
+	}
+	at, already, err := s.Store.ReactivateCompany(ctx, reg, req.GetCompanyId(), req.GetReason())
+	if err != nil {
+		return nil, s.internal("ReactivateCompany", err)
+	}
+	s.log().Info("company reactivated", "company", req.GetCompanyId(), "region", req.GetRegion(), "admin", req.GetAdminId(), "already", already)
+	return &orgv1.ReactivateCompanyResponse{ReactivatedAt: timestamppb.New(at), AlreadyActive: already}, nil
+}
+
+// CompleteRegionOnboarding runs the region-migration saga for the user: identity copies the user, org copies the
+// organization draft and progress, identity commits, org releases the holding rows and emits org.region.moved.v1.
+// Every step is persisted (accounts.region_move_sagas), so calling it again after any failure resumes or
+// re-attempts. Needs REGION_MOVE=saga. It issues no tokens: the caller rotates its session.
+func (s *RPC) CompleteRegionOnboarding(ctx context.Context, req *orgv1.CompleteRegionOnboardingRequest) (*orgv1.CompleteRegionOnboardingResponse, error) {
+	if s.Mover == nil || s.Countries == nil {
+		return nil, status.Error(codes.Unimplemented, "the region-migration saga is off: set REGION_MOVE=saga")
+	}
+	userID, err := uuid.Parse(req.GetUserId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "user_id is not a uuid")
+	}
+	countryID, err := uuid.Parse(req.GetCountryId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "country_id is not a uuid")
+	}
+	target, err := s.Countries.CountryRegion(ctx, countryID)
+	if err != nil {
+		return nil, s.internal("CompleteRegionOnboarding", err)
+	}
+	if !region.Valid(target) || target == region.RegionGlobal {
+		return nil, status.Error(codes.InvalidArgument, "unknown or inactive country")
+	}
+	reg, err := s.Mover.Move(ctx, userID, target)
+	switch {
+	case errors.Is(err, regionsaga.ErrConflict):
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
+	case errors.Is(err, regionsaga.ErrBusy):
+		return nil, status.Error(codes.Aborted, err.Error())
+	case errors.Is(err, regionsaga.ErrCompensated):
+		return nil, status.Error(codes.Aborted, "the move failed and was rolled back; the account is unchanged, retry")
+	case err != nil:
+		return nil, s.internal("CompleteRegionOnboarding", err)
+	}
+	return &orgv1.CompleteRegionOnboardingResponse{Region: string(reg)}, nil
+}
+
 // GetCompanyByOwner returns the company a user owns (admin user detail page).
 func (s *RPC) GetCompanyByOwner(ctx context.Context, req *orgv1.GetCompanyByOwnerRequest) (*orgv1.GetCompanyByOwnerResponse, error) {
 	reg, err := callRegion(ctx)
@@ -433,8 +518,10 @@ var (
 // monolith, which makes the same calls while a service is not extracted.
 var orgAllow = rpc.AllowList{
 	orgv1.OrgService_ResolveMembership_FullMethodName:      {"hiring", "applications", "identity", "server"},
+	orgv1.OrgService_GetOnboardingProgress_FullMethodName:  {"identity", "server"},
 	orgv1.OrgService_GetPublishReadiness_FullMethodName:    {"hiring", "applications", "identity", "server"},
 	orgv1.AdminOrgService_ApplyKybDecision_FullMethodName:  {"identity", "server"},
 	orgv1.AdminOrgService_GetCompanyByOwner_FullMethodName: {"identity", "server"},
 	orgv1.AdminOrgService_DeleteCompany_FullMethodName:     {"identity", "server"},
+	orgv1.AdminOrgService_ReactivateCompany_FullMethodName: {"identity", "server"},
 }

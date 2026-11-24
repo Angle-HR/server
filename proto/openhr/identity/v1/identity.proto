@@ -27,10 +27,16 @@ service IdentityService {
   // target region (idempotent). Step 1 of the onboarding region-migration saga
   // driven by the org service.
   rpc PrepareRegionMove(PrepareRegionMoveRequest) returns (PrepareRegionMoveResponse);
-  // CommitRegionMove repoints users_registry at the target region, releases the
-  // pending row and issues a fresh token pair whose region claim is the new one.
-  // Step 3 of the saga; the org service has copied its own rows in step 2.
+  // CommitRegionMove repoints users_registry at the target region and releases the
+  // pending user row (idempotent). Step 3 of the saga; the org service has copied its
+  // own rows in step 2. It is the point of no return: after it the saga only rolls
+  // forward. It issues no tokens (sessions are server-side and the caller rotates its
+  // session to pick up the new region), so `tokens` stays empty.
   rpc CommitRegionMove(CommitRegionMoveRequest) returns (CommitRegionMoveResponse);
+  // AbortRegionMove is the compensation of PrepareRegionMove: it removes the user row
+  // copied into the target region while users_registry still says "global"
+  // (idempotent). FailedPrecondition once CommitRegionMove has happened.
+  rpc AbortRegionMove(AbortRegionMoveRequest) returns (AbortRegionMoveResponse);
 
   // CreateOrgInvite stores a hashed invite token for a company and asks
   // notifications to mail it.
@@ -148,8 +154,20 @@ message CommitRegionMoveRequest {
 
 message CommitRegionMoveResponse {
   string region = 1;
-  // New tokens: the ones the caller holds carry the stale pre-move region.
+  // Not issued (always empty): the caller rotates its session instead.
   TokenPair tokens = 2;
+  // True when the move had already been committed (retry).
+  bool already_committed = 3;
+}
+
+message AbortRegionMoveRequest {
+  string user_id = 1;
+  string target_region = 2;
+}
+
+message AbortRegionMoveResponse {
+  // True when a copied row was removed; false when there was nothing to undo.
+  bool removed = 1;
 }
 
 message CreateOrgInviteRequest {

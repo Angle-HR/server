@@ -26,6 +26,8 @@ contract).
 | `SESSION_VALIDATION=on` | web-bff | validate the session cookie in Redis at the edge (default off); also reads `COOKIE_SECURE`, `SESSION_IDLE_TTL`, `SESSION_ABSOLUTE_TTL` like the monolith |
 | `IDENTITY_EVENTS=on` | identity (and monolith while it serves identity) | emit the events below through the outbox (needs `NATS_URL`) |
 | `ORG_APPLY=db\|grpc` | identity / monolith | how a KYB review decision reaches org: `db` writes org's regional tables (interim), `grpc` calls `AdminOrgService.ApplyKybDecision` at `ORG_GRPC_ADDR` |
+| `ORG_MEMBERSHIP=db\|grpc` | identity / monolith | `/auth/me` roles and permissions from the accounts tables (`db`) or `OrgService.ResolveMembership` (`grpc`, 503 when org is down) |
+| `ORG_ONBOARDING=db\|grpc` | identity / monolith | onboarding progress (`/auth/me`, login) and the admin user detail's progress and company name from the accounts tables or org (`GetOnboardingProgress`, `GetCompanyByOwner`) |
 | `NATS_URL` | identity | required: mail requests always leave through the outbox (notifications events transport) |
 
 The service reads the monolith's configuration for sessions, cookies, CORS/origins, databases, admin bootstrap and
@@ -77,6 +79,17 @@ verification session, which is one per email and purpose; stored with the code's
 answers 429 `too_many_attempts` with `Retry-After` and `details.retry_after_seconds`. `POST /auth/resend-verification`
 issues a fresh code and resets the budget.
 
+## Audit log read path (`GET /admin/audit-logs`)
+
+Staff audit trail (`admin.audit_logs`, written by every admin mutation), permission `audit:read`; the admin BFF routes
+`/admin/audit-logs` to identity (`bff.IdentityPath`). Newest first (ties by id). Filters: `actor_id`, `action`,
+`resource_type`, `resource_id` (the entity) and `from` (inclusive) / `to` (exclusive), RFC 3339 or `YYYY-MM-DD` (a date
+`to` covers that day). Paging: `limit` (default 50, max 100) and `offset`; `meta.has_more` says whether a next page
+exists. Each row is `{id, actor_id, actor_email, action, resource_type, resource_id, meta, ip, created_at}`. `ip` is
+returned exactly as stored: the writer stores the bare address (`admin.NormalizeIP`, migration 000016 cleaned old rows)
+and nothing is rewritten on read. The company side of the trail, job and application events, is `GET /jobs/audit` in
+hiring.
+
 ## Routing at the edge
 
 `bff.IdentityPath`: `/auth/*`, `/organizations/invites`, `/admin/auth/*`, `/admin/{users,staff,roles,permissions,
@@ -101,8 +114,14 @@ region), `LookupRegion`; `AdminIdentityService.ListUsers`, `SetUserActive` (also
 `InviteStaff` (role id or slug; acting admin from the call context), `ListAdminRoles`, `HasAdminPermission`,
 `ListVerificationQueue`, `ReviewVerification`, `EnqueueVerification`.
 
-Unimplemented (codes.Unimplemented with a reason): `PrepareRegionMove`, `CommitRegionMove` (the saga still runs in
-the onboarding handlers, and its `TokenPair` no longer exists: sessions rotate), `CreateOrgInvite`, `AcceptOrgInvite`
+`IdentityService.PrepareRegionMove`, `CommitRegionMove`, `AbortRegionMove` are identity's half of the region-migration
+saga that org drives (see [org.md](org.md), `internal/regionsaga.IdentitySide`; callers allowed: `org`, `server`):
+prepare copies the pending user into the target region, commit repoints `users_registry` and deletes the pending user
+(the point of no return, idempotent, no tokens: sessions rotate), abort removes the copied user while the registry still
+says `global`. `FailedPrecondition` means no retry helps (user not pending, not prepared, already committed);
+`Unavailable` means retry. Org also gets `AdminOrgService.ReactivateCompany` through `POST /admin/companies/{id}/reactivate`.
+
+Unimplemented (codes.Unimplemented with a reason): `CreateOrgInvite`, `AcceptOrgInvite`
 (contract has no company context / session result; served over HTTP).
 
 ## Events
@@ -116,8 +135,13 @@ only (never emails, names or codes). Off unless `IDENTITY_EVENTS=on`. Stream `ID
 | `identity.user.email_verified.v1` | email verified (outbox of the user's database) | `user_id`, `region`, `verified_at` |
 | `identity.user.deactivated.v1` | an operator disables the account (admin PATCH or `SetUserActive`) | `user_id`, `region`, `by_admin_id`, `deactivated_at` |
 | `identity.staff.invited.v1` | a staff invite is created (not on resend; global DB) | `staff_id`, `invited_by`, `region` (`global`), `invited_at` |
+| `identity.staff.deactivated.v1` | a staff member goes from active to inactive (`PATCH /admin/staff/{id}`; only that transition, same transaction, global DB) | `staff_id`, `region` (`global`), `deactivated_at` |
 
-Not emitted yet: reactivation, region moves, staff deactivation.
+Consumer: with `IDENTITY_EVENTS=on` the service also subscribes to `identity.staff.deactivated.>` (inbox consumer
+`identity-staff`) and revokes the member's admin sessions again; the PATCH revokes inline too, the event repeats it until
+it succeeds.
+
+Not emitted yet: user reactivation, user region moves (org emits `org.region.moved.v1` when the saga finishes).
 
 ## KYB review queue
 
@@ -129,9 +153,15 @@ With `ORG_APPLY=grpc` `GET /admin/verification/{id}` answers 503: the contract h
 
 ## Interim pieces
 
-- `OrgDB` writes org's regional tables and `internal/identityhttp/region_sql.go`, `callerresolver` (company roles on
-  `/auth/me`), the admin user detail (onboarding progress, company name) and signup/login read `accounts.*` directly:
-  all replaced by org calls later.
+- `OrgDB` writes org's regional tables and `internal/identityhttp/region_sql.go` and signup/login read `accounts.*`
+  directly: replaced by org calls later. Company roles and permissions on `/auth/me` (`ORG_MEMBERSHIP=grpc`) and the
+  onboarding progress and company name of `/auth/me` and the admin user detail (`ORG_ONBOARDING=grpc`) already go
+  through org (`OrgService.ResolveMembership`, `GetOnboardingProgress`, `AdminOrgService.GetCompanyByOwner`; client in
+  `internal/identityhttp/org_reads.go`, bounded by `ORG_GRPC_TIMEOUT`). With `db` (default) the old reads remain. In
+  `grpc` mode there is no database fallback: `/auth/me` answers 503 `SERVICE_UNAVAILABLE` while org is unreachable, so a
+  client never sees a signed-in user with silently empty roles. A user without a company, or an account still in the
+  global holding region, gets empty roles as before. One difference: `GetCompanyByOwner` ignores deleted companies,
+  the old query did not.
 - `POST /organizations/invites` (create invite) lives in `auth_invite.go` next to acceptance and is served here, although
   BOUNDARIES lists org invites under org; the proto also places `CreateOrgInvite` in `IdentityService`.
 - The region-move helpers stay in `internal/handler` (onboarding); `internal/handler/account_user.go` holds copies of the

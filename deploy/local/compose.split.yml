@@ -113,6 +113,8 @@ services:
       ORG_REMOTE: ${ORG_REMOTE:-off}
       # org.* events (company verified, KYB rejected, agreement accepted, ...) through the outbox.
       ORG_EVENTS: ${ORG_EVENTS:-off}
+      # Region migration while the monolith serves the onboarding routes: inline (default) or saga.
+      REGION_MOVE: ${REGION_MOVE:-inline}
       # "on": the monolith stops serving the identity routes (/auth/*, /organizations/invites, identity half of /admin).
       IDENTITY_REMOTE: ${IDENTITY_REMOTE:-off}
       IDENTITY_EVENTS: ${IDENTITY_EVENTS:-off}
@@ -172,6 +174,9 @@ services:
       IDENTITY_EVENTS: ${IDENTITY_EVENTS:-off}
       # How a KYB decision reaches org: db (interim, writes the regional database) or grpc (ORG_GRPC_ADDR).
       ORG_APPLY: ${ORG_APPLY:-db}
+      # /auth/me roles and onboarding progress, admin user detail: db (accounts tables) or grpc (org service).
+      ORG_MEMBERSHIP: ${ORG_MEMBERSHIP:-db}
+      ORG_ONBOARDING: ${ORG_ONBOARDING:-db}
       # The regional database config requires a bucket name per region (the service stores no files).
       ANGLEHR_UK_R2_BUCKET: ${ANGLEHR_UK_R2_BUCKET:-openhr-uk}
       ANGLEHR_US_R2_BUCKET: ${ANGLEHR_US_R2_BUCKET:-openhr-us}
@@ -196,6 +201,9 @@ services:
       NOTIFICATIONS_TRANSPORT: ${NOTIFICATIONS_TRANSPORT:-events}
       # org.* events through the outbox (relayed to NATS_URL by this service).
       ORG_EVENTS: ${ORG_EVENTS:-off}
+      # Region migration: inline (default) or saga (persisted, resumable; identity over gRPC at IDENTITY_GRPC_ADDR).
+      REGION_MOVE: ${REGION_MOVE:-inline}
+      REGION_MOVE_RESUME_INTERVAL: ${REGION_MOVE_RESUME_INTERVAL:-30s}
       # KYB review items: db (write admin.verification_queue directly) or grpc (identity's EnqueueVerification).
       IDENTITY_QUEUE: ${IDENTITY_QUEUE:-db}
       # Sessions, CSRF and origin rules: identical to the monolith, so the cookie it issued is accepted here.
@@ -364,7 +372,13 @@ services:
       RATE_LIMIT_PUBLIC_APPLY: ${RATE_LIMIT_PUBLIC_APPLY:-}
       # make local-e2e-all signs the bootstrap admin in from several scripts: raise these (for example 1000/1m) on a
       # throwaway stack, or the edge answers 429 before the service does.
+      RATE_LIMIT_LOGIN: ${RATE_LIMIT_LOGIN:-}
       RATE_LIMIT_LOGIN_EMAIL: ${RATE_LIMIT_LOGIN_EMAIL:-}
+      # e2e-region-saga signs several accounts up in a row.
+      RATE_LIMIT_SIGNUP: ${RATE_LIMIT_SIGNUP:-}
+      RATE_LIMIT_SIGNUP_EMAIL: ${RATE_LIMIT_SIGNUP_EMAIL:-}
+      RATE_LIMIT_VERIFY_EMAIL: ${RATE_LIMIT_VERIFY_EMAIL:-}
+      RATE_LIMIT_VERIFY_EMAIL_EMAIL: ${RATE_LIMIT_VERIFY_EMAIL_EMAIL:-}
       RATE_LIMIT_LOGIN_TOTP_EMAIL: ${RATE_LIMIT_LOGIN_TOTP_EMAIL:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       SESSION_IDLE_TTL: ${SESSION_IDLE_TTL:-7200}

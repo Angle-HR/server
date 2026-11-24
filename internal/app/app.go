@@ -33,6 +33,7 @@ import (
 	"github.com/Angle-HR/server/internal/orghttp"
 	"github.com/Angle-HR/server/internal/queue"
 	"github.com/Angle-HR/server/internal/region"
+	"github.com/Angle-HR/server/internal/regionsaga"
 	"github.com/Angle-HR/server/internal/session"
 	"github.com/Angle-HR/server/pkg/besteffort"
 	"github.com/Angle-HR/server/pkg/config"
@@ -177,8 +178,17 @@ func Run() error {
 	// same handlers. ORG_REMOTE=on stops this process serving them (and hiring's agreements routes).
 	var orgHandlers *orghttp.Handlers
 	if !orghttp.Remote() {
+		saga, stopSaga, sagaErr := regionsaga.Start(ctx, globalPool, regionsaga.Regional(dbRouter.DB), log)
+		if sagaErr != nil {
+			return fmt.Errorf("region move saga: %w", sagaErr)
+		}
+		defer stopSaga()
+		var mover orghttp.RegionMover
+		if saga != nil {
+			mover = saga
+		}
 		orgHandlers = orghttp.New(orghttp.Deps{
-			Router: dbRouter, Global: globalPool, Sessions: productSessions, Enqueuer: emailQueue, Config: cfg,
+			Mover: mover, Router: dbRouter, Global: globalPool, Sessions: productSessions, Enqueuer: emailQueue, Config: cfg,
 		})
 	}
 	kybNotifierFor := newKYBNotifierFactory(dbRouter, globalPool, emailQueue)
@@ -199,8 +209,14 @@ func Run() error {
 	hiringHandler.Applications = newApplicationsService(cfg, dbRouter, log)
 	hiringHandler.Remote = hiringhttp.HiringRemote()
 	publicHandler.Remote = hiringhttp.HiringRemote()
+	orgReads, closeOrgReads, err := identityhttp.OrgReadsFromEnv()
+	if err != nil {
+		return err
+	}
+	defer closeOrgReads()
 	if authHandler != nil {
 		authHandler.MeAccess = hiringHandler.Access
+		authHandler.OrgReads = orgReads
 	}
 	adminHandler := handler.NewAdminHandler(
 		adminStore,
@@ -222,6 +238,7 @@ func Run() error {
 		identityAdmin = identityhttp.NewAdminHandler(adminStore, dbRouter, globalPool, redisClient, adminSessions,
 			emailQueue, review)
 		identityAdmin.UseTOTP(totpCrypto, cfg.AdminTOTPRequired)
+		identityAdmin.OrgReads = orgReads
 	}
 	identityDeps = identityhttp.Deps{
 		Auth: authHandler, Admin: identityAdmin, RequireAuth: authMiddleware.RequireAuth, AdminMW: adminMiddleware,

@@ -86,3 +86,27 @@ func PermissionList(s rbac.Set) []string {
 	sort.Strings(out)
 	return out
 }
+
+// OnboardingProgress is a user's onboarding position in a company region.
+type OnboardingProgress struct {
+	CurrentStep    string
+	CompletedSteps []string
+}
+
+// Progress loads the onboarding progress of a user in region reg. It returns ErrNotFound when there is no row yet.
+func (s *Store) Progress(ctx context.Context, reg region.Region, userID string) (*OnboardingProgress, error) {
+	d, err := s.db(reg)
+	if err != nil {
+		return nil, err
+	}
+	var p OnboardingProgress
+	err = d.QueryRow(ctx, `SELECT current_step, completed_steps FROM accounts.onboarding_progress WHERE user_id = $1::uuid`,
+		userID).Scan(&p.CurrentStep, &p.CompletedSteps)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("orgstore: onboarding progress: %w", err)
+	}
+	return &p, nil
+}

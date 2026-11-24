@@ -115,8 +115,8 @@ linters:
         # exception, internal/hiring/hiringhttp -> the applications packages, is not listed: enable a
         # hiring-no-applications rule when hiring-svc has cut it. Prefix matching means internal/app (the
         # composition root) cannot be denied without also matching internal/applicationsvc, so it is not listed.
-        # NOTE: golangci-lint panics on the Go toolchain used for this work, so these rules were validated against
-        # `go list` import data only. Run `golangci-lint run` on a supported toolchain in CI before relying on them.
+        # Validated with golangci-lint v2.15.0 built from source with the module's toolchain (the prebuilt release
+        # binaries panic on a newer Go). CI gates on these rules via `--enable-only depguard`.
         shared-library-independent:
           files:
             - "**/pkg/**"
@@ -144,10 +144,18 @@ linters:
             - pkg: github.com/Angle-HR/server/internal/notifications
               desc: "pkg/* is the shared library: it must not depend on a service's code"
         bff-no-domain:
+          # Tests are exempt: internal/bff/identity_test.go deliberately walks the monolith's real route tables to prove
+          # every route the identity/admin handlers register is routed to the right upstream.
           files:
             - "**/internal/bff/**"
             - "**/cmd/web-bff/**"
             - "**/cmd/admin-bff/**"
+            - "!$test"
+          # Pkg matching is by prefix, so denying internal/admin would also match internal/adminbff (the admin BFF
+          # itself, which cmd/admin-bff must import). The allow entry carves it back out.
+          list-mode: lax
+          allow:
+            - github.com/Angle-HR/server/internal/adminbff
           deny:
             - pkg: github.com/Angle-HR/server/internal/hiring
               desc: "a BFF proxies and composes; it must not import domain code"

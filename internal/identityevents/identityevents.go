@@ -4,6 +4,7 @@
 //	identity.user.email_verified.v1  the account verified its email (the user now has a home region row)
 //	identity.user.deactivated.v1     an operator deactivated the account (reactivation is not an event yet)
 //	identity.staff.invited.v1        an operator invited a platform staff member
+//	identity.staff.deactivated.v1    an operator deactivated a platform staff member (reactivation is not an event)
 //
 // Events go to the transactional outbox of the database that holds the change, in the same transaction, with the
 // user (or staff) id as partition key. Payloads carry ids, region and timestamps only: never an email, a name or a
@@ -31,6 +32,7 @@ const (
 	TypeUserEmailVerified  = "identity.user.email_verified.v1"
 	TypeUserDeactivated    = "identity.user.deactivated.v1"
 	TypeStaffInvited       = "identity.staff.invited.v1"
+	TypeStaffDeactivated   = "identity.staff.deactivated.v1"
 	regionGlobalHolding    = "global"
 	envVar                 = "IDENTITY_EVENTS"
 	idNamespaceDescription = "openhr/identity/events"
@@ -72,6 +74,13 @@ type StaffInvited struct {
 	InvitedAt time.Time `json:"invited_at"`
 }
 
+// StaffDeactivated is the data of identity.staff.deactivated.v1.
+type StaffDeactivated struct {
+	StaffID       string    `json:"staff_id"`
+	Region        string    `json:"region"` // always "global": staff live in the global database
+	DeactivatedAt time.Time `json:"deactivated_at"`
+}
+
 var idSpace = uuid.NewSHA1(uuid.NameSpaceURL, []byte(idNamespaceDescription))
 
 func build(typ, subject, region, key string, at time.Time, payload any) (events.Event, error) {
@@ -107,6 +116,16 @@ func StaffInvitedEvent(p StaffInvited) (events.Event, error) {
 		p.Region = regionGlobalHolding
 	}
 	return build(TypeStaffInvited, p.StaffID, p.Region, p.StaffID, p.InvitedAt, p)
+}
+
+// StaffDeactivatedEvent builds identity.staff.deactivated.v1. The id includes the time so a deactivation after a
+// reactivation is a new event.
+func StaffDeactivatedEvent(p StaffDeactivated) (events.Event, error) {
+	if p.Region == "" {
+		p.Region = regionGlobalHolding
+	}
+	return build(TypeStaffDeactivated, p.StaffID, p.Region, p.StaffID+"/"+p.DeactivatedAt.UTC().Format(time.RFC3339Nano),
+		p.DeactivatedAt, p)
 }
 
 func enqueue(ctx context.Context, tx outbox.Execer, ev events.Event, err error) error {
@@ -149,5 +168,14 @@ func EnqueueStaffInvited(ctx context.Context, tx outbox.Execer, p StaffInvited) 
 		return nil
 	}
 	ev, err := StaffInvitedEvent(p)
+	return enqueue(ctx, tx, ev, err)
+}
+
+// EnqueueStaffDeactivated writes the event into tx's outbox. It does nothing unless Enabled.
+func EnqueueStaffDeactivated(ctx context.Context, tx outbox.Execer, p StaffDeactivated) error {
+	if !Enabled() {
+		return nil
+	}
+	ev, err := StaffDeactivatedEvent(p)
 	return enqueue(ctx, tx, ev, err)
 }

@@ -23,6 +23,10 @@ const (
 	OrgConsumer        = "hiring-org"
 	OrgSubjectFilter   = "org.company.deleted.>"
 	typeCompanyDeleted = "org.company.deleted.v1"
+	// OrgReactivatedFilter / typeCompanyReactivated: a reactivated company is only logged. Its jobs stay archived
+	// (reopening them is the company's decision), and hiring keeps no tombstone.
+	OrgReactivatedFilter   = "org.company.reactivated.>"
+	typeCompanyReactivated = "org.company.reactivated.v1"
 )
 
 var orgUUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -37,6 +41,12 @@ type CompanyDeletion struct {
 
 // Handle is the events.Handler.
 func (c *CompanyDeletion) Handle(ctx context.Context, e events.Event) error {
+	if e.Type == typeCompanyReactivated {
+		if c.Log != nil {
+			c.Log.Info("company reactivated: its archived jobs stay archived", "company", e.CompanyID, "region", e.Region)
+		}
+		return nil
+	}
 	if e.Type != typeCompanyDeleted {
 		return events.Terminal(fmt.Errorf("hiring-org: unexpected event type %q", e.Type))
 	}
@@ -87,5 +97,5 @@ func SubscribeOrgEvents(ctx context.Context, bus events.Subscriber, router *dbro
 	service func(region string) (*draft.Service, error), log *slog.Logger, opts ...events.SubscribeOption,
 ) (events.Subscription, error) {
 	h := &CompanyDeletion{Pools: jobmodel.RouterPools(router), Service: service, Log: log}
-	return bus.Subscribe(ctx, OrgConsumer, []string{OrgSubjectFilter}, h.Handle, opts...)
+	return bus.Subscribe(ctx, OrgConsumer, []string{OrgSubjectFilter, OrgReactivatedFilter}, h.Handle, opts...)
 }

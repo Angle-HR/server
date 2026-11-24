@@ -29,6 +29,8 @@ var _ = apidoc.ErrorEnvelope{}
 
 // IndividualOnboardingHandler handles the individual onboarding endpoint.
 type IndividualOnboardingHandler struct {
+	// Mover moves a still-global account into its region; nil runs the inline migration (REGION_MOVE).
+	Mover    RegionMover
 	Router   *dbrouter.DBRouter
 	GlobalDB globalDB
 	Sessions *session.Manager
@@ -202,7 +204,7 @@ func (h *IndividualOnboardingHandler) migrateForCountry(
 		Scan(new(uuid.UUID), new(string), new(string), &target, new(*string)); scanErr != nil {
 		return region.RegionUnknown, apperror.New(apperror.CodeInvalidReference, apperror.MsgInvalidCountryID)
 	}
-	newReg, err := migrateUserToRegion(ctx, h.Router, h.GlobalDB, userID, region.Region(target))
+	newReg, err := moveUser(ctx, h.Mover, h.Router, h.GlobalDB, userID, region.Region(target))
 	if err != nil {
 		return region.RegionUnknown, apperror.ErrInternal
 	}

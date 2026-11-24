@@ -38,6 +38,11 @@ const (
 	Consumer      = "applications-org"
 	Type          = "org.company.deleted.v1"
 	SubjectFilter = "org.company.deleted.>"
+	// TypeReactivated lifts the tombstone a deletion left (org.company.reactivated.v1). The removed data does not
+	// come back; the company's next job events are accepted again.
+	TypeReactivated = "org.company.reactivated.v1"
+	// ReactivatedFilter is the subject filter of TypeReactivated.
+	ReactivatedFilter = "org.company.reactivated.>"
 )
 
 // Payload is the data of org.company.deleted.v1. Fields missing here fall back to the envelope.
@@ -85,6 +90,9 @@ VALUES ('00000000-0000-0000-0000-000000000000'::uuid, $1::uuid, 'retention', 'in
 // Handle is the events.Handler. A malformed event or an unknown region is dead-lettered; a database or storage
 // failure is retried.
 func (h *Handler) Handle(ctx context.Context, e events.Event) error {
+	if e.Type == TypeReactivated {
+		return h.handleReactivated(ctx, e)
+	}
 	if e.Type != Type {
 		return events.Terminal(fmt.Errorf("companydeletion: unexpected event type %q", e.Type))
 	}
@@ -132,6 +140,42 @@ func (h *Handler) Handle(ctx context.Context, e events.Event) error {
 		}
 		if _, err := tx.Exec(ctx, logSQL, p.CompanyID, reason); err != nil {
 			return fmt.Errorf("companydeletion: log deletion: %w", err)
+		}
+		return nil
+	})(ctx, e)
+}
+
+// handleReactivated removes the company's tombstone so its job events are projected again.
+func (h *Handler) handleReactivated(ctx context.Context, e events.Event) error {
+	var p Payload
+	if err := e.DecodeJSON(&p); err != nil {
+		return events.Terminal(fmt.Errorf("companydeletion: decode %s: %w", e.ID, err))
+	}
+	if p.CompanyID == "" {
+		p.CompanyID = e.CompanyID
+	}
+	if p.Region == "" {
+		p.Region = e.Region
+	}
+	if !uuidRE.MatchString(p.CompanyID) || p.Region == "" {
+		return events.Terminal(fmt.Errorf("companydeletion: %s: company id %q or region %q invalid", e.ID, p.CompanyID, p.Region))
+	}
+	db, err := h.Pools(p.Region)
+	if errors.Is(err, jobmodel.ErrUnknownRegion) {
+		return events.Terminal(fmt.Errorf("companydeletion: %s: region %q has no database", e.ID, p.Region))
+	}
+	if err != nil {
+		return fmt.Errorf("companydeletion: database for region %q: %w", p.Region, err)
+	}
+	return inbox.Handle(db, Consumer, func(ctx context.Context, tx pgx.Tx, _ events.Event) error {
+		if _, err := tx.Exec(ctx, `DELETE FROM hiring.app_deleted_companies WHERE company_id = $1::uuid`, p.CompanyID); err != nil {
+			return fmt.Errorf("companydeletion: lift tombstone: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `SELECT set_config('app.tenant_id', $1, true)`, p.CompanyID); err != nil {
+			return fmt.Errorf("companydeletion: set tenant: %w", err)
+		}
+		if _, err := tx.Exec(ctx, logSQL, p.CompanyID, "company_reactivated: tombstone lifted, removed data is not restored"); err != nil {
+			return fmt.Errorf("companydeletion: log reactivation: %w", err)
 		}
 		return nil
 	})(ctx, e)
@@ -199,5 +243,5 @@ func Subscribe(ctx context.Context, bus events.Subscriber, router *dbrouter.DBRo
 			return router.Blob(region.Region(reg))
 		},
 	}
-	return bus.Subscribe(ctx, Consumer, []string{SubjectFilter}, h.Handle, opts...)
+	return bus.Subscribe(ctx, Consumer, []string{SubjectFilter, ReactivatedFilter}, h.Handle, opts...)
 }

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -209,43 +210,83 @@ func (h *AdminHandler) patchStaff(w http.ResponseWriter, r *http.Request) {
 // listAuditLogs godoc
 //
 //	@Summary		List admin audit logs
+//	@Description	Newest first. Filter by actor, action, entity (resource_type and resource_id) and time. The ip is returned as stored. Page with limit and offset; meta.has_more says whether another page follows. Needs audit:read.
 //	@Tags			admin/audit
 //	@Produce		json
 //	@Security		AdminSessionCookie
 //	@Param			actor_id		query	string	false	"Actor UUID"
 //	@Param			action			query	string	false	"Action filter"
 //	@Param			resource_type	query	string	false	"Resource type"
-//	@Param			limit			query	int		false	"Page size"
+//	@Param			resource_id		query	string	false	"Resource id (with resource_type)"
+//	@Param			from			query	string	false	"On or after this time (RFC 3339 or YYYY-MM-DD)"
+//	@Param			to				query	string	false	"Before this time (RFC 3339), or up to the end of this day (YYYY-MM-DD)"
+//	@Param			limit			query	int		false	"Page size (default 50, max 100)"
 //	@Param			offset			query	int		false	"Offset"
 //	@Success		200				{object}	identityhttp.AdminAuditListEnvelope
+//	@Failure		400				{object}	apidoc.ErrorEnvelope
 //	@Router			/admin/audit-logs [get]
 func (h *AdminHandler) listAuditLogs(w http.ResponseWriter, r *http.Request) {
-	var actorID *uuid.UUID
-	if raw := strings.TrimSpace(r.URL.Query().Get("actor_id")); raw != "" {
+	qv := r.URL.Query()
+	q := admin.AuditQuery{
+		Action:       strings.TrimSpace(qv.Get("action")),
+		ResourceType: strings.TrimSpace(qv.Get("resource_type")),
+		ResourceID:   strings.TrimSpace(qv.Get("resource_id")),
+	}
+	if raw := strings.TrimSpace(qv.Get("actor_id")); raw != "" {
 		id, err := uuid.Parse(raw)
 		if err != nil {
 			response.Error(w, r, apperror.New(apperror.CodeValidationError, "invalid actor_id"))
 			return
 		}
-		actorID = &id
+		q.ActorID = &id
 	}
-	limit := parseLimit(r.URL.Query().Get("limit"), defaultPageLimit, maxPageLimit)
-	offset := parseLimit(r.URL.Query().Get("offset"), 0, maxPageOffset)
-	if r.URL.Query().Get("offset") == "" {
-		offset = 0
+	var err error
+	if q.From, err = parseAuditTime(qv.Get("from"), false); err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, "invalid from: use RFC 3339 or YYYY-MM-DD"))
+		return
 	}
+	if q.To, err = parseAuditTime(qv.Get("to"), true); err != nil {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, "invalid to: use RFC 3339 or YYYY-MM-DD"))
+		return
+	}
+	if q.From != nil && q.To != nil && !q.From.Before(*q.To) {
+		response.Error(w, r, apperror.New(apperror.CodeValidationError, "to must be after from"))
+		return
+	}
+	limit := parseLimit(qv.Get("limit"), defaultPageLimit, maxPageLimit)
+	if qv.Get("offset") != "" {
+		q.Offset = parseLimit(qv.Get("offset"), 0, maxPageOffset)
+	}
+	// One extra row tells whether another page follows.
+	q.Limit = limit + 1
 
-	logs, err := h.Store.ListAuditLogs(
-		r.Context(),
-		actorID,
-		strings.TrimSpace(r.URL.Query().Get("action")),
-		strings.TrimSpace(r.URL.Query().Get("resource_type")),
-		limit,
-		offset,
-	)
+	logs, err := h.Store.ListAudit(r.Context(), q)
 	if err != nil {
 		response.Error(w, r, err)
 		return
 	}
-	response.Success(w, r, http.StatusOK, logs)
+	more := len(logs) > limit
+	if more {
+		logs = logs[:limit]
+	}
+	response.SuccessWithMeta(w, r, http.StatusOK, logs, &response.Meta{HasMore: &more})
+}
+
+func parseAuditTime(raw string, endOfDay bool) (*time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		t = t.UTC()
+		return &t, nil
+	}
+	t, err := time.Parse("2006-01-02", raw)
+	if err != nil {
+		return nil, err
+	}
+	if endOfDay {
+		t = t.AddDate(0, 0, 1)
+	}
+	return &t, nil
 }

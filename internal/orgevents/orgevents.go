@@ -5,6 +5,8 @@
 //	org.agreement.accepted.v1        a company accepted an agreement version
 //	org.company.profile_updated.v1   company data other services denormalize changed (the privacy contact)
 //	org.company.deleted.v1           a company was deleted
+//	org.company.reactivated.v1       a deleted company was reactivated
+//	org.region.moved.v1              an onboarding account moved from the global holding area into its region
 //
 // Events are written to the transactional outbox of the company's regional database in the same transaction as the
 // change, with the company id as partition key, and relayed to the bus by an outbox relay. Payloads carry ids,
@@ -39,6 +41,8 @@ const (
 	TypeAgreementAccepted     = "org.agreement.accepted.v1"
 	TypeCompanyProfileUpdated = "org.company.profile_updated.v1"
 	TypeCompanyDeleted        = "org.company.deleted.v1"
+	TypeCompanyReactivated    = "org.company.reactivated.v1"
+	TypeRegionMoved           = "org.region.moved.v1"
 )
 
 // EnvVar switches emission. Anything but "on" (case-insensitive) leaves behaviour unchanged and writes nothing.
@@ -101,6 +105,31 @@ type CompanyDeleted struct {
 	DeletedAt   time.Time `json:"deleted_at"`
 	// Reason is free text from the operator, for the audit trail of the consumers.
 	Reason string `json:"reason,omitempty"`
+}
+
+// CompanyReactivated is the data of org.company.reactivated.v1. Data the consumers removed when the company was
+// deleted does not come back.
+type CompanyReactivated struct {
+	// CompanyKind is "business" or "individual" (a personal organization).
+	CompanyKind   string    `json:"company_kind"`
+	CompanyID     string    `json:"company_id"`
+	Region        string    `json:"region"`
+	ReactivatedAt time.Time `json:"reactivated_at"`
+	// Reason is free text from the operator, for the audit trail of the consumers.
+	Reason string `json:"reason,omitempty"`
+}
+
+// RegionMoved is the data of org.region.moved.v1: the region-migration saga finished and the account lives in
+// ToRegion. CompanyID and CompanyKind are empty for an account without an organization (an individual without a
+// personal organization yet). Services that cache a user's region must drop it.
+type RegionMoved struct {
+	SagaID      string    `json:"saga_id"`
+	UserID      string    `json:"user_id"`
+	CompanyID   string    `json:"company_id,omitempty"`
+	CompanyKind string    `json:"company_kind,omitempty"`
+	FromRegion  string    `json:"from_region"` // always "global"
+	ToRegion    string    `json:"region"`
+	MovedAt     time.Time `json:"moved_at"`
 }
 
 // Kinds of company.
@@ -170,6 +199,29 @@ func DeletedEvent(p CompanyDeleted) (events.Event, error) {
 	return build(TypeCompanyDeleted, p.CompanyID, p.CompanyID, p.Region, p.DeletedAt, p)
 }
 
+// ReactivatedEvent builds the event. Its id derives from the company and the time, so a later deletion followed by
+// another reactivation is a new event.
+func ReactivatedEvent(p CompanyReactivated) (events.Event, error) {
+	return build(TypeCompanyReactivated, p.CompanyID+"/"+p.ReactivatedAt.UTC().Format(time.RFC3339Nano), p.CompanyID, p.Region, p.ReactivatedAt, p)
+}
+
+// RegionMovedEvent builds the event. A user leaves the holding area once, so the id derives from the user and the
+// target region, not from the saga attempt: a resumed or repeated saga cannot emit it twice. The subject and partition
+// key are the user id (the company, when there is one, is in the envelope).
+func RegionMovedEvent(p RegionMoved) (events.Event, error) {
+	ev, err := events.NewJSON(Source, TypeRegionMoved, p)
+	if err != nil {
+		return ev, err
+	}
+	ev.ID = uuid.NewSHA1(idSpace, []byte(TypeRegionMoved+"/"+p.UserID+"/"+p.ToRegion)).String()
+	ev.Time = p.MovedAt.UTC()
+	ev = ev.WithSubject(p.UserID).WithRegion(p.ToRegion).WithPartitionKey(p.UserID)
+	if p.CompanyID != "" {
+		ev = ev.WithCompany(p.CompanyID)
+	}
+	return ev, nil
+}
+
 func enqueue(ctx context.Context, tx outbox.Execer, region string, build func() (events.Event, error)) error {
 	if !Enabled() {
 		return nil
@@ -209,4 +261,15 @@ func EnqueueProfileUpdated(ctx context.Context, tx outbox.Execer, p CompanyProfi
 // yet (kyb-sweep only flags); the first deletion path must call this inside its transaction.
 func EnqueueDeleted(ctx context.Context, tx outbox.Execer, p CompanyDeleted) error {
 	return enqueue(ctx, tx, p.Region, func() (events.Event, error) { return DeletedEvent(p) })
+}
+
+// EnqueueReactivated writes org.company.reactivated.v1; see EnqueueVerified.
+func EnqueueReactivated(ctx context.Context, tx outbox.Execer, p CompanyReactivated) error {
+	return enqueue(ctx, tx, p.Region, func() (events.Event, error) { return ReactivatedEvent(p) })
+}
+
+// EnqueueRegionMoved writes org.region.moved.v1 into the outbox of the target region's database; see
+// EnqueueVerified.
+func EnqueueRegionMoved(ctx context.Context, tx outbox.Execer, p RegionMoved) error {
+	return enqueue(ctx, tx, p.ToRegion, func() (events.Event, error) { return RegionMovedEvent(p) })
 }

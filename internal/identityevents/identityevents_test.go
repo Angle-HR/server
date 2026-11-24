@@ -73,3 +73,19 @@ func TestIDsAreStable(t *testing.T) {
 		t.Fatalf("staff region = %q", s.Region)
 	}
 }
+
+func TestStaffDeactivatedEvent(t *testing.T) {
+	at := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
+	a, err := StaffDeactivatedEvent(StaffDeactivated{StaffID: "s1", DeactivatedAt: at})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := StaffDeactivatedEvent(StaffDeactivated{StaffID: "s1", DeactivatedAt: at})
+	c, _ := StaffDeactivatedEvent(StaffDeactivated{StaffID: "s1", DeactivatedAt: at.Add(time.Hour)})
+	if a.Type != "identity.staff.deactivated.v1" || a.ID != b.ID || a.ID == c.ID || a.PartitionKey != "s1" || a.Region != "global" {
+		t.Fatalf("%+v", a)
+	}
+	if err = a.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}

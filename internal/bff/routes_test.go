@@ -119,7 +119,11 @@ func TestNoCatchAllUpstream(t *testing.T) {
 }
 
 func TestDocsPagesGetTheirOwnCSP(t *testing.T) {
-	f := newFixture(t, func(c *Config) { c.Name = "web-bff"; c.AppEnv = "development"; c.PublicAPIURL = "http://localhost:8081" }, nil)
+	f := newFixture(t, func(c *Config) {
+		c.Name = "web-bff"
+		c.AppEnv = "development"
+		c.PublicAPIURL = "http://localhost:8081"
+	}, nil)
 	resp := do(t, "GET", f.edge.URL+"/api/docs", "", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("docs: %d", resp.StatusCode)

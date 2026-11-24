@@ -107,8 +107,6 @@ Row shape: `{source, id, job_id, actor_id, action, diff, created_at}`. Complianc
 `hiring.app_compliance_log`) are not included. Hiring reads the applications-owned table directly, like
 `job_applicant_counts`; when applications gets its own database, replace `hiringstore.Store.AuditEvents` with a call.
 - `cmd/hiring-expire` stays a separate one-shot job (run it on a schedule); `ORG_TENANTS=grpc` makes it use org.
-- `tools/orgfake` (`go run ./cmd/tools/orgfake`) is a stand-in OrgService over the shared DBs (readiness, membership,
-  industries, companies) until org-svc lands; `tools/hiringprobe` calls the hiring gRPC API.
 
 ## Verified (hiring-svc branch, own compose project)
 

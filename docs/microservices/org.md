@@ -20,7 +20,7 @@ browser -> web-bff --(org paths: bff.OrgPath)--> cmd/org --> regional DBs (accou
 | `internal/orgevents` | Event contract and outbox enqueue helpers; `KYBSaveHook` for `kybstore`. |
 | `internal/kyb/kybidentity` | The review-queue port towards identity (`db` or `grpc`). |
 | `internal/hiring/callerresolver/grpc.go` | gRPC client for the caller resolver (`CALLER_RESOLVER=grpc`). |
-| `cmd/org`, `cmd/tools/orgprobe` | Binary and a gRPC probe. |
+| `cmd/org` | Binary. |
 
 ## HTTP routes (same cookies, CSRF and origin rules as the monolith)
 

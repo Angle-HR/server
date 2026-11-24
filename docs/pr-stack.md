@@ -83,7 +83,7 @@ probe tools, blob-based uploads in `dbrouter` (replaces the R2 minio client), mi
 ### 07 `pr/07-hiring`
 
 `cmd/hiring` and `internal/hiringsvc` (HTTP and gRPC, org lookups through `orgclient`), `cmd/hiring-expire`,
-`cmd/hiring-jobs-backfill`, `hiringprobe`, `orgfake`, `orgprobe`.
+`cmd/hiring-jobs-backfill`.
 
 ### 08 `pr/08-org`
 
@@ -92,7 +92,7 @@ probe tools, blob-based uploads in `dbrouter` (replaces the R2 minio client), mi
 
 ### 09 `pr/09-identity`
 
-`cmd/identity` and `internal/identitysvc`, `identityprobe`, `totpcode`. Docs: `identity.md`.
+`cmd/identity` and `internal/identitysvc`, `totpcode`. Docs: `identity.md`.
 
 ### 10 `pr/10-hardening`
 

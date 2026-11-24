@@ -111,8 +111,6 @@ after. The equivalence test seeds hiring tables with SQL, produces the events wi
 `EnqueueLiveJobEvents`, projects them, and compares Model and jobsource on the same database for every method that
 is local.
 
-`cmd/tools/jobmodel-verify` (`consume`, `compare`, `readthrough`, `replay`) is the manual harness used to check the
-model against a running stack with `HIRING_EVENTS=on`.
 
 
 ## Fallback counters

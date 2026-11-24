@@ -93,5 +93,5 @@ step "6. identity events on the bus"
 sleep 3
 after="$(stream_msgs)"; echo "IDENTITY stream: $before -> $after messages, $(nsubjects) distinct subjects"
 [ "$after" -gt "$before" ] || fail "no identity.staff.invited event"
-[ "$(nsubjects)" -ge 3 ] || fail "expected registered, email_verified and staff.invited subjects (see: go run ./cmd/tools/identityprobe events NATS_URL)"
+[ "$(nsubjects)" -ge 3 ] || fail "expected registered, email_verified and staff.invited subjects"
 echo; echo "SUCCESS: identity e2e"

@@ -105,8 +105,7 @@ Run the apply e2e with the application side on the service: `BASE_APPS=http://lo
 SESSION_VALIDATION=on IDENTITY_EVENTS=on` runs the auth, session and admin-identity routes in `cmd/identity` behind the
 BFF (details: `docs/microservices/identity.md`). Checks: `BASE=http://localhost:8081/api/v1 AUTH_MODE=cookie
 scripts/e2e-auth.sh`, `BASE=... scripts/e2e-identity.sh` (edge refusal, admin cookie, staff invite, events) and
-`scripts/e2e-apply.sh` (KYB approved through the identity service). `go run ./cmd/tools/identityprobe` prints the
-IDENTITY stream and calls the gRPC read RPCs (run it on the compose network: gRPC is not published).
+`scripts/e2e-apply.sh` (KYB approved through the identity service).
 
 `scripts/e2e-admin-totp.sh` (through the admin BFF, `ADMIN_BASE=http://localhost:8082/api/v1`; run the stack with
 `IDENTITY_REMOTE=on UPSTREAM_IDENTITY_URL=http://identity:8080` so the admin BFF reaches the identity service, and
@@ -141,9 +140,7 @@ NATS_PORT=14222 NATS_MONITOR_PORT=18222 NOTIFICATIONS_PORT=18105`, then
 `make local-up PROFILES=hiring` runs `cmd/hiring` (host port `HIRING_PORT`, default 8103; gRPC `hiring:9090`). See
 `docs/microservices/hiring.md` for `HIRING_REMOTE`, `UPSTREAM_HIRING_URL`, `ORG_READINESS|MEMBERSHIP|INDUSTRIES=db|grpc`
 and `HIRING_EVENTS`. Parallel stacks: set `LOCAL_IMAGE_PREFIX` (and `COMPOSE_PROJECT_NAME`, `LOCAL_NETWORK`) so image tags
-such as `openhr-local/web-bff:dev` are not overwritten by another stack's build. Until org-svc exists,
-`go run ./cmd/tools/orgfake` serves the OrgService calls hiring makes (point `ORG_GRPC_ADDR` at it, for example
-`host.docker.internal:9091` with `ORGFAKE_ADDR=:9091`).
+such as `openhr-local/web-bff:dev` are not overwritten by another stack's build. 
 
 ## The org service
 

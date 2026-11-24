@@ -134,6 +134,23 @@ jobs:
           cache-from: type=gha,scope=migrate
           cache-to: type=gha,mode=max,scope=migrate
 
+      # The split services share one Dockerfile (deploy/local/Dockerfile.service), one image per cmd/<service>.
+      - name: Build and push services
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          for svc in identity org hiring applications notifications web-bff admin-bff; do
+            ref="$REGISTRY/openhr/$svc:$TAG"
+            if docker buildx imagetools inspect "$ref" >/dev/null 2>&1; then
+              echo "$svc:$TAG already in ECR; skipping"
+              continue
+            fi
+            docker buildx build --platform "$PLATFORMS" --file deploy/local/Dockerfile.service \
+              --build-arg "SERVICE=$svc" --tag "$ref" \
+              --cache-from "type=gha,scope=svc-$svc" --cache-to "type=gha,mode=max,scope=svc-$svc" \
+              --push .
+          done
+
       - name: Roll out
         if: vars.AUTO_ROLLOUT == 'true'
         env:

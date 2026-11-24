@@ -17,7 +17,7 @@ set -euo pipefail
 API_SERVICE="${API_SERVICE:-api}"
 
 # Repositories built by Container Images; images from anywhere else (clamav, redis, frontends) are left alone.
-OUR_IMAGES='/openhr/(server|email-worker|jobs|migrate):'
+OUR_IMAGES='/openhr/(server|email-worker|jobs|migrate|identity|org|hiring|applications|notifications|web-bff|admin-bff):'
 
 # Prints the ARN of a revision of $1 whose images from OUR_IMAGES carry $TAG, registering one if needed.
 retag() {

@@ -67,15 +67,15 @@ var (
 	LawfulBases       = set("contract", "legitimate_interests", "consent", "legal_obligation")
 	RetentionOptions  = map[int]bool{3: true, 6: true, 12: true}
 
-	// Currencies are limited to the launch markets (SGD, PHP and AED left with their markets on 7 Oct).
-	Currencies = set("GBP", "EUR", "USD", "NGN", "KES", "INR")
+	// Currencies are limited to the supported markets: the United Kingdom (GBP) and the European Union (EUR).
+	Currencies = set("GBP", "EUR")
 )
 
 // RetentionChoices lists the retention periods an employer can pick, in months.
 var RetentionChoices = []int{3, 6, 12}
 
 // CurrencyCodes lists the supported currencies in display order.
-var CurrencyCodes = []string{"GBP", "EUR", "USD", "NGN", "KES", "INR"}
+var CurrencyCodes = []string{"GBP", "EUR"}
 
 // DescriptionKeys are the six fixed sections of the structured job description.
 var DescriptionKeys = []string{

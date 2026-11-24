@@ -50,7 +50,7 @@ func publicPath(p string, admin bool) bool {
 		if len(parts) >= 2 {
 			return parts[1] != "me" && parts[1] != "totp"
 		}
-	case "countries", "public":
+	case "countries", "public", "j": // "j" is the public careers pages (/j/{public_id}, /j/{public_id}/privacy)
 		return true
 	case "onboarding":
 		if len(parts) == 2 {

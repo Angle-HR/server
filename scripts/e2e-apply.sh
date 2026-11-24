@@ -39,7 +39,7 @@
 #   OBJECT_BUCKET bucket the CVs land in, checked through the object store's S3 API with curl --aws-sigv4 (default openhr-uk;
 #                 MINIO_ROOT_USER/MINIO_ROOT_PASSWORD are the credentials, default minioadmin)
 #   STATE_FILE    write the ids this run created (company, job, public id, credentials) for scripts/e2e-couplings.sh
-#   KYB_COUNTRY   country with no automated registry, so verification goes to manual review (default KE)
+#   KYB_COUNTRY   country with no automated registry, so verification goes to manual review (default DE)
 #
 # Test-only shortcuts: none. Everything goes through the public API, the admin API (approving the KYB case) and
 # the outbox command.
@@ -54,7 +54,7 @@ ADMIN_PASSWORD="${ADMIN_PASSWORD:-changeme123}"
 [ -n "${PG_PORT:-}" ] || e2e_port PG_PORT POSTGRES_PORT 5432
 [ -n "${SMTP_PORT:-}" ] || e2e_port SMTP_PORT MAILHOG_SMTP_PORT 1025
 e2e_port MINIO_API_PORT MINIO_API_PORT 9000
-KYB_COUNTRY="${KYB_COUNTRY:-KE}"
+KYB_COUNTRY="${KYB_COUNTRY:-DE}"
 UPLOADS="${UPLOADS:-off}"
 APPS_LOG_CMD="${APPS_LOG_CMD:-docker compose -p ${COMPOSE_PROJECT_NAME:-openhr-local} logs --no-color applications}"
 CANDIDATE2="candidate2-$(date +%s)-$RANDOM@example.com"
@@ -143,7 +143,7 @@ api PUT /onboarding/compliance "$(jq -nc --arg b "$BUSINESS_TYPE" --arg i "$INDU
 api POST /onboarding/complete; expect complete
 
 step "3. company: KYB submit ($KYB_COUNTRY has no automated registry: goes to manual review)"
-api POST /organization/verification "$(jq -nc --arg c "$KYB_COUNTRY" '{country_code:$c,registration_number:"PVT-123456",legal_name:"ANGLE Apply E2E Ltd",address:{line1:"1 Kenyatta Avenue",city:"Nairobi",country:"KE"},address_type:"registered"}')"
+api POST /organization/verification "$(jq -nc --arg c "$KYB_COUNTRY" --arg n "${KYB_NUMBER:-HRB 123456}" '{country_code:$c,registration_number:$n,legal_name:"ANGLE Apply E2E Ltd",address:{line1:"1 Friedrichstrasse",city:"Berlin",country:"DE"},address_type:"registered"}')"
 expect "kyb submit"
 KYB_STATUS="$(jq -r '.data.status' <<<"$LAST_BODY")"
 [ "$KYB_STATUS" = pending ] || fail "expected KYB status pending (manual review), got $KYB_STATUS"
@@ -157,7 +157,7 @@ adm GET "/admin/verification?limit=100"; expect "verification queue"
 ORG_ID="$(jq -r --arg c "$KYB_COUNTRY" '[.data[] | select(.country_code == $c)] | sort_by(.submitted_at) | last | .organization_id // empty' <<<"$LAST_BODY")"
 [ -n "$ORG_ID" ] || fail "could not find the new company in the verification queue"
 adm GET "/admin/verification/$ORG_ID"; expect "case details"
-[ "$(jq -r '.data.registration_number // .data.case.registration_number // empty' <<<"$LAST_BODY")" = "PVT-123456" ] || fail "case details do not show the submitted registration number"
+[ "$(jq -r '.data.registration_number // .data.case.registration_number // empty' <<<"$LAST_BODY")" = "${KYB_NUMBER:-HRB 123456}" ] || fail "case details do not show the submitted registration number"
 adm POST "/admin/verification/$ORG_ID/review" '{"decision":"approve"}'; expect "approve"
 api GET /organization/verification; expect "kyb status"
 [ "$(jq -r '.data.status' <<<"$LAST_BODY")" = verified ] || fail "company is not verified after approval"
@@ -264,7 +264,13 @@ case "$MARKET" in UK) COUNTRY=GB ;; *) COUNTRY="$MARKET" ;; esac
 upload_cv() {
   local f="$1" size ct=application/pdf
   size="$(wc -c <"$f" | tr -d ' ')"
-  anon POST "/public/jobs/$PUBLIC_ID/uploads" "$(jq -nc --arg q "$Q_CV" --arg c "$ct" --argjson s "$size" '{question_id:$q,filename:"cv.pdf",content_type:$c,size_bytes:$s}')"
+  # The applications service learns the job from an event, so a presign right after publish can see 404 for a moment.
+  local try
+  for try in 1 2 3 4 5 6 7 8 9 10; do
+    anon POST "/public/jobs/$PUBLIC_ID/uploads" "$(jq -nc --arg q "$Q_CV" --arg c "$ct" --argjson s "$size" '{question_id:$q,filename:"cv.pdf",content_type:$c,size_bytes:$s}')"
+    [ "$LAST_STATUS" = 404 ] || break
+    sleep 1
+  done
   if [ "${UPLOAD_SOFT:-}" = 1 ] && [ "$LAST_STATUS" != 201 ]; then return 1; fi
   expect_status 201 "presign"
   CV_TOKEN="$(jq -r '.data.token' <<<"$LAST_BODY")"

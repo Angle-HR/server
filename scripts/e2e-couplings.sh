@@ -27,7 +27,7 @@ ADMIN_EMAIL="${ADMIN_EMAIL:-admin@anglehr.local}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-changeme123}"
 [ -n "${PG_PORT:-}" ] || e2e_port PG_PORT POSTGRES_PORT 5432
 [ -n "${SMTP_PORT:-}" ] || e2e_port SMTP_PORT MAILHOG_SMTP_PORT 1025
-KYB_COUNTRY="${KYB_COUNTRY:-KE}"
+KYB_COUNTRY="${KYB_COUNTRY:-DE}"
 UPLOADS="${UPLOADS:-off}"
 APPS_LOG_CMD="${APPS_LOG_CMD:-docker compose -p ${COMPOSE_PROJECT_NAME:-openhr-local} logs --no-color applications}"
 CANDIDATE2="candidate2-$(date +%s)-$RANDOM@example.com"

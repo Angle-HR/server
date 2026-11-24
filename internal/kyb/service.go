@@ -84,8 +84,14 @@ type Service struct {
 	Notifier Notifier      // optional
 	Formats  FormatChecker // optional
 	Logger   *slog.Logger  // optional, defaults to slog.Default()
-	Now      func() time.Time
+	// Supported limits the countries a business may register in (ISO alpha-2, upper case). Nil allows every country.
+	Supported func(code string) bool
+	Now       func() time.Time
 }
+
+const unsupportedCountryMessage = "OpenHR currently supports employers in the United Kingdom and the European Union only"
+
+func (s *Service) countrySupported(code string) bool { return s.Supported == nil || s.Supported(code) }
 
 func (s *Service) logger() *slog.Logger {
 	if s.Logger != nil {
@@ -135,6 +141,8 @@ func (s *Service) Submit(ctx context.Context, in *SubmitInput) (*Record, error) 
 	var bad []FieldError
 	if !validCountry {
 		bad = append(bad, FieldError{Path: "country_code", Message: countryMessage})
+	} else if !s.countrySupported(code) {
+		bad = append(bad, FieldError{Path: "country_code", Message: unsupportedCountryMessage})
 	}
 	if in.RegistrationNumber == "" {
 		bad = append(bad, FieldError{Path: "registration_number", Message: "registration number is required"})
@@ -247,6 +255,9 @@ func (s *Service) ChangeCountry(ctx context.Context, organizationID, countryCode
 	countryCode, validCountry := countrycode.Normalize(countryCode)
 	if !validCountry {
 		return nil, &InvalidInputError{Fields: []FieldError{{Path: "country_code", Message: countryMessage}}}
+	}
+	if !s.countrySupported(countryCode) {
+		return nil, &InvalidInputError{Fields: []FieldError{{Path: "country_code", Message: unsupportedCountryMessage}}}
 	}
 	rec, err := s.Store.Load(ctx, organizationID)
 	if err != nil {

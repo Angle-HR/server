@@ -85,6 +85,24 @@ to hiring, `/organizations/invites` to identity. Set a `*_REMOTE` flag and its `
 
 ## Public job link (`PUBLIC_SITE_URL`)
 
-The publish dialog's share link and the candidate privacy-notice link are built from `PUBLIC_SITE_URL`, falling
-back to `PUBLIC_API_URL`. Set it to the origin that serves `/j/{public_id}` (the web BFF in the split, or the
-careers site), for example `https://tryopenhr.com`. Left empty, links point at the API origin.
+The publish dialog's share link, the careers page's Apply button and the candidate privacy-notice link are built
+from `PUBLIC_SITE_URL`, falling back to `PUBLIC_API_URL`. Set it to the frontend origin that serves the job page
+`/j/{public_id}` and the apply page `/j/{public_id}/apply`:
+
+| Environment | `PUBLIC_SITE_URL` | `ALLOWED_ORIGINS` / `CORS_ALLOWED_ORIGINS` |
+|---|---|---|
+| Local stack (default) | `http://localhost:3000` | `http://localhost:3000,http://localhost:3001` |
+| Staging (AWS) | `https://staging.tryopenhr.com` | `https://staging.tryopenhr.com` plus the staging admin origin |
+| Production (Azure) | `https://tryopenhr.com` | `https://tryopenhr.com` plus the admin origin |
+
+(The staging API is `https://api.staging.tryopenhr.com`.) The server still renders a plain `/j/{public_id}`
+page through the web BFF (public, no session); it is the fallback for crawlers and links made before the frontend
+pages existed.
+
+## Supported countries (`SUPPORTED_COUNTRIES`)
+
+Employers can register in the United Kingdom and the 27 EU member states only. Migration global `000019` deactivates
+the onboarding countries of the other regions (`waitlist.countries.is_active`), and the KYB submit and change-country
+paths refuse any other ISO code with a field error on `country_code`. `SUPPORTED_COUNTRIES=any` lifts the KYB check
+for tests. Applicants may still apply from any country: an "Anywhere" job accepts every valid ISO code.
+The `us`, `africa` and `asia` regions and their databases are unchanged; they are simply not selectable.

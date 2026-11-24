@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Angle-HR/server/internal/countrycode"
 	"log/slog"
 	"net/http"
 	"time"
@@ -202,12 +203,13 @@ func (h *KYBHandler) scope(w http.ResponseWriter, r *http.Request) (*kybScope, b
 		reg:    reg,
 		store:  store,
 		svc: &kyb.Service{
-			Store:    store,
-			Queue:    h.queue(reg),
-			Registry: h.Registry,
-			Notifier: h.NotifierFor.notifier(reg),
-			Formats:  h.Formats,
-			Logger:   slog.Default(),
+			Store:     store,
+			Queue:     h.queue(reg),
+			Registry:  h.Registry,
+			Notifier:  h.NotifierFor.notifier(reg),
+			Formats:   h.Formats,
+			Logger:    slog.Default(),
+			Supported: countrycode.SupportedFromEnv(),
 		},
 	}, true
 }

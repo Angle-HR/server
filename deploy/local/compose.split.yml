@@ -22,6 +22,7 @@ x-service-env: &service-env
   NATS_URL: nats://nats:4222
   REDIS_URL: redis://redis:6379/${REDIS_DB:-0}
   PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8081}
+  PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:3000}
   CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
   ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:3001}
   JWT_SECRET: ${JWT_SECRET:-dev-insecure-jwt-secret-change-me}
@@ -253,7 +254,7 @@ services:
       APPLICANT_COUNTS: ${APPLICANT_COUNTS:-db}
       # Sessions, CSRF and origin rules: identical to the monolith, so its cookie is accepted here.
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
-      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-}
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:3000}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://*.tryopenhr.com,http://localhost:3000}
       SESSION_IDLE_TTL: ${SESSION_IDLE_TTL:-7200}
       SESSION_ABSOLUTE_TTL: ${SESSION_ABSOLUTE_TTL:-43200}
@@ -330,7 +331,7 @@ services:
       SMTP_HOST: ${SMTP_HOST:-mailhog}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_FROM: ${SMTP_FROM:-no-reply@anglehr.local}
-      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Angle HR}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-OpenHR}
       APP_URL: ${APP_URL:-http://localhost:3000}
       # The admin_invite email links to this origin (/admin/accept-invite?token=...); the mailer refuses without it.
       ADMIN_APP_URL: ${ADMIN_APP_URL:-http://localhost:3001}

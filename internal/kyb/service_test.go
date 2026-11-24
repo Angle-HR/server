@@ -428,3 +428,18 @@ func TestNudgeCadenceAndDeletion(t *testing.T) {
 		}
 	}
 }
+
+func TestSubmitRejectsUnsupportedCountry(t *testing.T) {
+	f := newFixture()
+	f.svc.Supported = func(c string) bool { return c == "GB" || c == "DE" }
+	in := ukInput()
+	in.CountryCode = "KE"
+	_, err := f.svc.Submit(context.Background(), in)
+	var invalid *InvalidInputError
+	if !errors.As(err, &invalid) || len(invalid.Fields) != 1 || invalid.Fields[0].Message != unsupportedCountryMessage {
+		t.Fatalf("want the unsupported-country message, got %v", err)
+	}
+	if _, err := f.svc.ChangeCountry(context.Background(), "org-1", "KE", "u1"); !errors.As(err, &invalid) {
+		t.Fatalf("ChangeCountry must refuse an unsupported country, got %v", err)
+	}
+}

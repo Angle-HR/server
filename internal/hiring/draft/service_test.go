@@ -507,7 +507,7 @@ func TestPayIsRedactedForReadersWithoutPayPermissions(t *testing.T) {
 func TestCatalogAndDuplicateAcknowledge(t *testing.T) {
 	s, st := newService()
 	cat, err := s.Catalog(context.Background())
-	if err != nil || len(cat.Markets) != 4 || len(cat.Currencies) != 6 {
+	if err != nil || len(cat.Markets) != 4 || len(cat.Currencies) != 2 {
 		t.Fatalf("catalog: %v %+v", err, cat)
 	}
 	c := caller(userA, rbac.RoleFounder)

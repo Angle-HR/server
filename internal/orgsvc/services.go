@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Angle-HR/server/internal/countrycode"
 	"log/slog"
 
 	"github.com/google/uuid"
@@ -46,11 +47,12 @@ func (k *kybReviewer) service(reg region.Region) (*kyb.Service, *kybstore.Store,
 	}
 	store := &kybstore.Store{DB: pool, OnSave: orgevents.KYBSaveHook(string(reg))}
 	return &kyb.Service{
-		Store:    store,
-		Queue:    kybidentity.LenientResolve{Queue: k.Queue(string(reg))},
-		Registry: kyb.NewRegistry(),
-		Notifier: k.NotifierFor(reg),
-		Logger:   k.Log,
+		Store:     store,
+		Queue:     kybidentity.LenientResolve{Queue: k.Queue(string(reg))},
+		Registry:  kyb.NewRegistry(),
+		Notifier:  k.NotifierFor(reg),
+		Logger:    k.Log,
+		Supported: countrycode.SupportedFromEnv(),
 	}, store, nil
 }
 

@@ -1,14 +1,15 @@
-// Package main is the HTTP server entrypoint.
+// Command apidocs exists only to give swag (make swagger) the OpenAPI general information and, through its imports,
+// every package that carries route annotations. It is not built into any image.
 //
-//	@title						Angle HR API
+//	@title						OpenHR API
 //	@version					1.0
-//	@description				Waitlist and product onboarding API for Open HR.
+//	@description				Product API for OpenHR: accounts, onboarding, hiring and applications.
 //	@description				Interactive docs (Scalar) are served at `/` in non-production environments.
 //	@description				Product flow: signup → verify email (6-digit OTP, 5 min expiry) → profile → address → [business] → complete.
 //	@description				Authentication is a server-side session in an HttpOnly cookie (`__Host-openhr_session`, or `openhr_session` when COOKIE_SECURE=false); there are no bearer tokens.
 //	@description				Login, verify-email, login/otp/verify, login/totp and accept-invite return `csrf_token` in the body; `GET /auth/me` returns it again on page load. Every POST/PUT/PATCH/DELETE on an authenticated route must send it as `X-CSRF-Token` (403 `CSRF_INVALID` otherwise). Browsers must call with credentials included.
 //	@description				Admin ops console APIs live under `/api/v1/admin` and use a separate cookie (`__Host-openhr_admin_session`) and CSRF token.
-//	@host						localhost:8080
+//	@host						localhost:8081
 //	@BasePath					/api/v1
 //
 //	@securityDefinitions.apikey	SessionCookie
@@ -20,23 +21,14 @@
 //	@in							header
 //	@name						Cookie
 //	@description				Admin session cookie (`__Host-openhr_admin_session`). Unsafe methods also need the `X-CSRF-Token` header.
-//
-// Runtime serving overrides host and schemes from PUBLIC_API_URL (see internal/docs).
 package main
 
 import (
-	"log"
-	"os"
-
-	"github.com/Angle-HR/server/internal/app"
+	_ "github.com/Angle-HR/server/internal/handler"
+	_ "github.com/Angle-HR/server/internal/hiring/apphttp"
+	_ "github.com/Angle-HR/server/internal/hiring/hiringhttp"
+	_ "github.com/Angle-HR/server/internal/identityhttp"
+	_ "github.com/Angle-HR/server/internal/orghttp"
 )
 
-//go:generate swag init -g main.go -o ../../internal/docs/spec --parseDependency --parseInternal
-
-func main() {
-	log.SetFlags(0)
-	if err := app.Run(); err != nil {
-		log.Print(err)
-		os.Exit(1)
-	}
-}
+func main() {}

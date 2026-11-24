@@ -33,15 +33,3 @@ type AdminCatalogUpsertRequest struct {
 	MinSize     *int    `json:"min_size"`
 	MaxSize     *int    `json:"max_size"`
 }
-
-// AdminJobListEnvelope wraps job list responses.
-type AdminJobListEnvelope struct {
-	Data []adminJobView `json:"data"`
-	Meta *apidoc.Meta   `json:"meta,omitempty"`
-}
-
-// AdminJobEnvelope wraps a single job.
-type AdminJobEnvelope struct {
-	Data adminJobView `json:"data"`
-	Meta *apidoc.Meta `json:"meta,omitempty"`
-}

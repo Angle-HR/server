@@ -11,14 +11,12 @@
 #   5  staff invite through the service: invite mail in mailhog, identity.staff.invited.v1 on the bus
 #   6  identity.user.registered / email_verified events on the bus (NATS monitoring port)
 #
-# Env: BASE (web-bff API base, default http://localhost:8081/api/v1), DIRECT (monolith API base, default
-#      http://localhost:8080/api/v1), MAILHOG, NATS_MON (default http://localhost:8222), ADMIN_EMAIL, ADMIN_PASSWORD.
-#      Ports default from WEB_BFF_PORT, SERVER_PORT, MAILHOG_UI_PORT, NATS_MONITOR_PORT; with another COMPOSE_PROJECT_NAME they must be set.
+# Env: BASE (web-bff API base, default http://localhost:8081/api/v1), MAILHOG, NATS_MON (default http://localhost:8222), ADMIN_EMAIL, ADMIN_PASSWORD.
+#      Ports default from WEB_BFF_PORT, MAILHOG_UI_PORT, NATS_MONITOR_PORT; with another COMPOSE_PROJECT_NAME they must be set.
 #      With ADMIN_TOTP_REQUIRED=true the bootstrap admin is enrolled / completes TOTP (scripts/lib/e2e-common.sh).
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/e2e-common.sh"
 e2e_url BASE WEB_BFF_PORT 8081 /api/v1
-e2e_url DIRECT SERVER_PORT 8080 /api/v1
 e2e_url MAILHOG MAILHOG_UI_PORT 8025
 e2e_url NATS_MON NATS_MONITOR_PORT 8222
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@anglehr.local}"
@@ -34,8 +32,7 @@ step() { printf '\n=== %s ===\n' "$1"; }
 stream_msgs() { curl -s "$NATS_MON/jsz?streams=true" | jq -r '[.account_details[]?.stream_detail[]? | select(.name=="IDENTITY") | .state.messages] | add // 0'; }
 nsubjects() { curl -s "$NATS_MON/jsz?streams=true" | jq -r '[.account_details[]?.stream_detail[]? | select(.name=="IDENTITY") | .state.num_subjects] | add // 0'; }
 
-step "1. monolith does not serve /auth; the BFF reaches the service"
-[ "$(code -X POST "$DIRECT/auth/login" -H 'Content-Type: application/json' -d '{}')" = 404 ] || fail "monolith still serves /auth/login"
+step "1. the BFF reaches the identity service"
 s="$(code -X POST "$BASE/auth/login" -H 'Content-Type: application/json' -d '{}')"
 case "$s" in 400|401|422) echo "BFF /auth/login -> $s (service answered)";; *) fail "BFF /auth/login -> $s";; esac
 

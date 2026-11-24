@@ -2,7 +2,7 @@
 #
 # Ports. Defaults are the openhr-local ports. When COMPOSE_PROJECT_NAME names another stack, a port (or the whole URL)
 # must be given explicitly: the script fails fast instead of silently talking to a different stack on the default ports.
-# The port variables are the docker compose ones: SERVER_PORT, WEB_BFF_PORT, ADMIN_BFF_PORT, APPLICATIONS_PORT,
+# The port variables are the docker compose ones: WEB_BFF_PORT, ADMIN_BFF_PORT, APPLICATIONS_PORT,
 # MAILHOG_UI_PORT, MAILHOG_SMTP_PORT, NATS_MONITOR_PORT, POSTGRES_PORT, MINIO_API_PORT.
 #
 # Bootstrap admin with ADMIN_TOTP_REQUIRED: e2e_admin_login enrols the admin (authenticator secret kept in

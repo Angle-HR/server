@@ -699,116 +699,37 @@ const docTemplate = `{
                 }
             }
         },
-        "/admin/jobs": {
-            "get": {
-                "security": [
-                    {
-                        "AdminSessionCookie": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "admin/jobs"
-                ],
-                "summary": "List Fluvio jobs",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Queue name",
-                        "name": "queue",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Job state",
-                        "name": "state",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Job kind",
-                        "name": "kind",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page size",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Offset",
-                        "name": "offset",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminJobListEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/jobs/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "AdminSessionCookie": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "admin/jobs"
-                ],
-                "summary": "Get Fluvio job",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Job ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminJobEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/jobs/{id}/retry": {
+        "/admin/companies/{id}/reactivate": {
             "post": {
                 "security": [
                     {
                         "AdminSessionCookie": []
                     }
                 ],
-                "description": "Replays dead jobs, runs scheduled jobs now, or requeues failed jobs as pending.",
+                "description": "Superadmin only. Org clears the deletion and emits org.company.reactivated.v1. Data applications and hiring removed when the company was deleted does not come back. Repeating it is harmless. Needs ORG_APPLY=grpc.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "admin/jobs"
+                    "admin/companies"
                 ],
-                "summary": "Retry Fluvio job",
+                "summary": "Reactivate a deleted company",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Job ID",
+                        "type": "string",
+                        "description": "Company ID",
                         "name": "id",
                         "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Company region (uk, us, eu, africa, asia)",
+                        "name": "region",
+                        "in": "query",
                         "required": true
                     }
                 ],
@@ -816,7 +737,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.AdminJobEnvelope"
+                            "$ref": "#/definitions/internal_identityhttp.AdminReactivateCompanyEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
                     }
                 }
@@ -8886,102 +8819,6 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_handler.AdminJobEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_handler.adminJobView"
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.AdminJobListEnvelope": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_handler.adminJobView"
-                    }
-                },
-                "meta": {
-                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
-                }
-            }
-        },
-        "internal_handler.adminJobView": {
-            "type": "object",
-            "properties": {
-                "args": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "attempt": {
-                    "type": "integer"
-                },
-                "attempted_at": {
-                    "type": "string"
-                },
-                "attempted_by": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "error_trace": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "finalized_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "kind": {
-                    "type": "string"
-                },
-                "max_attempts": {
-                    "type": "integer"
-                },
-                "metadata": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "priority": {
-                    "type": "integer"
-                },
-                "queue": {
-                    "type": "string"
-                },
-                "scheduled_at": {
-                    "type": "string"
-                },
-                "state": {
-                    "type": "string"
-                },
-                "tags": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "unique_key": {
-                    "type": "string"
-                }
-            }
-        },
         "internal_hiring_apphttp.ApplicantSettingsEnvelope": {
             "type": "object",
             "properties": {
@@ -9746,6 +9583,28 @@ const docTemplate = `{
                 },
                 "meta": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_identityhttp.AdminReactivateCompanyData": {
+            "type": "object",
+            "properties": {
+                "already_active": {
+                    "type": "boolean"
+                },
+                "company_id": {
+                    "type": "string"
+                },
+                "reactivated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_identityhttp.AdminReactivateCompanyEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_identityhttp.AdminReactivateCompanyData"
                 }
             }
         },
@@ -12096,11 +11955,11 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
-	Host:             "localhost:8080",
+	Host:             "localhost:8081",
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
-	Title:            "Angle HR API",
-	Description:      "Waitlist and product onboarding API for Open HR.\nInteractive docs (Scalar) are served at `/` in non-production environments.\nProduct flow: signup → verify email (6-digit OTP, 5 min expiry) → profile → address → [business] → complete.\nAuthentication is a server-side session in an HttpOnly cookie (`__Host-openhr_session`, or `openhr_session` when COOKIE_SECURE=false); there are no bearer tokens.\nLogin, verify-email, login/otp/verify, login/totp and accept-invite return `csrf_token` in the body; `GET /auth/me` returns it again on page load. Every POST/PUT/PATCH/DELETE on an authenticated route must send it as `X-CSRF-Token` (403 `CSRF_INVALID` otherwise). Browsers must call with credentials included.\nAdmin ops console APIs live under `/api/v1/admin` and use a separate cookie (`__Host-openhr_admin_session`) and CSRF token.",
+	Title:            "OpenHR API",
+	Description:      "Product API for OpenHR: accounts, onboarding, hiring and applications.\nInteractive docs (Scalar) are served at `/` in non-production environments.\nProduct flow: signup → verify email (6-digit OTP, 5 min expiry) → profile → address → [business] → complete.\nAuthentication is a server-side session in an HttpOnly cookie (`__Host-openhr_session`, or `openhr_session` when COOKIE_SECURE=false); there are no bearer tokens.\nLogin, verify-email, login/otp/verify, login/totp and accept-invite return `csrf_token` in the body; `GET /auth/me` returns it again on page load. Every POST/PUT/PATCH/DELETE on an authenticated route must send it as `X-CSRF-Token` (403 `CSRF_INVALID` otherwise). Browsers must call with credentials included.\nAdmin ops console APIs live under `/api/v1/admin` and use a separate cookie (`__Host-openhr_admin_session`) and CSRF token.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

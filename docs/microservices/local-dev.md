@@ -149,24 +149,30 @@ such as `openhr-local/web-bff:dev` are not overwritten by another stack's build.
 `docs/microservices/org.md` for switches, the gRPC surface and events. Use `CALLER_RESOLVER=grpc` on the applications
 service to resolve companies through it.
 
-## Every service remote (verified combination)
+## The monolith is retired
 
-All eight profiles, every route owned by its service, gRPC between the services, events on, the BFF validating sessions:
+There is no `server` container any more: every route is owned by one of identity, org, hiring, applications (behind
+the web BFF) or identity again for the admin API (behind the admin BFF). A path no service owns is a 404 at the BFF.
+`make local-up` starts all six services plus NATS, Redis, Postgres, MinIO and MailHog, and loads `deploy/local/remote.env`
+(the switches below) before your shell and `.env`:
 
 ```
 IDENTITY_REMOTE=on ORG_REMOTE=on HIRING_REMOTE=on APPLICATIONS_REMOTE=on
-IDENTITY_EVENTS=on ORG_EVENTS=on HIRING_EVENTS=on SERVER_HIRING_EVENTS=off APPLICATIONS_EVENTS=on
+IDENTITY_EVENTS=on ORG_EVENTS=on HIRING_EVENTS=on APPLICATIONS_EVENTS=on
 APPLICATIONS_JOBSOURCE=events CALLER_RESOLVER=grpc APPLICANT_COUNTS=grpc
 ORG_READINESS=grpc ORG_MEMBERSHIP=grpc ORG_APPLY=grpc IDENTITY_QUEUE=grpc SESSION_VALIDATION=on
 ORG_TENANTS=grpc ORG_NOTICE=grpc ORG_COMPANY=grpc IDENTITY_USERS=grpc
 APPLICATIONS_ORG_EVENTS=on HIRING_ORG_EVENTS=on
-UPSTREAM_APPLICATIONS_URL=http://applications:8080 UPSTREAM_HIRING_URL=http://hiring:8080
-UPSTREAM_ORG_URL=http://org:8080 UPSTREAM_IDENTITY_URL=http://identity:8080
-make local-up PROFILES="applications hiring org identity web-bff admin-bff"
+UPSTREAM_*_URL=http://<service>:8080
+make local-up
 BASE=http://localhost:8081/api/v1 make local-e2e-all
 # couplings checks (second member, Anywhere job, org/identity data, company deletion chain); needs the clamav profile
 STATE_FILE=/tmp/state.env UPLOADS=on scripts/e2e-apply.sh && STATE_FILE=/tmp/state.env scripts/e2e-couplings.sh
 ```
+
+The interactive API docs are served by the web BFF at `/` and `/api/docs` (outside production). The admin catalogs
+(`/admin/catalogs`) are served by the identity service. The Fluvio job-queue view (`/admin/jobs`) and the email worker
+were removed with the monolith: mail goes through the notifications service.
 
 Notes: `ORG_INDUSTRIES` stays `db` (not needed for the scripts). `scripts/e2e-identity.sh` takes `DIRECT` and `NATS_MON` for remapped ports. `scripts/e2e-couplings.sh` reads the applications service's `/internal/jobmodel-stats` (`APPS_HTTP`, default port 8104) and asserts no hiring-table fallback; its second member gets the `line_manager` role through one test-only SQL insert (company roles have no HTTP API). The identity route `DELETE /admin/companies/{id}` needs `ORG_APPLY=grpc`. With `ORG_APPLY=grpc`,
 `GET /admin/verification/{id}` reads the case details from identity's own database access to org's regional tables,

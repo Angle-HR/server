@@ -5,7 +5,7 @@
 #          -> business onboarding -> job create + publish-check -> logout
 #
 # Env:
-#   BASE          API base            (default http://localhost:8080/api/v1)
+#   BASE          API base            (default http://localhost:8081/api/v1)
 #   MAILHOG       mailhog HTTP base   (default http://localhost:8025)
 #   AUTH_MODE     bearer | cookie     (default cookie)
 #                 bearer: Authorization: Bearer <access_token> from login.
@@ -16,7 +16,7 @@
 set -euo pipefail
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/e2e-common.sh"
-e2e_url BASE SERVER_PORT 8080 /api/v1
+e2e_url BASE WEB_BFF_PORT 8081 /api/v1
 e2e_url MAILHOG MAILHOG_UI_PORT 8025
 AUTH_MODE="${AUTH_MODE:-cookie}"
 EMAIL="${EMAIL:-e2e-auth-$(date +%s)-$RANDOM@example.com}"
@@ -102,7 +102,7 @@ SESSION_ID="$(jq -r '.data.verification_session_id' <<<"$LAST_BODY")"
 [ -n "$SESSION_ID" ] && [ "$SESSION_ID" != null ] || fail "no verification_session_id"
 
 step "2. read code from mailhog"
-CODE="$(mail_code "$EMAIL")" || fail "no verification email for $EMAIL within 30s (is email-worker running?)"
+CODE="$(mail_code "$EMAIL")" || fail "no verification email for $EMAIL within 30s (is the notifications service running?)"
 echo "code=$CODE"
 
 step "2b. verify-email wrong-code sequence: attempts_remaining, lockout, resend resets"

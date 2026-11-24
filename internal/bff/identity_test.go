@@ -56,19 +56,22 @@ func TestIdentityPathCoversEveryIdentityRoute(t *testing.T) {
 			t.Errorf("%s matches both upstreams", p)
 		}
 	}
-	stay := walkPaths(t, func(r chi.Router) {
+	// The admin catalogs are mounted by the identity service as well (AdminExtra).
+	cat := walkPaths(t, func(r chi.Router) {
 		new(handler.AdminHandler).RegisterProtectedRoutes(r, nil)
 	})
-	if len(stay) == 0 {
-		t.Fatal("no monolith admin routes found")
+	if len(cat) == 0 {
+		t.Fatal("no admin catalog routes found")
 	}
-	for _, p := range append(stay, "/admin/catalogs/x", "/admin/jobs", "/organizations", "/organizations/invites/x",
-		"/auth", "/admin", "/admin/auth", "/onboarding/status", "/jobs/1", "/countries") {
-		if IdentityPath("/admin"+strings.TrimPrefix(p, "/admin")) && strings.HasPrefix(p, "/admin") && !adminIdentityCollection(strings.Split(p, "/")[2:][0]) {
-			t.Errorf("%s must stay on the monolith", p)
+	for _, p := range cat {
+		if !IdentityPath("/admin" + strings.TrimPrefix(p, "/admin")) {
+			t.Errorf("%s is served by identity but IdentityPath is false", p)
 		}
-		if !strings.HasPrefix(p, "/admin") && IdentityPath(p) {
-			t.Errorf("%s must stay on the monolith", p)
+	}
+	// Nothing else is claimed: these have no owner and get a 404 at the edge.
+	for _, p := range []string{"/admin/jobs", "/organizations", "/auth", "/admin", "/onboarding/status", "/jobs/1", "/countries"} {
+		if IdentityPath(p) && p != "/auth" {
+			t.Errorf("%s must not be an identity path", p)
 		}
 	}
 	_ = admin.PermUsersRead
@@ -84,10 +87,9 @@ func TestIdentityRoutedAtTheEdge(t *testing.T) {
 	if gotIdentity != "/api/v1/auth/login" {
 		t.Fatalf("login went to %q", gotIdentity)
 	}
-	f.lastReq = nil
 	do(t, "GET", f.edge.URL+"/api/v1/admin/catalogs/x", "", nil)
-	if f.lastReq == nil || f.lastReq.URL.Path != "/api/v1/admin/catalogs/x" {
-		t.Fatal("catalogs must stay on the monolith")
+	if gotIdentity != "/api/v1/admin/catalogs/x" {
+		t.Fatalf("catalogs went to %q", gotIdentity)
 	}
 }
 

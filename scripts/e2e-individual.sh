@@ -14,7 +14,7 @@
 set -euo pipefail
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/e2e-common.sh"
-e2e_url BASE SERVER_PORT 8080 /api/v1
+e2e_url BASE WEB_BFF_PORT 8081 /api/v1
 e2e_url MAILHOG MAILHOG_UI_PORT 8025
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@anglehr.local}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-changeme123}"

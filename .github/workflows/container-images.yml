@@ -1,4 +1,4 @@
-# Builds the server, email-worker, jobs and migrate images and pushes them to the environment's ECR.
+# Builds the service, jobs and migrate images and pushes them to the environment's ECR.
 #
 # GitHub Environment setup (Settings → Environments), one per AWS account:
 #
@@ -73,7 +73,7 @@ jobs:
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
-          for image in server email-worker jobs migrate; do
+          for image in jobs migrate; do
             key="$(echo "$image" | tr '-' '_')"
             if docker buildx imagetools inspect "$REGISTRY/openhr/$image:$TAG" >/dev/null 2>&1; then
               echo "$image:$TAG already in ECR; skipping"
@@ -82,32 +82,6 @@ jobs:
               echo "$key=false" >> "$GITHUB_OUTPUT"
             fi
           done
-
-      - name: Build and push server
-        if: steps.exists.outputs.server != 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          target: server
-          platforms: ${{ env.PLATFORMS }}
-          push: true
-          tags: ${{ steps.ecr.outputs.registry }}/openhr/server:${{ env.TAG }}
-          cache-from: type=gha,scope=server
-          cache-to: type=gha,mode=max,scope=server
-
-      - name: Build and push email-worker
-        if: steps.exists.outputs.email_worker != 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          target: email-worker
-          platforms: ${{ env.PLATFORMS }}
-          push: true
-          tags: ${{ steps.ecr.outputs.registry }}/openhr/email-worker:${{ env.TAG }}
-          cache-from: type=gha,scope=email-worker
-          cache-to: type=gha,mode=max,scope=email-worker
 
       - name: Build and push jobs
         if: steps.exists.outputs.jobs != 'true'

@@ -24,7 +24,10 @@ type Config struct {
 	Name          string
 	ListenAddr    string // LISTEN_ADDR
 	OpsListenAddr string // OPS_LISTEN_ADDR: serves /metrics; empty disables
-	UpstreamURL   string // UPSTREAM_API_URL
+	// UpstreamURL (UPSTREAM_API_URL) is the optional catch-all upstream. Empty (the monolith is retired): a path no
+	// service route claims gets a 404.
+	UpstreamURL  string
+	PublicAPIURL string // PUBLIC_API_URL: the origin the API docs advertise (web BFF only)
 	// ApplicationsURL, when set (UPSTREAM_APPLICATIONS_URL), sends the applications routes (ApplicationsPath) to the
 	// applications service instead of the monolith.
 	ApplicationsURL string
@@ -152,6 +155,7 @@ func LoadConfig(d Defaults, getenv func(string) string) (Config, error) {
 		ListenAddr:         get("LISTEN_ADDR", d.ListenAddr),
 		OpsListenAddr:      get("OPS_LISTEN_ADDR", ""),
 		UpstreamURL:        get("UPSTREAM_API_URL", d.Upstream),
+		PublicAPIURL:       get("PUBLIC_API_URL", ""),
 		ApplicationsURL:    get("UPSTREAM_APPLICATIONS_URL", ""),
 		HiringURL:          get("UPSTREAM_HIRING_URL", ""),
 		OrgURL:             get("UPSTREAM_ORG_URL", ""),
@@ -200,8 +204,8 @@ func LoadConfig(d Defaults, getenv func(string) string) (Config, error) {
 		cc.Email = rule("RATE_LIMIT_"+name+"_EMAIL", cc.Email)
 		c.Classes[name] = cc
 	}
-	if c.UpstreamURL == "" {
-		errs = append(errs, "UPSTREAM_API_URL is required")
+	if c.UpstreamURL == "" && c.ApplicationsURL == "" && c.HiringURL == "" && c.OrgURL == "" && c.IdentityURL == "" {
+		errs = append(errs, "at least one upstream is required (UPSTREAM_IDENTITY_URL, UPSTREAM_ORG_URL, UPSTREAM_HIRING_URL, UPSTREAM_APPLICATIONS_URL or UPSTREAM_API_URL)")
 	}
 	if len(errs) > 0 {
 		return c, fmt.Errorf("invalid config: %s", strings.Join(errs, "; "))

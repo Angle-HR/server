@@ -87,46 +87,6 @@ services:
     environment:
       NOTIFICATIONS_DB_URL: postgres://openhr:${POSTGRES_PASSWORD:-change-me}@postgres:5432/openhr_notifications?sslmode=disable
 
-  # Email transport of the monolith. Locally the default is "events": the outbox plus the always-on notifications
-  # service send the mail. For the old Fluvio path run NOTIFICATIONS_TRANSPORT=fluvio make local-up PROFILES=legacy-email.
-  server:
-    volumes: ["${GRPC_CERT_DIR:-./deploy/local/certs}/server:/run/grpc:ro"]
-    environment:
-      SERVICE_NAME: server
-      GRPC_AUTH: ${GRPC_AUTH:-off}
-      GRPC_AUTH_SECRET: ${GRPC_AUTH_SECRET:-dev-insecure-grpc-secret-change-me}
-      GRPC_TLS_CERT_FILE: /run/grpc/tls.crt
-      GRPC_TLS_KEY_FILE: /run/grpc/tls.key
-      GRPC_TLS_CA_FILE: /run/grpc/ca.crt
-      NATS_URL: nats://nats:4222
-      NOTIFICATIONS_TRANSPORT: ${NOTIFICATIONS_TRANSPORT:-events}
-      # Every process that touches the notifications stream must use the same retention (see hardening.md).
-      NOTIFICATIONS_STREAM_MAX_AGE: ${NOTIFICATIONS_STREAM_MAX_AGE:-}
-      # "on": the monolith stops serving the applications routes (cmd/applications serves them).
-      APPLICATIONS_REMOTE: ${APPLICATIONS_REMOTE:-off}
-      # "on": the monolith stops serving the hiring routes (jobs, drafts, forms, templates, catalog, settings,
-      # lifecycle, the DPIA route, the careers page and sitemap); cmd/hiring serves them.
-      HIRING_REMOTE: ${HIRING_REMOTE:-off}
-      # Job lifecycle events (hiring.job.*) through the outbox; the monolith relays them to NATS. With
-      # HIRING_REMOTE=on the hiring service emits and relays them instead: set SERVER_HIRING_EVENTS=off.
-      HIRING_EVENTS: ${SERVER_HIRING_EVENTS:-${HIRING_EVENTS:-off}}
-      # "on": the monolith stops serving the org routes (cmd/org serves them), including the agreements routes.
-      ORG_REMOTE: ${ORG_REMOTE:-off}
-      # org.* events (company verified, KYB rejected, agreement accepted, ...) through the outbox.
-      ORG_EVENTS: ${ORG_EVENTS:-off}
-      # Region migration while the monolith serves the onboarding routes: inline (default) or saga.
-      REGION_MOVE: ${REGION_MOVE:-inline}
-      # "on": the monolith stops serving the identity routes (/auth/*, /organizations/invites, identity half of /admin).
-      IDENTITY_REMOTE: ${IDENTITY_REMOTE:-off}
-      IDENTITY_EVENTS: ${IDENTITY_EVENTS:-off}
-      # Where the job list gets its applicant counters: db (the shared table) or grpc (ApplicationsService, needs the
-      # applications profile and APPLICATIONS_GRPC_ADDR).
-      APPLICANT_COUNTS: ${APPLICANT_COUNTS:-db}
-      APPLICATIONS_GRPC_ADDR: ${APPLICATIONS_GRPC_ADDR:-applications:9090}
-    depends_on:
-      nats:
-        condition: service_healthy
-
   nats:
     image: nats:2-alpine
     # -js JetStream, -sd store dir, -m monitoring port (/healthz, /jsz, /varz)
@@ -298,7 +258,7 @@ services:
       ANGLEHR_REAPPLY_HMAC_KEY: ${ANGLEHR_REAPPLY_HMAC_KEY:-local-dev-insecure-reapply-hmac-key-0001}
       # Consume org.company.deleted.v1 (delete the company's applications data).
       APPLICATIONS_ORG_EVENTS: ${APPLICATIONS_ORG_EVENTS:-off}
-      # Sessions, CSRF and origin rules: identical to the monolith (docker-compose.yml, service `server`), so the
+      # Sessions, CSRF and origin rules: identical to the identity service, so the
       # cookie the monolith issued is accepted here (same Redis, same cookie names).
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://*.tryopenhr.com,http://localhost:3000}
@@ -358,7 +318,6 @@ services:
       SERVICE_NAME: web-bff
       LISTEN_ADDR: ":8080"
       SESSION_COOKIE_NAME: openhr_session
-      UPSTREAM_API_URL: http://server:8080
       # Set to http://applications:8080 (profile applications) to route the applications paths to that service.
       UPSTREAM_APPLICATIONS_URL: ${UPSTREAM_APPLICATIONS_URL:-}
       # Set to http://hiring:8080 (profile hiring) to route the hiring paths (bff.HiringPath) to that service.
@@ -400,7 +359,6 @@ services:
       LISTEN_ADDR: ":8080"
       # Forwards only /api/v1/admin/* to the monolith. Cookie name: __Host-openhr_admin_session, or
       # openhr_admin_session when COOKIE_SECURE=false (local http); must match the monolith's COOKIE_SECURE.
-      UPSTREAM_API_URL: http://server:8080
       # Set to http://identity:8080 (with IDENTITY_REMOTE=on on the monolith) to route /admin/auth and the other
       # identity admin paths (bff.IdentityPath) to the identity service.
       UPSTREAM_IDENTITY_URL: ${UPSTREAM_IDENTITY_URL:-}

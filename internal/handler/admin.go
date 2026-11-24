@@ -7,7 +7,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 	goredis "github.com/redis/go-redis/v9"
-	fluvio "github.com/software78/fluvio"
 
 	"github.com/Angle-HR/server/internal/admin"
 	"github.com/Angle-HR/server/internal/auth"
@@ -30,7 +29,6 @@ type AdminHandler struct {
 	Router          *dbrouter.DBRouter
 	GlobalDB        globalDB
 	Sessions        *session.Manager
-	Jobs            *fluvio.Client
 	Enqueuer        jobEnqueuer
 	KYBNotifierFor  KYBNotifierFactory // optional, emails the owner when a review rejects
 	PasswordLockout *auth.LoginLockout
@@ -44,7 +42,6 @@ func NewAdminHandler(
 	globalDB globalDB,
 	redisClient *goredis.Client,
 	sessions *session.Manager,
-	jobs *fluvio.Client,
 	enqueuer jobEnqueuer,
 ) *AdminHandler {
 	return &AdminHandler{
@@ -52,7 +49,6 @@ func NewAdminHandler(
 		Router:   router,
 		GlobalDB: globalDB,
 		Sessions: sessions,
-		Jobs:     jobs,
 		Enqueuer: enqueuer,
 		PasswordLockout: auth.NewLoginLockout(redisClient, "admin_pwd",
 			adminPasswordLockoutMaxAttempts, adminPasswordLockoutWindow, adminPasswordLockoutDuration),
@@ -60,17 +56,13 @@ func NewAdminHandler(
 	}
 }
 
-// RegisterProtectedRoutes mounts the authenticated admin routes this package still serves (catalogs, jobs). The
+// RegisterProtectedRoutes mounts the authenticated admin routes this package still serves (the catalogs). The
 // identity routes (auth, users, staff, roles, audit, verification) moved to internal/identityhttp. Caller must apply
 // RequireAdmin.
 func (h *AdminHandler) RegisterProtectedRoutes(r chi.Router, mw *auth.AdminMiddleware) {
 	r.With(mw.RequirePermission(admin.PermCatalogsRead)).Get("/catalogs/{type}", h.listCatalog)
 	r.With(mw.RequirePermission(admin.PermCatalogsWrite)).Post("/catalogs/{type}", h.createCatalog)
 	r.With(mw.RequirePermission(admin.PermCatalogsWrite)).Patch("/catalogs/{type}/{id}", h.patchCatalog)
-
-	r.With(mw.RequirePermission(admin.PermJobsRead)).Get("/jobs", h.listJobs)
-	r.With(mw.RequirePermission(admin.PermJobsRead)).Get("/jobs/{id}", h.getJob)
-	r.With(mw.RequirePermission(admin.PermJobsWrite)).Post("/jobs/{id}/retry", h.retryJob)
 }
 
 func (h *AdminHandler) audit(r *http.Request, action, resourceType, resourceID string, meta map[string]any) {

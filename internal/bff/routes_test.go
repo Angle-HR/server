@@ -99,3 +99,20 @@ func TestRoutedToFourUpstreams(t *testing.T) {
 		}
 	}
 }
+
+// With no UPSTREAM_API_URL (the monolith is retired) a path no service claims is a 404 at the edge, and readiness
+// follows the routed upstreams.
+func TestNoCatchAllUpstream(t *testing.T) {
+	hire := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	defer hire.Close()
+	f := newFixture(t, func(c *Config) { c.UpstreamURL = ""; c.HiringURL = hire.URL }, nil)
+	if code := do(t, "GET", f.edge.URL+"/api/v1/jobs", "", nil).StatusCode; code != http.StatusOK {
+		t.Fatalf("hiring route: %d", code)
+	}
+	if code := do(t, "GET", f.edge.URL+"/api/v1/nothing-here", "", nil).StatusCode; code != http.StatusNotFound {
+		t.Fatalf("unowned route: %d, want 404", code)
+	}
+	if code := do(t, "GET", f.edge.URL+"/readyz", "", nil).StatusCode; code != http.StatusOK {
+		t.Fatalf("readyz: %d", code)
+	}
+}

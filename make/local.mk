@@ -1,11 +1,12 @@
 # Local Docker dev/test stack (project name `openhr-local`, set in docker-compose.yml).
 # Included from the main Makefile. See docs/microservices/local-dev.md.
 #
-#   make local-up                          base stack + nats
-#   make local-up PROFILES="identity org"  also build/run those service profiles (or `split`, `web`, `clamav`)
+#   make local-up                          the six services, NATS and the base stack
+#   make local-up PROFILES="identity org"  only those service profiles (add `web`, `clamav`)
 
-LOCAL_PROFILES ?= $(PROFILES)
-LOCAL_COMPOSE  := docker compose -f docker-compose.yml -f deploy/local/compose.split.yml $(foreach p,$(LOCAL_PROFILES),--profile $(p))
+# Every service runs by default: the monolith is gone, each route is owned by its service.
+LOCAL_PROFILES ?= $(or $(PROFILES),identity org hiring applications web-bff admin-bff)
+LOCAL_COMPOSE  := docker compose --env-file deploy/local/remote.env $(addprefix --env-file ,$(wildcard .env)) -f docker-compose.yml -f deploy/local/compose.split.yml $(foreach p,$(LOCAL_PROFILES),--profile $(p))
 
 .PHONY: local-grpc-certs local-up local-down local-reset local-logs local-smoke local-e2e local-e2e-all
 
@@ -21,7 +22,7 @@ local-down: ## Stop the local stack (keeps volumes)
 local-reset: ## Stop the local stack and delete its volumes (databases, minio, nats)
 	$(LOCAL_COMPOSE) --profile '*' down --volumes --remove-orphans
 
-local-logs: ## Follow logs (SERVICE=server to filter)
+local-logs: ## Follow logs (SERVICE=identity to filter)
 	$(LOCAL_COMPOSE) logs -f --tail=100 $(SERVICE)
 
 local-smoke: ## Health-check every running service

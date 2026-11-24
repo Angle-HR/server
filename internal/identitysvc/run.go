@@ -26,9 +26,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/Angle-HR/server/internal/admin"
 	"github.com/Angle-HR/server/internal/auth"
 	"github.com/Angle-HR/server/internal/dbrouter"
+	"github.com/Angle-HR/server/internal/handler"
 	"github.com/Angle-HR/server/internal/hiring/callerresolver"
 	"github.com/Angle-HR/server/internal/identityevents"
 	"github.com/Angle-HR/server/internal/identityhttp"
@@ -167,16 +170,21 @@ func Run() error {
 	adminMW := auth.NewAdminMiddleware(adminSessions, adminStore)
 	adminMW.RequireMFA = cfg.AdminTOTPRequired
 
-	handler := NewRouter(HTTPDeps{
+	// The admin catalogs (countries, industries, roles, ...) are served here: they sit behind the admin session and
+	// permissions this service owns.
+	catalogs := handler.NewAdminHandler(adminStore, router, global, redisClient, adminSessions, emailQueue)
+
+	httpHandler := NewRouter(HTTPDeps{
 		Log: log, CORSAllowedOrigins: cfg.CORSAllowedOrigins, AllowedOrigins: cfg.AllowedOrigins,
 		Ready: global.Ping,
 		NATS:  func() string { return "up" },
 		Identity: identityhttp.Deps{
 			Auth: authHandler, Admin: adminHandler, RequireAuth: auth.NewMiddleware(productSessions).RequireAuth, AdminMW: adminMW,
+			AdminExtra: func(r chi.Router) { catalogs.RegisterProtectedRoutes(r, adminMW) },
 		},
 	})
 	httpSrv := &http.Server{
-		Addr: env("HTTP_ADDR", ":8080"), Handler: handler,
+		Addr: env("HTTP_ADDR", ":8080"), Handler: httpHandler,
 		ReadHeaderTimeout: readHeaderTimeout, ReadTimeout: readTimeout, WriteTimeout: writeTimeout, IdleTimeout: idleTimeout,
 	}
 

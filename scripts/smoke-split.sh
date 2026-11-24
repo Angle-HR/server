@@ -16,8 +16,6 @@ SERVICES=(
   "minio|${MINIO_API_PORT:-9000}|/minio/health/live|1"
   "mailhog|${MAILHOG_UI_PORT:-8025}|/api/v2/messages?limit=1|1"
   "nats|${NATS_MONITOR_PORT:-8222}|/healthz|1"
-  "server|${SERVER_PORT:-8080}|/healthz|1"
-  "email-worker||-|1"
   "identity|${IDENTITY_PORT:-8101}|/healthz|0"
   "org|${ORG_PORT:-8102}|/healthz|0"
   "hiring|${HIRING_PORT:-8103}|/healthz|0"

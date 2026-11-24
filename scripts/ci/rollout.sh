@@ -10,14 +10,14 @@
 # Terraform resolves the image to the newest sha in ECR, so a later `terraform apply` lands on the same image.
 #
 # Env: CLUSTER, TAG, MIGRATE_TASK_DEFINITION, MIGRATE_SUBNETS, MIGRATE_SECURITY_GROUP, SCHEDULE_PREFIX,
-#      API_SERVICE (default api; desiredCount 0 means staging is asleep).
+#      API_SERVICE (default identity; desiredCount 0 means staging is asleep).
 set -euo pipefail
 
 : "${CLUSTER:?}" "${TAG:?}" "${MIGRATE_TASK_DEFINITION:?}" "${MIGRATE_SUBNETS:?}" "${MIGRATE_SECURITY_GROUP:?}" "${SCHEDULE_PREFIX:?}"
-API_SERVICE="${API_SERVICE:-api}"
+API_SERVICE="${API_SERVICE:-identity}"
 
 # Repositories built by Container Images; images from anywhere else (clamav, redis, frontends) are left alone.
-OUR_IMAGES='/openhr/(server|email-worker|jobs|migrate|identity|org|hiring|applications|notifications|web-bff|admin-bff):'
+OUR_IMAGES='/openhr/(jobs|migrate|identity|org|hiring|applications|notifications|web-bff|admin-bff):'
 
 # Prints the ARN of a revision of $1 whose images from OUR_IMAGES carry $TAG, registering one if needed.
 retag() {

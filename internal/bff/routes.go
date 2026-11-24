@@ -100,8 +100,8 @@ func OrgPath(p string) bool {
 
 // IdentityPath reports whether the path belongs to the identity service: the product auth routes (/auth/*,
 // including session start, /auth/me and TOTP), org-invite creation, and the identity half of the admin API (admin
-// auth, users, staff, roles, permissions, audit logs and the KYB verification queue). Admin catalogs and jobs stay
-// on the monolith.
+// auth, users, staff, roles, permissions, audit logs and the KYB verification queue). The admin catalogs are served by the identity
+// service too.
 func IdentityPath(p string) bool {
 	parts := strings.Split(strings.Trim(p, "/"), "/")
 	switch parts[0] {
@@ -123,7 +123,7 @@ func IdentityPath(p string) bool {
 
 func adminIdentityCollection(name string) bool {
 	switch name {
-	case "users", "staff", "roles", "permissions", "audit-logs", "verification", "companies":
+	case "users", "staff", "roles", "permissions", "audit-logs", "verification", "companies", "catalogs":
 		return true
 	}
 	return false

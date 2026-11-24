@@ -21,7 +21,7 @@
 # ./cmd/hiring-outbox once, which this script does itself (see OUTBOX_CMD).
 #
 # Env:
-#   BASE          API base            (default http://localhost:8080/api/v1)
+#   BASE          API base            (default http://localhost:8081/api/v1)
 #   BASE_APPS     API base of the applications service (default: BASE). Set it to run the applications side
 #                 (public apply and uploads, /jobs/{id}/applications*, /hiring/applicant-settings) against
 #                 `cmd/applications` while everything else (signup, KYB, jobs, publish) stays on the monolith,
@@ -46,7 +46,7 @@
 set -euo pipefail
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/e2e-common.sh"
-e2e_url BASE SERVER_PORT 8080 /api/v1
+e2e_url BASE WEB_BFF_PORT 8081 /api/v1
 BASE_APPS="${BASE_APPS:-$BASE}"
 e2e_url MAILHOG MAILHOG_UI_PORT 8025
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@anglehr.local}"

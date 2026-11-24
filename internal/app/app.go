@@ -154,7 +154,6 @@ func Run() error {
 	adminMiddleware := auth.NewAdminMiddleware(tokenService, adminStore)
 
 	countriesHandler := handler.NewCountriesHandler(globalPool)
-	waitlistHandler := handler.NewWaitlistHandler(dbRouter, globalPool, fluvioClient, cfg.AuthDefaultRegion)
 	authHandler := handler.NewAuthHandler(dbRouter, globalPool, redisClient, tokenService, fluvioClient, totpCrypto)
 	productOnboardingHandler := handler.NewProductOnboardingHandler(dbRouter, globalPool, fluvioClient, tokenService)
 	wireAddressProviders(productOnboardingHandler, cfg)
@@ -196,7 +195,6 @@ func Run() error {
 
 	router.Route("/api/v1", func(r chi.Router) {
 		countriesHandler.RegisterRoutes(r)
-		waitlistHandler.RegisterRoutes(r)
 		r.Route("/auth", authHandler.RegisterRoutes)
 		productOnboardingHandler.RegisterRoutes(r)
 		publicHandler.RegisterRoutes(r)

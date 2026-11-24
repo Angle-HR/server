@@ -19,20 +19,3 @@ type CountriesEnvelope struct {
 	Data []CountryResponse `json:"data"`
 	Meta *apidoc.Meta      `json:"meta,omitempty"`
 }
-
-// SignupRequest is the waitlist signup request body.
-type SignupRequest struct {
-	Email string `json:"email" example:"jerry@example.com"`
-}
-
-// SignupData is the waitlist signup success payload.
-type SignupData struct {
-	Message string `json:"message" example:"You're on the list!"`
-	Region  string `json:"region" example:"uk"`
-}
-
-// SignupEnvelope is a successful waitlist signup response.
-type SignupEnvelope struct {
-	Data SignupData   `json:"data"`
-	Meta *apidoc.Meta `json:"meta,omitempty"`
-}

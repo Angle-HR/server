@@ -76,7 +76,6 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 
 	assertTagGroup(t, groups[0], "Waitlist", []string{
 		"waitlist/reference",
-		"waitlist/signup",
 	})
 	assertTagGroup(t, groups[1], "Onboarding", []string{
 		"auth",
@@ -91,7 +90,6 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 	})
 	assertTagGroup(t, groups[2], "Admin", []string{
 		"admin/auth",
-		"admin/waitlist",
 		"admin/users",
 		"admin/catalogs",
 		"admin/jobs",
@@ -108,12 +106,11 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 	})
 
 	tagDefs, ok := doc["tags"].([]any)
-	if !ok || len(tagDefs) != 24 {
-		t.Fatalf("tags: got %v, want 24 tag definitions", doc["tags"])
+	if !ok || len(tagDefs) != 22 {
+		t.Fatalf("tags: got %v, want 22 tag definitions", doc["tags"])
 	}
 	wantTagNames := []string{
 		"waitlist/reference",
-		"waitlist/signup",
 		"auth",
 		"onboarding/reference",
 		"onboarding/profile",
@@ -123,7 +120,6 @@ func assertAPITagGroups(t *testing.T, doc map[string]any) {
 		"onboarding/individual",
 		"onboarding/session",
 		"admin/auth",
-		"admin/waitlist",
 		"admin/users",
 		"admin/catalogs",
 		"admin/jobs",
@@ -229,7 +225,7 @@ func TestRegisterRoutesServesDocsUnderAPI(t *testing.T) {
 
 	for _, tc := range []struct{ path, wantType, wantBody string }{
 		{"/", "text/html", "https://app.staging.example.com/openapi.json"},
-		{APIDocsPath, "text/html", "/waitlist"}, // spec inlined, not fetched
+		{APIDocsPath, "text/html", "/auth/signup"}, // spec inlined, not fetched
 		{"/openapi.json", "application/json", `"paths"`},
 		{APISpecPath, "application/json", `"paths"`},
 	} {

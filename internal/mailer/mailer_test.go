@@ -42,19 +42,6 @@ func TestTemplatesRendering(t *testing.T) {
 		t.Fatalf("failed to create mailer: %v", err)
 	}
 
-	t.Run("waitlist_confirmation", func(t *testing.T) {
-		content := renderTemplate(t, m, "waitlist_confirmation.html", EmailArgs{
-			Type:      TypeWaitlistConfirmation,
-			Recipient: "test@example.com",
-		})
-
-		assertNotContains(t, content, "/survey?token=")
-		assertNotContains(t, content, "Help shape our product")
-		assertContains(t, content, "Hi,")
-		assertContains(t, content, "You're on")
-		assertContains(t, content, "What happens next?")
-	})
-
 	t.Run("more_info_ack", func(t *testing.T) {
 		content := renderTemplate(t, m, "more_info_ack.html", EmailArgs{
 			Type:      TypeMoreInfoAck,

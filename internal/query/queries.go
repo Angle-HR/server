@@ -6,7 +6,6 @@ import (
 
 	qb "github.com/Software78/sql-go-query-builder"
 	"github.com/Software78/sql-go-query-builder/builder"
-	"github.com/Software78/sql-go-query-builder/expr"
 	"github.com/google/uuid"
 )
 
@@ -83,46 +82,6 @@ func ListWaitlistBusinessTypes() (string, []any, error) {
 		[]any{true}, nil
 }
 
-// InsertWaitlistSignup returns SQL and args for a regional waitlist signup row.
-func InsertWaitlistSignup(
-	email string,
-	region, regionSource string,
-	metadata []byte,
-) (string, []any, error) {
-	return mustSQL(postgres.Insert("waitlist").
-		Columns("email", "region", "region_source", "metadata").
-		Values(email, region, regionSource, metadata).
-		OnConflict("email").DoNothing().
-		Returning("uuid").
-		ToSQL())
-}
-
-// InsertWaitlistRegistry returns SQL and args for a global waitlist.registry row.
-func InsertWaitlistRegistry(email, region, regionSource string, waitlistToken uuid.UUID) (string, []any, error) {
-	return mustSQL(postgres.Insert("registry").
-		Columns("email", "region", "region_source", "waitlist_token").
-		Values(email, region, regionSource, waitlistToken).
-		OnConflict("email").DoNothing().
-		ToSQL())
-}
-
-// LookupWaitlistRegistryByToken returns SQL to resolve region and email for a waitlist token.
-func LookupWaitlistRegistryByToken(token uuid.UUID) (string, []any, error) {
-	return mustSQL(postgres.Select("email", "region").
-		From("registry").
-		Where("waitlist_token", "=", token).
-		ToSQL())
-}
-
-// LookupWaitlistByUUID returns SQL for a waitlist row by public token.
-func LookupWaitlistByUUID(token uuid.UUID) (string, []any, error) {
-	return mustSQL(postgres.Select("id", "full_name", "email", "onboarding_submitted_at").
-		From("waitlist").
-		Where("uuid", "=", token).
-		WhereNull("deleted_at").
-		ToSQL())
-}
-
 // ActiveIndustriesByIDs returns SQL to load active industries for the given IDs.
 func ActiveIndustriesByIDs(ids []uuid.UUID) (string, []any, error) {
 	if len(ids) == 0 {
@@ -178,24 +137,6 @@ func TeamSizeByID(id uuid.UUID) (string, []any, error) {
 		ToSQL())
 }
 
-// SubmitWaitlistOnboarding returns SQL to finalize onboarding on a waitlist row.
-func SubmitWaitlistOnboarding(
-	waitlistID int64,
-	wantsEarlyAccess, wantsUserTesting bool,
-	roleID, teamSizeID uuid.UUID,
-) (string, []any, error) {
-	return mustSQL(postgres.Update("waitlist").
-		SetExpr("onboarding_submitted_at", expr.Raw{SQL: "now()"}).
-		Set("wants_early_access", wantsEarlyAccess).
-		Set("wants_user_testing", wantsUserTesting).
-		Set("role_id", roleID).
-		Set("team_size_id", teamSizeID).
-		Where("id", "=", waitlistID).
-		WhereNull("onboarding_submitted_at").
-		Returning("id").
-		ToSQL())
-}
-
 func uuidArgs(ids []uuid.UUID) []any {
 	args := make([]any, len(ids))
 	for i, id := range ids {
@@ -203,28 +144,4 @@ func uuidArgs(ids []uuid.UUID) []any {
 	}
 
 	return args
-}
-
-// InsertWaitlistIndustry returns SQL for a waitlist industry junction row.
-func InsertWaitlistIndustry(waitlistID int64, industryID uuid.UUID, otherText *string) (string, []any, error) {
-	return mustSQL(postgres.Insert("waitlist_industries").
-		Columns("waitlist_id", "industry_id", "other_text").
-		Values(waitlistID, industryID, otherText).
-		ToSQL())
-}
-
-// InsertWaitlistHiringTool returns SQL for a waitlist hiring tool junction row.
-func InsertWaitlistHiringTool(waitlistID int64, toolID uuid.UUID, otherText *string) (string, []any, error) {
-	return mustSQL(postgres.Insert("waitlist_hiring_tools").
-		Columns("waitlist_id", "hiring_tool_id", "other_text").
-		Values(waitlistID, toolID, otherText).
-		ToSQL())
-}
-
-// InsertWaitlistFrustration returns SQL for a waitlist frustration junction row.
-func InsertWaitlistFrustration(waitlistID int64, frustrationID uuid.UUID, otherText *string) (string, []any, error) {
-	return mustSQL(postgres.Insert("waitlist_frustrations").
-		Columns("waitlist_id", "frustration_id", "other_text").
-		Values(waitlistID, frustrationID, otherText).
-		ToSQL())
 }

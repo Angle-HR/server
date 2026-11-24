@@ -71,12 +71,6 @@ func (h *AdminHandler) RegisterPublicRoutes(r chi.Router) {
 func (h *AdminHandler) RegisterProtectedRoutes(r chi.Router, mw *auth.AdminMiddleware) {
 	r.Get("/auth/me", h.me)
 
-	r.With(mw.RequirePermission(admin.PermWaitlistRead)).Get("/waitlist", h.listWaitlist)
-	r.With(mw.RequirePermission(admin.PermWaitlistRead)).Get("/waitlist/{uuid}", h.getWaitlist)
-	r.With(mw.RequirePermission(admin.PermWaitlistWrite)).Patch("/waitlist/{uuid}", h.patchWaitlist)
-	r.With(mw.RequirePermission(admin.PermWaitlistWrite)).Delete("/waitlist/{uuid}", h.deleteWaitlist)
-	r.With(mw.RequirePermission(admin.PermWaitlistWrite)).Post("/waitlist/{uuid}/restore", h.restoreWaitlist)
-
 	r.With(mw.RequirePermission(admin.PermUsersRead)).Get("/users", h.listUsers)
 	r.With(mw.RequirePermission(admin.PermUsersRead)).Get("/users/{id}", h.getUser)
 	r.With(mw.RequirePermission(admin.PermUsersWrite)).Patch("/users/{id}", h.patchUser)

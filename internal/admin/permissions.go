@@ -3,8 +3,6 @@ package admin
 
 // Permission slugs enforced by middleware and seeded in migrations.
 const (
-	PermWaitlistRead  = "waitlist:read"
-	PermWaitlistWrite = "waitlist:write"
 	PermUsersRead     = "users:read"
 	PermUsersWrite    = "users:write"
 	PermCatalogsRead  = "catalogs:read"

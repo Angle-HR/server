@@ -38,7 +38,7 @@ func TestEmailWorker_Work_Success(t *testing.T) {
 	w := &EmailWorker{Mailer: m}
 	job := &fluvio.Job[mailer.EmailArgs]{
 		Args: mailer.EmailArgs{
-			Type:      "waitlist_confirmation",
+			Type:      "email_verification",
 			Recipient: "recipient@acme.com",
 		},
 	}

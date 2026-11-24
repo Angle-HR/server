@@ -45,53 +45,6 @@ func TestLookupCountryByIDSQL(t *testing.T) {
 	}
 }
 
-func TestInsertWaitlistSignupSQL(t *testing.T) {
-	t.Parallel()
-
-	sql, args, err := InsertWaitlistSignup("jane@acme.com", "uk", "inferred", []byte("{}"))
-	if err != nil {
-		t.Fatalf("InsertWaitlistSignup: %v", err)
-	}
-
-	if len(args) != 4 {
-		t.Fatalf("args: got %v", args)
-	}
-
-	if !strings.Contains(sql, `INSERT INTO "waitlist"`) {
-		t.Fatalf("sql: %q", sql)
-	}
-	if !strings.Contains(sql, `"email", "region", "region_source", "metadata"`) {
-		t.Fatalf("sql: %q", sql)
-	}
-	if !strings.Contains(sql, `ON CONFLICT ("email") DO NOTHING RETURNING "uuid"`) {
-		t.Fatalf("sql: %q", sql)
-	}
-}
-
-func TestInsertWaitlistRegistrySQL(t *testing.T) {
-	t.Parallel()
-
-	token := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
-	sql, args, err := InsertWaitlistRegistry("jane@acme.com", "uk", "explicit", token)
-	if err != nil {
-		t.Fatalf("InsertWaitlistRegistry: %v", err)
-	}
-
-	if len(args) != 4 {
-		t.Fatalf("args: got %v", args)
-	}
-
-	if !strings.Contains(sql, `INSERT INTO "registry"`) {
-		t.Fatalf("sql: %q", sql)
-	}
-	if !strings.Contains(sql, `ON CONFLICT ("email") DO NOTHING`) {
-		t.Fatalf("sql: %q", sql)
-	}
-	if !strings.Contains(sql, `"waitlist_token"`) {
-		t.Fatalf("sql: %q", sql)
-	}
-}
-
 func TestListActiveIndustriesSQL(t *testing.T) {
 	t.Parallel()
 

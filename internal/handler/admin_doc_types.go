@@ -51,25 +51,6 @@ type AdminMeEnvelope struct {
 	Meta *apidoc.Meta   `json:"meta,omitempty"`
 }
 
-// AdminWaitlistListEnvelope wraps waitlist list responses.
-type AdminWaitlistListEnvelope struct {
-	Data []adminWaitlistItem `json:"data"`
-	Meta *apidoc.Meta        `json:"meta,omitempty"`
-}
-
-// AdminWaitlistDetailEnvelope wraps waitlist detail responses.
-type AdminWaitlistDetailEnvelope struct {
-	Data adminWaitlistDetail `json:"data"`
-	Meta *apidoc.Meta        `json:"meta,omitempty"`
-}
-
-// AdminWaitlistPatchRequest is the waitlist patch body.
-type AdminWaitlistPatchRequest struct {
-	WantsEarlyAccess *bool           `json:"wants_early_access"`
-	WantsUserTesting *bool           `json:"wants_user_testing"`
-	Metadata         json.RawMessage `json:"metadata"`
-}
-
 // AdminUserListEnvelope wraps user list responses.
 type AdminUserListEnvelope struct {
 	Data []adminUserListItem `json:"data"`

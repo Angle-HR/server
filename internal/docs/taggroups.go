@@ -6,7 +6,6 @@ var waitlistTagGroup = map[string]any{
 	"name": "Waitlist",
 	"tags": []any{
 		"waitlist/reference",
-		"waitlist/signup",
 	},
 }
 
@@ -29,7 +28,6 @@ var adminTagGroup = map[string]any{
 	"name": "Admin",
 	"tags": []any{
 		"admin/auth",
-		"admin/waitlist",
 		"admin/users",
 		"admin/catalogs",
 		"admin/jobs",
@@ -55,12 +53,6 @@ var apiTagDefinitions = []map[string]any{
 		"name":          "waitlist/reference",
 		"description":   "Reference data for waitlist and onboarding forms: countries.",
 		"x-displayName": "Reference",
-	},
-	{
-		"name": "waitlist/signup",
-		"description": "Email-only waitlist registration. Creates a regional waitlist entry and global " +
-			"waitlist.registry row.",
-		"x-displayName": "Signup",
 	},
 	{
 		"name": "auth",
@@ -118,11 +110,6 @@ var apiTagDefinitions = []map[string]any{
 		"description": "Admin console login, invite acceptance, token refresh, and current admin profile " +
 			"with RBAC permissions.",
 		"x-displayName": "Auth",
-	},
-	{
-		"name":          "admin/waitlist",
-		"description":   "Cross-region waitlist list, detail, flag updates, soft-delete, and restore.",
-		"x-displayName": "Waitlist",
 	},
 	{
 		"name":          "admin/users",

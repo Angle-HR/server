@@ -16,18 +16,17 @@ var templatesFS embed.FS
 
 // Email job types.
 const (
-	TypeWaitlistConfirmation = "waitlist_confirmation"
-	TypeMoreInfoAck          = "more_info_ack"
-	TypeEmailVerification    = "email_verification"
-	TypeOnboardingComplete   = "onboarding_complete"
-	TypeAdminInvite          = "admin_invite"
-	TypePasswordReset        = "password_reset"
-	TypeLoginOTP             = "login_otp"
-	TypeOrgInvite            = "org_invite"
-	TypeKYBFailed            = "kyb_failed"
-	TypeKYBReviewQueued      = "kyb_review_queued"
-	TypeKYBNudge1            = "kyb_nudge_1"
-	TypeKYBNudge2            = "kyb_nudge_2"
+	TypeMoreInfoAck        = "more_info_ack"
+	TypeEmailVerification  = "email_verification"
+	TypeOnboardingComplete = "onboarding_complete"
+	TypeAdminInvite        = "admin_invite"
+	TypePasswordReset      = "password_reset"
+	TypeLoginOTP           = "login_otp"
+	TypeOrgInvite          = "org_invite"
+	TypeKYBFailed          = "kyb_failed"
+	TypeKYBReviewQueued    = "kyb_review_queued"
+	TypeKYBNudge1          = "kyb_nudge_1"
+	TypeKYBNudge2          = "kyb_nudge_2"
 
 	// Hiring emails. They are sent from the region's outbox by hiring-outbox, so candidate details stay in the
 	// region; they are not queued through the global job queue.
@@ -116,8 +115,6 @@ func (m *Mailer) selectTemplate(emailType string) (templateName, subject, baseUR
 	}
 
 	switch emailType {
-	case TypeWaitlistConfirmation:
-		return "waitlist_confirmation.html", "You're on the OpenHR waitlist", baseURL, nil
 	case TypeMoreInfoAck:
 		return "more_info_ack.html", "Thanks for sharing more about yourself", baseURL, nil
 	case TypeEmailVerification:

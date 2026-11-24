@@ -6,11 +6,11 @@
 #     HIRING_ORG_EVENTS=on ORG_REMOTE=on IDENTITY_REMOTE=on ORG_APPLY=grpc IDENTITY_QUEUE=grpc SERVER_HIRING_EVENTS=off
 #     (plus the UPSTREAM_*_URL and *_REMOTE variables of the split stack, docs/microservices/local-dev.md)
 #
-#   1  business account: signup, verify, profile, address (the step that gives it a country) runs the saga:
+#   1  business account: signup, verify, profile (the step that gives it a country) runs the saga:
 #      saga row completed, users_registry points at uk, pending rows gone, user + organization + progress in uk,
 #      one org.region.moved.v1 in the uk outbox and on the ORG stream; the session keeps working
-#   2  a repeated address step moves nothing again (no new saga, still one event)
-#   3  compensation and resume: identity stopped, the address step fails and leaves a stalled saga; identity started,
+#   2  a repeated profile step moves nothing again (no new saga, still one event); the address step needs no country
+#   3  compensation and resume: identity stopped, the profile step fails and leaves a stalled saga; identity started,
 #      the same request succeeds; the failed attempt is compensated, the account is in uk exactly once
 #   4  crash recovery: a saga row left in "started" is finished by the resumer without any request
 #   5  org.company.deleted/reactivated.v1: admin deletes then reactivates the company (idempotent); applications lifts
@@ -68,9 +68,6 @@ new_account() {
   CSRF="$(jq -r '.data.csrf_token // empty' <<<"$body")"; [ -n "$CSRF" ] || fail "login $email: $body"
   USER_ID="$(pg global "SELECT id FROM accounts.pending_users WHERE email = '$email'")"
   [ -n "$USER_ID" ] || fail "no pending user for $email"
-  api PUT /onboarding/profile "$(jq -nc --arg r "$COMPANY_ROLE" '{account_type:"business",legal_business_name:"Saga E2E Ltd",legal_full_name:"Sam Saga",company_role_id:$r}')"
-  [ "$LAST" = 200 ] || fail "profile step (HTTP $LAST): $BODY"
-  [ "$(pg global "SELECT count(*) FROM accounts.pending_organizations WHERE owner_user_id = '$USER_ID'")" = 1 ] || fail "profile step did not leave a pending organization"
 }
 LAST=""; BODY=""
 api() { # api METHOD PATH [BODY] uses JAR and CSRF; sets LAST (status) and BODY
@@ -83,6 +80,7 @@ api() { # api METHOD PATH [BODY] uses JAR and CSRF; sets LAST (status) and BODY
   printf '%s %s -> %s\n' "$1" "$2" "$LAST"
   return 0
 }
+profile_body() { jq -nc --arg r "$COMPANY_ROLE" --arg c "$UK_COUNTRY" '{account_type:"business",country_id:$c,legal_business_name:"Saga E2E Ltd",legal_full_name:"Sam Saga",company_role_id:$r}'; }
 address_body() { jq -nc --arg c "$UK_COUNTRY" '{country_id:$c,entry_mode:"manual",line_1:"10 Downing Street",city:"London",state_or_county:"Greater London",post_code:"SW1A 2AA",identification:{registration_number:"12345678"}}'; }
 
 step "0. preflight"
@@ -91,12 +89,12 @@ curl -fsS "${BASE%/api/v1}/healthz" >/dev/null || fail "web-bff not healthy at $
 [ "$(pg global "SELECT to_regclass('accounts.region_move_sagas') IS NOT NULL")" = t ] || fail "migration global_registry/000018 is not applied"
 ok "stack runs the saga ($PROJECT)"
 
-step "1. business account: the address step moves it into uk through the saga"
+step "1. business account: the profile step moves it into uk through the saga"
 EMAIL1="saga-1-$(date +%s)-$RANDOM@example.com"
 ORG_MSGS_BEFORE="$(stream_msgs ORG)"
 new_account "$EMAIL1"; U1="$USER_ID"; J1="$JAR"; C1="$CSRF"
-api PUT /onboarding/address "$(address_body)"
-[ "$LAST" = 200 ] || fail "address step (HTTP $LAST): $BODY"
+api PUT /onboarding/profile "$(profile_body)"
+[ "$LAST" = 200 ] || fail "profile step (HTTP $LAST): $BODY"
 [ "$(pg global "SELECT state FROM accounts.region_move_sagas WHERE user_id = '$U1'")" = completed ] || fail "saga is not completed"
 [ "$(pg global "SELECT region FROM auth.users_registry WHERE user_id = '$U1'")" = uk ] || fail "users_registry does not point at uk"
 [ "$(pg global "SELECT (SELECT count(*) FROM accounts.pending_users WHERE id='$U1') + (SELECT count(*) FROM accounts.pending_organizations WHERE owner_user_id='$U1') + (SELECT count(*) FROM accounts.pending_onboarding_progress WHERE user_id='$U1')")" = 0 ] || fail "pending rows remain"
@@ -108,12 +106,13 @@ until_val 20 1 pg uk "SELECT count(*) FROM events_outbox WHERE type='org.region.
 [ "$(pg uk "SELECT envelope->'data'->>'company_id' = '$ORG1' AND envelope->'data'->>'region' = 'uk' AND envelope->'data'->>'from_region' = 'global' FROM events_outbox WHERE type='org.region.moved.v1' AND partition_key='$U1'")" = t ] || fail "event payload"
 [ "$(stream_msgs ORG)" -gt "$ORG_MSGS_BEFORE" ] || fail "no message reached the ORG stream"
 ok "org.region.moved.v1 written in the same region and relayed to the ORG stream"
-J1="$JAR"; C1="$CSRF" # the address step rotated the session and its CSRF token
+J1="$JAR"; C1="$CSRF" # the profile step rotated the session and its CSRF token
 api GET /onboarding/status; [ "$LAST" = 200 ] || fail "session after the move (HTTP $LAST): $BODY"
 ok "the rotated session keeps working"
 
-step "2. repeating the address step moves nothing again"
-api PUT /onboarding/address "$(address_body)"; [ "$LAST" = 200 ] || fail "repeat (HTTP $LAST): $BODY"
+step "2. repeating the profile step moves nothing again; the address step needs no country"
+api PUT /onboarding/profile "$(profile_body)"; [ "$LAST" = 200 ] || fail "repeat (HTTP $LAST): $BODY"
+api PUT /onboarding/address "$(address_body | jq -c 'del(.country_id)')"; [ "$LAST" = 200 ] || fail "address without country_id (HTTP $LAST): $BODY"
 [ "$(pg global "SELECT count(*) FROM accounts.region_move_sagas WHERE user_id = '$U1'")" = 1 ] || fail "a second saga was created"
 [ "$(pg uk "SELECT count(*) FROM events_outbox WHERE type='org.region.moved.v1' AND partition_key='$U1'")" = 1 ] || fail "a second event was written"
 ok "one saga, one event"
@@ -122,8 +121,8 @@ step "3. identity down: the saga stalls and compensates; identity back: the same
 EMAIL3="saga-3-$(date +%s)-$RANDOM@example.com"
 new_account "$EMAIL3"; U3="$USER_ID"
 docker stop "$IDENTITY_CONTAINER" >/dev/null; IDENTITY_STOPPED=1
-api PUT /onboarding/address "$(address_body)"
-case "$LAST" in 5??) ok "address step failed while identity is down (HTTP $LAST)";; *) fail "expected 5xx with identity down, got $LAST: $BODY";; esac
+api PUT /onboarding/profile "$(profile_body)"
+case "$LAST" in 5??) ok "profile step failed while identity is down (HTTP $LAST)";; *) fail "expected 5xx with identity down, got $LAST: $BODY";; esac
 S3="$(pg global "SELECT state FROM accounts.region_move_sagas WHERE user_id = '$U3' ORDER BY created_at LIMIT 1")"
 case "$S3" in started|compensating|compensated) ok "saga is $S3 (not completed, not committed)";; *) fail "unexpected saga state $S3";; esac
 [ "$(pg global "SELECT region FROM auth.users_registry WHERE user_id = '$U3'")" = global ] || fail "registry moved although identity was down"
@@ -131,9 +130,9 @@ case "$S3" in started|compensating|compensated) ok "saga is $S3 (not completed, 
 docker start "$IDENTITY_CONTAINER" >/dev/null; IDENTITY_STOPPED=0
 until_val 90 healthy docker inspect -f '{{.State.Health.Status}}' "$IDENTITY_CONTAINER" 2>/dev/null || fail "identity did not become healthy"
 sleep 2
-api PUT /onboarding/address "$(address_body)"
-[ "$LAST" = 200 ] || { sleep 5; api PUT /onboarding/address "$(address_body)"; }
-[ "$LAST" = 200 ] || fail "address step after identity is back (HTTP $LAST): $BODY"
+api PUT /onboarding/profile "$(profile_body)"
+[ "$LAST" = 200 ] || { sleep 5; api PUT /onboarding/profile "$(profile_body)"; }
+[ "$LAST" = 200 ] || fail "profile step after identity is back (HTTP $LAST): $BODY"
 [ "$(pg global "SELECT region FROM auth.users_registry WHERE user_id = '$U3'")" = uk ] || fail "registry does not point at uk"
 [ "$(pg global "SELECT string_agg(state, ',' ORDER BY created_at) FROM accounts.region_move_sagas WHERE user_id = '$U3'")" = compensated,completed ] || fail "expected a compensated then a completed saga: $(pg global "SELECT string_agg(state, ',' ORDER BY created_at) FROM accounts.region_move_sagas WHERE user_id = '$U3'")"
 [ "$(pg uk "SELECT (SELECT count(*) FROM accounts.users WHERE id='$U3') || '/' || (SELECT count(*) FROM accounts.organizations WHERE owner_user_id='$U3')")" = 1/1 ] || fail "uk does not hold the account exactly once"
@@ -146,7 +145,7 @@ new_account "$EMAIL4"; U4="$USER_ID"
 pg global "INSERT INTO accounts.region_move_sagas (id, user_id, target_region, state, updated_at) VALUES (gen_random_uuid(), '$U4', 'uk', 'started', now() - interval '10 minutes')" >/dev/null
 until_val 60 completed pg global "SELECT state FROM accounts.region_move_sagas WHERE user_id = '$U4'" || fail "the resumer did not finish the saga (set REGION_MOVE_RESUME_INTERVAL=2s on org): state $(pg global "SELECT state FROM accounts.region_move_sagas WHERE user_id = '$U4'")"
 [ "$(pg global "SELECT region FROM auth.users_registry WHERE user_id = '$U4'")" = uk ] || fail "registry does not point at uk"
-[ "$(pg uk "SELECT count(*) FROM accounts.organizations WHERE owner_user_id='$U4'")" = 1 ] || fail "organization not copied"
+[ "$(pg uk "SELECT count(*) FROM accounts.users WHERE id='$U4'")" = 1 ] || fail "user not copied"
 ok "resumer completed the saga without any request"
 
 step "5. org.company.deleted / reactivated"

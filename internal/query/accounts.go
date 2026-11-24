@@ -152,6 +152,19 @@ func UpdateAccountUserBusinessProfile(userID uuid.UUID, legalFullName string) (s
 		ToSQL())
 }
 
+// UpdateAccountUserBusinessProfileWithCountry is UpdateAccountUserBusinessProfile that also saves the country
+// given on the profile step.
+func UpdateAccountUserBusinessProfileWithCountry(userID uuid.UUID, legalFullName string, countryID uuid.UUID) (string, []any, error) {
+	return mustSQL(postgres.Update("users").
+		Set("account_type", "business").
+		Set("legal_full_name", legalFullName).
+		Set("country_id", countryID).
+		Where("id", "=", userID).
+		WhereNull("deleted_at").
+		Returning("id").
+		ToSQL())
+}
+
 // SetAccountOnboardingCompleted returns SQL to finalize onboarding.
 func SetAccountOnboardingCompleted(userID uuid.UUID) (string, []any, error) {
 	return mustSQL(postgres.Update("users").

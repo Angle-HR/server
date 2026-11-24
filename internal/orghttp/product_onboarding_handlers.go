@@ -94,7 +94,8 @@ type productProfileBody struct {
 }
 
 type productAddressBody struct {
-	CountryID        string            `json:"country_id" validate:"required,uuid"`
+	// CountryID is optional: a business gives its country on the profile step and the saved one is used.
+	CountryID        string            `json:"country_id" validate:"omitempty,uuid"`
 	EntryMode        string            `json:"entry_mode" validate:"required,oneof=search manual"`
 	Line1            string            `json:"line_1" validate:"required_if=EntryMode manual,max=200"`
 	Line2            *string           `json:"line_2"`
@@ -311,6 +312,7 @@ func (h *ProductOnboardingHandler) saveBusinessProfile(
 	reqp *productProfileBody,
 ) (ProductProfileData, error) {
 	req := *reqp
+	originalReg := reg
 	if err := h.validateBusinessProfile(req); err != nil {
 		return ProductProfileData{}, err
 	}
@@ -318,9 +320,19 @@ func (h *ProductOnboardingHandler) saveBusinessProfile(
 	if err := h.ensureActiveCompanyRole(ctx, roleID); err != nil {
 		return ProductProfileData{}, err
 	}
+	countryID := uuid.MustParse(*req.CountryID)
+	if err := h.ensureActiveCountry(ctx, countryID); err != nil {
+		return ProductProfileData{}, err
+	}
 
-	// Business accounts don't give a country until the address step, so
-	// this write may still land in the global holding area.
+	// The country is given here, so this is the point a still-global account migrates into its region.
+	if reg == region.RegionGlobal {
+		newReg, err := h.moveToCountryRegion(ctx, userID, countryID)
+		if err != nil {
+			return ProductProfileData{}, err
+		}
+		reg = newReg
+	}
 	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
 	if err != nil {
 		return ProductProfileData{}, apperror.ErrInternal
@@ -344,7 +356,7 @@ func (h *ProductOnboardingHandler) saveBusinessProfile(
 	}
 	defer rollbackOnError(ctx, tx)
 
-	userSQL, userArgs, err := updateBusinessProfileSQL(reg, userID, *req.LegalFullName)
+	userSQL, userArgs, err := updateBusinessProfileSQL(reg, userID, *req.LegalFullName, countryID)
 	if err != nil {
 		return ProductProfileData{}, apperror.ErrInternal
 	}
@@ -369,12 +381,18 @@ func (h *ProductOnboardingHandler) saveBusinessProfile(
 		return ProductProfileData{}, apperror.ErrInternal
 	}
 
+	tokens, err := h.reissueIfMigrated(userID, originalReg, reg)
+	if err != nil {
+		return ProductProfileData{}, apperror.ErrInternal
+	}
+
 	next := onboarding.NextStep(req.AccountType, completed)
 	return ProductProfileData{
 		AccountType:       req.AccountType,
 		LegalBusinessName: req.LegalBusinessName,
 		LegalFullName:     req.LegalFullName,
 		CompanyRoleID:     req.CompanyRoleID,
+		CountryID:         req.CountryID,
 		Region:            string(reg),
 		Onboarding: OnboardingProgressSummary{
 			Status:         onboarding.StatusInProgress,
@@ -382,6 +400,7 @@ func (h *ProductOnboardingHandler) saveBusinessProfile(
 			CompletedSteps: completed,
 			NextStep:       &next,
 		},
+		Session: tokens,
 	}, nil
 }
 
@@ -464,14 +483,24 @@ func (h *ProductOnboardingHandler) saveAddress(
 ) (ProductAddressData, error) {
 	req := *reqp
 	originalReg := reg
-	countryID := uuid.MustParse(req.CountryID)
-	if err := h.ensureActiveCountry(ctx, countryID); err != nil {
-		return ProductAddressData{}, err
-	}
 
 	pool, err := resolvePool(h.Router, h.GlobalDB, reg)
 	if err != nil {
 		return ProductAddressData{}, fmt.Errorf("save address: resolve database: %w", err)
+	}
+
+	// The country saved on the profile step wins; accounts that predate that (still global, no country) send it here.
+	var countryID uuid.UUID
+	if saved, serr := loadStatusUser(ctx, pool, reg, userID); serr == nil && saved.countryID != nil {
+		countryID = *saved.countryID
+	} else if isUUID(req.CountryID) {
+		countryID = uuid.MustParse(req.CountryID)
+	} else {
+		return ProductAddressData{}, apperror.New(apperror.CodeValidationError, apperror.MsgInvalidCountryID)
+	}
+	req.CountryID = countryID.String()
+	if err = h.ensureActiveCountry(ctx, countryID); err != nil {
+		return ProductAddressData{}, err
 	}
 
 	accountType, err := h.loadAccountType(ctx, pool, reg, userID)
@@ -1556,6 +1585,9 @@ func (h *ProductOnboardingHandler) validateBusinessProfile(req productProfileBod
 	}
 	if req.CompanyRoleID == nil || !isUUID(*req.CompanyRoleID) {
 		return apperror.New(apperror.CodeValidationError, "company_role_id is required")
+	}
+	if req.CountryID == nil || !isUUID(*req.CountryID) {
+		return apperror.New(apperror.CodeValidationError, apperror.MsgInvalidCountryID)
 	}
 	return nil
 }

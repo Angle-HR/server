@@ -84,11 +84,11 @@ func lookupOnboardingProgressSQL(reg region.Region, userID uuid.UUID) (string, [
 	return query.LookupOnboardingProgress(userID)
 }
 
-func updateBusinessProfileSQL(reg region.Region, userID uuid.UUID, legalFullName string) (string, []any, error) {
+func updateBusinessProfileSQL(reg region.Region, userID uuid.UUID, legalFullName string, countryID uuid.UUID) (string, []any, error) {
 	if reg == region.RegionGlobal {
 		return query.UpdatePendingUserBusinessProfile(userID, legalFullName)
 	}
-	return query.UpdateAccountUserBusinessProfile(userID, legalFullName)
+	return query.UpdateAccountUserBusinessProfileWithCountry(userID, legalFullName, countryID)
 }
 
 func upsertOrganizationProfileSQL(

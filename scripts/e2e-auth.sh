@@ -182,7 +182,7 @@ job_flow() {
   step "6. onboarding (business) - prerequisite for jobs"
   api GET /onboarding/status
   [ "${LAST_STATUS:0:1}" = 2 ] || { stop_jobs "onboarding status unavailable (HTTP $LAST_STATUS)"; return; }
-  api PUT /onboarding/profile "$(jq -nc --arg r "$COMPANY_ROLE" '{account_type:"business",legal_business_name:"ANGLE E2E Ltd",legal_full_name:"Jerry Oluwasegun",company_role_id:$r}')"
+  api PUT /onboarding/profile "$(jq -nc --arg r "$COMPANY_ROLE" --arg c "$UK_COUNTRY" '{account_type:"business",country_id:$c,legal_business_name:"ANGLE E2E Ltd",legal_full_name:"Jerry Oluwasegun",company_role_id:$r}')"
   [ "${LAST_STATUS:0:1}" = 2 ] || { stop_jobs "onboarding profile rejected (HTTP $LAST_STATUS)"; return; }
   api PUT /onboarding/address "$(jq -nc --arg c "$UK_COUNTRY" '{country_id:$c,entry_mode:"manual",line_1:"10 Downing Street",city:"London",state_or_county:"Greater London",post_code:"SW1A 2AA",identification:{registration_number:"12345678"}}')"
   [ "${LAST_STATUS:0:1}" = 2 ] || { stop_jobs "onboarding address rejected (HTTP $LAST_STATUS)"; return; }

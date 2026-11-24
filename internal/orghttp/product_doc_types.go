@@ -53,7 +53,7 @@ type ProductProfileEnvelope struct {
 
 // ProductAddressRequest upserts workspace address.
 type ProductAddressRequest struct {
-	CountryID        string            `json:"country_id" example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
+	CountryID        string            `json:"country_id,omitempty" example:"a1b2c3d4-e5f6-4789-a012-3456789abcde"`
 	EntryMode        string            `json:"entry_mode" example:"manual" enums:"search,manual"`
 	Line1            string            `json:"line_1" example:"10 Downing Street"`
 	Line2            *string           `json:"line_2,omitempty"`

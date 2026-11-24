@@ -137,7 +137,7 @@ call "$JAR" "" POST /auth/login "$(jq -nc --arg e "$EMAIL" --arg p "$PASS" '{ema
 CSRF="$(jq -r '.data.csrf_token' <<<"$LAST_BODY")"
 
 step "2. company: business onboarding"
-api PUT /onboarding/profile "$(jq -nc --arg r "$COMPANY_ROLE" '{account_type:"business",legal_business_name:"ANGLE Apply E2E Ltd",legal_full_name:"Jerry Oluwasegun",company_role_id:$r}')"; expect profile
+api PUT /onboarding/profile "$(jq -nc --arg r "$COMPANY_ROLE" --arg c "$UK_COUNTRY" '{account_type:"business",country_id:$c,legal_business_name:"ANGLE Apply E2E Ltd",legal_full_name:"Jerry Oluwasegun",company_role_id:$r}')"; expect profile
 api PUT /onboarding/address "$(jq -nc --arg c "$UK_COUNTRY" '{country_id:$c,entry_mode:"manual",line_1:"10 Downing Street",city:"London",state_or_county:"Greater London",post_code:"SW1A 2AA",identification:{registration_number:"12345678"}}')"; expect address
 api PUT /onboarding/compliance "$(jq -nc --arg b "$BUSINESS_TYPE" --arg i "$INDUSTRY" '{business_type_id:$b,industry_id:$i,employee_count:25}')"; expect compliance
 api POST /onboarding/complete; expect complete

@@ -41,11 +41,11 @@ curl -s "$BASE/onboarding/status" -H "$AUTH" | pretty
 
 step "5. PUT /onboarding/profile (business)"
 curl -s -X PUT "$BASE/onboarding/profile" -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"account_type\":\"business\",\"legal_business_name\":\"ANGLE E2E Ltd\",\"legal_full_name\":\"Jerry Oluwasegun\",\"company_role_id\":\"$COMPANY_ROLE\"}" | pretty
+  -d "{\"account_type\":\"business\",\"legal_business_name\":\"ANGLE E2E Ltd\",\"legal_full_name\":\"Jerry Oluwasegun\",\"company_role_id\":\"$COMPANY_ROLE\",\"country_id\":\"$UK_COUNTRY\"}" | pretty
 
 step "6. PUT /onboarding/address"
 curl -s -X PUT "$BASE/onboarding/address" -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"country_id\":\"$UK_COUNTRY\",\"entry_mode\":\"manual\",\"line_1\":\"10 Downing Street\",\"city\":\"London\",\"state_or_county\":\"Greater London\",\"post_code\":\"SW1A 2AA\",\"identification\":{\"registration_number\":\"12345678\"}}" | pretty
+  -d "{\"entry_mode\":\"manual\",\"line_1\":\"10 Downing Street\",\"city\":\"London\",\"state_or_county\":\"Greater London\",\"post_code\":\"SW1A 2AA\",\"identification\":{\"registration_number\":\"12345678\"}}" | pretty
 
 step "7. PUT /onboarding/compliance"
 curl -s -X PUT "$BASE/onboarding/compliance" -H "$AUTH" -H 'Content-Type: application/json' \

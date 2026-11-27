@@ -262,6 +262,8 @@ type Change struct {
 	Decision string
 	Block    *Block
 	Email    *apply.OutboxEmail
+	// Message is a message written by a person; it replaces Email.
+	Message *NewMessage
 }
 
 // Store is one region's database as this package uses it.
@@ -303,6 +305,8 @@ type Service struct {
 	Store Store
 	// Pipeline holds stages, notes, tags, follows and the timeline. Nil turns those routes off.
 	Pipeline PipelineStore
+	// Mail keeps email templates and the messages sent to candidates.
+	Mail MessageStore
 	// Names resolves actor names in the timeline. Optional.
 	Names UserNames
 	// Jobs is what the application side knows about jobs: access to a job and what a status email says about it.
@@ -503,6 +507,8 @@ type StatusInput struct {
 	Note   string
 	// Reason is a disqualification reason code, optional with a rejection.
 	Reason string
+	// Message, with a hire or a rejection, is emailed to the candidate instead of the standard email.
+	Message *MessageInput
 }
 
 // Result is the outcome of a status change.
@@ -512,7 +518,11 @@ type Result struct {
 }
 
 // applyOpts are the pipeline parts of a change.
-type applyOpts struct{ StageID, Reason string }
+type applyOpts struct {
+	StageID, Reason string
+	// Message is written by a person and goes to the candidate with a hire or a rejection, instead of the standard email.
+	Message *MessageInput
+}
 
 func cleanReason(to, reason string) (string, error) {
 	reason = strings.TrimSpace(reason)
@@ -569,7 +579,7 @@ func (s *Service) SetStatus(ctx context.Context, c Caller, jobID, appID string, 
 	if err != nil {
 		return nil, err
 	}
-	return s.apply(ctx, c, a, st, appID, in.Status, note, "", applyOpts{Reason: reason})
+	return s.apply(ctx, c, a, st, appID, in.Status, note, "", applyOpts{Reason: reason, Message: in.Message})
 }
 
 // ReviewInput is the decision on a flagged application.
@@ -578,6 +588,8 @@ type ReviewInput struct {
 	Note     string
 	// Reason is a disqualification reason code, optional with a rejection.
 	Reason string
+	// Message is emailed to the candidate with a rejection, instead of the standard email.
+	Message *MessageInput
 }
 
 // Review decides a flagged application. The reviewer must have opened the application since it was flagged: the
@@ -619,7 +631,7 @@ func (s *Service) Review(ctx context.Context, c Caller, jobID, appID string, in 
 	if err != nil {
 		return nil, err
 	}
-	return s.apply(ctx, c, a, st, appID, to, note, in.Decision, applyOpts{Reason: reason})
+	return s.apply(ctx, c, a, st, appID, to, note, in.Decision, applyOpts{Reason: reason, Message: in.Message})
 }
 
 // apply works out everything a change brings with it and has the store do it in one transaction: the retention
@@ -632,6 +644,9 @@ func (s *Service) apply(ctx context.Context, c Caller, a *JobAccess, st *ChangeS
 		RetentionMonths: a.RetentionMonths, Decision: decision,
 		StageID: o.StageID, Reason: o.Reason,
 	}
+	if o.Message != nil && !Final(to) {
+		return nil, invalid("message", "a message goes with a hire or a rejection")
+	}
 	if Final(to) {
 		if to == StatusRejected && st.ReapplyBlockMonths > 0 && s.Hasher.Enabled() {
 			ch.Block = &Block{
@@ -639,7 +654,13 @@ func (s *Service) apply(ctx context.Context, c Caller, a *JobAccess, st *ChangeS
 				Until:     now.AddDate(0, st.ReapplyBlockMonths, 0),
 			}
 		}
-		if st.SendStatusEmails && (to == StatusRejected || to == StatusHired) {
+		if o.Message != nil && (to == StatusRejected || to == StatusHired) {
+			m, err := s.decisionMessage(ctx, c, st, a.JobID, appID, o.Message)
+			if err != nil {
+				return nil, err
+			}
+			ch.Message = m
+		} else if st.SendStatusEmails && (to == StatusRejected || to == StatusHired) {
 			kind := "application_rejected"
 			if to == StatusHired {
 				kind = "application_hired"

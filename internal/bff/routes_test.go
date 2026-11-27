@@ -32,7 +32,8 @@ func TestHiringPath(t *testing.T) {
 		"/public/jobs/abc/applications", "/public/jobs/abc/uploads", "/jobs/1/applications", "/jobs/1/applications/2/status",
 		"/jobs/1/applications/2/files/3", "/hiring/applicant-settings",
 		"/jobs/1/stages", "/jobs/1/stages/order", "/jobs/1/stages/2", "/jobs/1/applications/2/stage", "/jobs/1/applications/2/notes",
-		"/jobs/1/applications/bulk/stage", "/hiring/tags", "/hiring/tags/3", "/hiring/disqualification-reasons",
+		"/jobs/1/applications/bulk/stage", "/hiring/tags", "/hiring/tags/3", "/hiring/disqualification-reasons", "/hiring/email-templates", "/hiring/email-templates/3", "/hiring/email-settings",
+		"/jobs/1/applications/2/emails", "/jobs/1/applications/2/emails/preview",
 		// everything else stays on the monolith
 		"/auth/login", "/auth/me", "/organization", "/organization/members", "/organization/agreements", "/organization/privacy-contact", "/organization/agreements/x", "/public", "/public/jobs", "/public/companies", "/public/companies/acme/jobs",
 		"/organization/profile",

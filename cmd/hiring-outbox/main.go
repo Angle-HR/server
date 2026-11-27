@@ -98,7 +98,13 @@ func run() error {
 		jobs := jobsource.NewRegional(pool)
 		w := &outbox.Worker{Tenants: jobs.TenantIDs, Store: store, Sender: sender, Logger: slogger}
 		res, err := w.Run(ctx)
-		attrs := []any{"region", string(reg), "sent", res.Sent, "retry", res.Retry, "failed", res.Failed}
+		// Messages people wrote to candidates, including scheduled ones that are now due.
+		mres, merr := w.RunMessages(ctx, store)
+		res.Sent, res.Retry, res.Failed = res.Sent+mres.Sent, res.Retry+mres.Retry, res.Failed+mres.Failed
+		if err == nil {
+			err = merr
+		}
+		attrs := []any{"region", string(reg), "sent", res.Sent, "retry", res.Retry, "failed", res.Failed, "messages_sent", mres.Sent}
 		if err != nil {
 			failed = true
 			slogger.Error("hiring outbox failed", append(attrs, "error", err)...)

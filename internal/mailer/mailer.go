@@ -34,6 +34,8 @@ const (
 	TypeApplicationRejected = "application_rejected"
 	TypeApplicationHired    = "application_hired"
 	TypeRetentionNotice     = "retention_notice"
+	// TypeCandidateMessage is an email a person at a company wrote to a candidate (Subject, MessageBody, ReplyTo).
+	TypeCandidateMessage = "candidate_message"
 )
 
 // EmailArgs defines job queue arguments for email notifications.
@@ -54,6 +56,10 @@ type EmailArgs struct {
 	NoticeURL string   `json:"notice_url,omitempty"` // the job's applicant privacy notice
 	Lines     []string `json:"lines,omitempty"`      // retention notice: one line per job
 	Count     int      `json:"count,omitempty"`
+	// MessageBody is the plain text of a candidate message; the template turns it into paragraphs.
+	MessageBody string `json:"message_body,omitempty"`
+	// ReplyTo, when set, is where a reply goes (a candidate message only).
+	ReplyTo string `json:"reply_to,omitempty"`
 }
 
 // Kind returns the job kind name.
@@ -147,6 +153,8 @@ func (m *Mailer) selectTemplate(emailType string) (templateName, subject, baseUR
 		return "application_rejected.html", "An update on your application", baseURL, nil
 	case TypeApplicationHired:
 		return "application_hired.html", "Good news about your application", baseURL, nil
+	case TypeCandidateMessage:
+		return "candidate_message.html", "A message about your application", baseURL, nil
 	case TypeRetentionNotice:
 		return "retention_notice.html", "Applications deleted under your retention policy", baseURL, nil
 	default:
@@ -213,6 +221,7 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 	message := []byte(fmt.Sprintf(
 		"To: %s\r\n"+
 			"From: %s\r\n"+
+			"%s"+
 			"Subject: %s\r\n"+
 			"MIME-Version: 1.0\r\n"+
 			"Content-Type: text/html; charset=UTF-8\r\n"+
@@ -220,6 +229,7 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 			"%s\r\n",
 		args.Recipient,
 		fromHeader,
+		replyToHeader(args),
 		subject,
 		body.String(),
 	))
@@ -266,10 +276,21 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 
 func isHiringType(t string) bool {
 	switch t {
-	case TypeApplicationReceived, TypeApplicationRejected, TypeApplicationHired:
+	case TypeApplicationReceived, TypeApplicationRejected, TypeApplicationHired, TypeCandidateMessage:
 		return true
 	}
 	return false
+}
+
+// replyToHeader is the Reply-To line of a candidate message, or nothing.
+func replyToHeader(args EmailArgs) string {
+	if args.Type != TypeCandidateMessage {
+		return ""
+	}
+	if r := cleanHeader(args.ReplyTo); r != "" {
+		return "Reply-To: " + r + "\r\n"
+	}
+	return ""
 }
 
 // cleanHeader makes a value safe to put in a mail header: a line break would let the text add headers of its own.
@@ -299,4 +320,15 @@ func formatFromHeader(name, email string) string {
 // SetSendMailForTesting allows setting a custom sendMail implementation for unit tests.
 func SetSendMailForTesting(m *Mailer, fn func(addr string, a smtp.Auth, from string, to []string, msg []byte) error) {
 	m.sendMail = fn
+}
+
+// Paragraphs splits a candidate message into paragraphs at blank lines; the template escapes each one.
+func (e EmailArgs) Paragraphs() []string {
+	var out []string
+	for _, p := range strings.Split(strings.ReplaceAll(e.MessageBody, "\r\n", "\n"), "\n\n") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

@@ -269,6 +269,30 @@ definitions:
             url:
                 type: string
         type: object
+    github_com_Angle-HR_server_internal_hiring_applications.Message:
+        properties:
+            body:
+                type: string
+            created_at:
+                type: string
+            error:
+                description: Error is a short reason when Status is failed.
+                type: string
+            id:
+                type: string
+            scheduled_at:
+                type: string
+            sender_id:
+                type: string
+            sent_at:
+                type: string
+            status:
+                type: string
+            subject:
+                type: string
+            template_id:
+                type: string
+        type: object
     github_com_Angle-HR_server_internal_hiring_applications.MoveResult:
         properties:
             decided_at:
@@ -310,6 +334,13 @@ definitions:
                     type: integer
                 description: StageCounts are the applications per stage id for the whole job, whatever the filters.
                 type: object
+        type: object
+    github_com_Angle-HR_server_internal_hiring_applications.Preview:
+        properties:
+            body:
+                type: string
+            subject:
+                type: string
         type: object
     github_com_Angle-HR_server_internal_hiring_applications.Reason:
         properties:
@@ -407,6 +438,19 @@ definitions:
             id:
                 type: string
             name:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_applications.Template:
+        properties:
+            body:
+                type: string
+            id:
+                type: string
+            name:
+                type: string
+            subject:
+                type: string
+            updated_at:
                 type: string
         type: object
     github_com_Angle-HR_server_internal_hiring_draft.AuditEvent:
@@ -1494,6 +1538,10 @@ definitions:
         properties:
             decision:
                 type: string
+            message:
+                allOf:
+                    - $ref: '#/definitions/internal_hiring_apphttp.MessageRequest'
+                description: Message is emailed to the candidate with a rejection, instead of the standard email.
             note:
                 type: string
             reason:
@@ -1502,6 +1550,10 @@ definitions:
         type: object
     internal_hiring_apphttp.ApplicationStatusRequest:
         properties:
+            message:
+                allOf:
+                    - $ref: '#/definitions/internal_hiring_apphttp.MessageRequest'
+                description: Message is emailed to the candidate with a hire or a rejection, instead of the standard email.
             note:
                 type: string
             reason:
@@ -1530,6 +1582,10 @@ definitions:
                 items:
                     type: string
                 type: array
+            message:
+                allOf:
+                    - $ref: '#/definitions/internal_hiring_apphttp.MessageRequest'
+                description: Message is emailed to each candidate (placeholders are filled for each) when the stage is Hired or Disqualified.
             note:
                 type: string
             reason:
@@ -1537,10 +1593,45 @@ definitions:
             stage_id:
                 type: string
         type: object
+    internal_hiring_apphttp.EmailSettings:
+        properties:
+            reply_to:
+                description: ReplyTo is where candidates' replies go. Empty means replies are not read.
+                type: string
+        type: object
+    internal_hiring_apphttp.EmailSettingsEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/internal_hiring_apphttp.EmailSettings'
+        type: object
     internal_hiring_apphttp.FileLinkEnvelope:
         properties:
             data:
                 $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.FileLink'
+        type: object
+    internal_hiring_apphttp.MessageEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Message'
+        type: object
+    internal_hiring_apphttp.MessageRequest:
+        properties:
+            body:
+                type: string
+            schedule_at:
+                description: ScheduleAt sends the message then (RFC 3339), between a minute and 90 days from now. Not with a decision.
+                type: string
+            subject:
+                type: string
+            template_id:
+                type: string
+        type: object
+    internal_hiring_apphttp.MessagesEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Message'
+                type: array
         type: object
     internal_hiring_apphttp.MoveResultEnvelope:
         properties:
@@ -1549,6 +1640,10 @@ definitions:
         type: object
     internal_hiring_apphttp.MoveStageRequest:
         properties:
+            message:
+                allOf:
+                    - $ref: '#/definitions/internal_hiring_apphttp.MessageRequest'
+                description: Message is emailed to the candidate when the move is to Hired or Disqualified, instead of the standard email.
             note:
                 type: string
             reason:
@@ -1573,6 +1668,11 @@ definitions:
                 items:
                     $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Note'
                 type: array
+        type: object
+    internal_hiring_apphttp.PreviewEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Preview'
         type: object
     internal_hiring_apphttp.ReasonsEnvelope:
         properties:
@@ -1623,6 +1723,30 @@ definitions:
             data:
                 items:
                     $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Tag'
+                type: array
+        type: object
+    internal_hiring_apphttp.TemplateEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Template'
+        type: object
+    internal_hiring_apphttp.TemplateRequest:
+        properties:
+            body:
+                description: |-
+                    Body is plain text. Blank lines start a new paragraph. Placeholders: {{candidate_name}}, {{job_title}},
+                    {{company}}, {{sender_name}}.
+                type: string
+            name:
+                type: string
+            subject:
+                type: string
+        type: object
+    internal_hiring_apphttp.TemplatesEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Template'
                 type: array
         type: object
     internal_hiring_apphttp.UploadRequest:
@@ -5374,6 +5498,178 @@ paths:
             summary: Disqualification reasons
             tags:
                 - hiring
+    /hiring/email-settings:
+        get:
+            description: The reply-to address of emails sent to candidates.
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.EmailSettingsEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Candidate email settings
+            tags:
+                - hiring
+        put:
+            consumes:
+                - application/json
+            description: 'Needs job.manage_any. An empty `reply_to` clears it: candidates are then told replies are not read. OpenHR does not read replies; they go to this address.'
+            parameters:
+                - description: Settings
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_apphttp.EmailSettings'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.EmailSettingsEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Change candidate email settings
+            tags:
+                - hiring
+    /hiring/email-templates:
+        get:
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.TemplatesEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: The company's email templates
+            tags:
+                - hiring
+        post:
+            consumes:
+                - application/json
+            description: Needs job.manage_any. Names are unique, ignoring case; at most 50 templates. Unknown placeholders are refused.
+            parameters:
+                - description: Template
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_apphttp.TemplateRequest'
+            produces:
+                - application/json
+            responses:
+                "201":
+                    description: Created
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.TemplateEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Create an email template
+            tags:
+                - hiring
+    /hiring/email-templates/{template_id}:
+        delete:
+            description: Needs job.manage_any.
+            parameters:
+                - description: Template id
+                  in: path
+                  name: template_id
+                  required: true
+                  type: string
+            responses:
+                "204":
+                    description: No Content
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Delete an email template
+            tags:
+                - hiring
+        put:
+            consumes:
+                - application/json
+            description: Needs job.manage_any. Messages already sent keep their text.
+            parameters:
+                - description: Template id
+                  in: path
+                  name: template_id
+                  required: true
+                  type: string
+                - description: Template
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_apphttp.TemplateRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.TemplateEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Replace an email template
+            tags:
+                - hiring
     /hiring/me:
         get:
             description: The signed-in person's company roles and the permissions they add up to, such as job.export. Use it to show or hide actions; the server still checks every request.
@@ -6235,6 +6531,166 @@ paths:
             security:
                 - SessionCookie: []
             summary: An application's activity
+            tags:
+                - jobs
+    /jobs/{id}/applications/{app_id}/emails:
+        get:
+            description: Newest first, with scheduled ones that have not gone out. Seen by people who can see the job.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Application id
+                  in: path
+                  name: app_id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.MessagesEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Emails sent to an application's candidate
+            tags:
+                - jobs
+        post:
+            consumes:
+                - application/json
+            description: 'Sends now, or at `schedule_at`. The message always goes to the application''s candidate: there is no recipient field. Placeholders are filled in before it is saved, so the history shows what the candidate got. At most 10 messages to one candidate and 500 by one company in 24 hours. Needs to be the job''s creator, a hiring manager or recruiter on it, or job.manage_any. Not for candidates who withdrew.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Application id
+                  in: path
+                  name: app_id
+                  required: true
+                  type: string
+                - description: Message
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_apphttp.MessageRequest'
+            produces:
+                - application/json
+            responses:
+                "201":
+                    description: Created
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.MessageEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "429":
+                    description: Too Many Requests
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Email the candidate
+            tags:
+                - jobs
+    /jobs/{id}/applications/{app_id}/emails/{message_id}:
+        delete:
+            description: Only a message that has not gone out yet.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Application id
+                  in: path
+                  name: app_id
+                  required: true
+                  type: string
+                - description: Message id
+                  in: path
+                  name: message_id
+                  required: true
+                  type: string
+            responses:
+                "204":
+                    description: No Content
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Cancel a scheduled email
+            tags:
+                - jobs
+    /jobs/{id}/applications/{app_id}/emails/preview:
+        post:
+            consumes:
+                - application/json
+            description: Fills the placeholders for this candidate and returns the subject and body, without sending anything.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Application id
+                  in: path
+                  name: app_id
+                  required: true
+                  type: string
+                - description: Message
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_apphttp.MessageRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.PreviewEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Preview an email to the candidate
             tags:
                 - jobs
     /jobs/{id}/applications/{app_id}/files/{file_id}:

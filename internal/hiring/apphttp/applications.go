@@ -48,6 +48,7 @@ func (h *Handler) RegisterJobRoutes(r chi.Router) {
 	r.Post("/applications/{app_id}/review", h.reviewApplication)
 	r.Get("/applications/{app_id}/files/{file_id}", h.applicationFile)
 	h.registerPipelineJobRoutes(r)
+	h.registerEmailJobRoutes(r)
 }
 
 // RegisterSettingsRoutes mounts the company-level candidate settings. r is the router of /hiring.
@@ -55,6 +56,7 @@ func (h *Handler) RegisterSettingsRoutes(r chi.Router) {
 	r.Get("/applicant-settings", h.getApplicantSettings)
 	r.Put("/applicant-settings", h.putApplicantSettings)
 	h.registerPipelineCompanyRoutes(r)
+	h.registerEmailCompanyRoutes(r)
 }
 
 // appScope resolves who is calling and the applications service of their region.
@@ -113,6 +115,12 @@ func applicationsError(err error) error {
 	case errors.Is(err, applications.ErrUnknownTag):
 		return apperror.NewWithDetails(apperror.CodeValidationError, "some fields need attention",
 			map[string]any{"fields": []map[string]string{{"path": "tag_ids", "message": "unknown tag"}}})
+	case errors.Is(err, applications.ErrQuota):
+		return apperror.NewWithDetails(apperror.CodeTooManyRequests, "daily email limit reached; try again tomorrow", map[string]any{"reason": "message_limit"})
+	case errors.Is(err, applications.ErrNotCancellable):
+		reason, msg = "not_cancellable", "this message has already gone out or been cancelled"
+	case errors.Is(err, applications.ErrNoMessages):
+		return apperror.New(apperror.CodeServiceUnavailable, "candidate email is not available")
 	case errors.Is(err, applications.ErrNoPipeline):
 		return apperror.New(apperror.CodeServiceUnavailable, "the pipeline is not available")
 	case errors.Is(err, apperror.ErrNotFound):
@@ -219,6 +227,8 @@ type ApplicationStatusRequest struct {
 	Note   string `json:"note,omitempty"`
 	// Reason is a disqualification reason code, optional with a rejection.
 	Reason string `json:"reason,omitempty"`
+	// Message is emailed to the candidate with a hire or a rejection, instead of the standard email.
+	Message *MessageRequest `json:"message,omitempty"`
 }
 
 // setApplicationStatus godoc
@@ -252,7 +262,7 @@ func (h *Handler) setApplicationStatus(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
-	res, err := svc.SetStatus(r.Context(), c, jobID(r), appID(r), applications.StatusInput{Status: req.Status, Note: req.Note, Reason: req.Reason})
+	res, err := svc.SetStatus(r.Context(), c, jobID(r), appID(r), applications.StatusInput{Status: req.Status, Note: req.Note, Reason: req.Reason, Message: req.Message.input()})
 	if err != nil {
 		response.Error(w, r, applicationsError(err))
 		return
@@ -266,6 +276,8 @@ type ApplicationReviewRequest struct {
 	Note     string `json:"note,omitempty"`
 	// Reason is a disqualification reason code, optional when rejecting.
 	Reason string `json:"reason,omitempty"`
+	// Message is emailed to the candidate with a rejection, instead of the standard email.
+	Message *MessageRequest `json:"message,omitempty"`
 }
 
 // reviewApplication godoc
@@ -299,7 +311,7 @@ func (h *Handler) reviewApplication(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
-	res, err := svc.Review(r.Context(), c, jobID(r), appID(r), applications.ReviewInput{Decision: req.Decision, Note: req.Note, Reason: req.Reason})
+	res, err := svc.Review(r.Context(), c, jobID(r), appID(r), applications.ReviewInput{Decision: req.Decision, Note: req.Note, Reason: req.Reason, Message: req.Message.input()})
 	if err != nil {
 		response.Error(w, r, applicationsError(err))
 		return

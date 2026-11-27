@@ -265,6 +265,8 @@ type MoveStageRequest struct {
 	// Reason is a disqualification reason code (GET /hiring/disqualification-reasons); needed for Disqualified.
 	Reason string `json:"reason,omitempty"`
 	Note   string `json:"note,omitempty"`
+	// Message is emailed to the candidate when the move is to Hired or Disqualified, instead of the standard email.
+	Message *MessageRequest `json:"message,omitempty"`
 }
 
 // moveStage godoc
@@ -293,7 +295,7 @@ func (h *Handler) moveStage(w http.ResponseWriter, r *http.Request) {
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	out, err := svc.MoveStage(r.Context(), c, jobID(r), appID(r), applications.MoveInput{StageID: req.StageID, Reason: req.Reason, Note: req.Note})
+	out, err := svc.MoveStage(r.Context(), c, jobID(r), appID(r), applications.MoveInput{StageID: req.StageID, Reason: req.Reason, Note: req.Note, Message: req.Message.input()})
 	finish(w, r, http.StatusOK, out, err)
 }
 
@@ -303,6 +305,8 @@ type BulkMoveStageRequest struct {
 	StageID        string   `json:"stage_id"`
 	Reason         string   `json:"reason,omitempty"`
 	Note           string   `json:"note,omitempty"`
+	// Message is emailed to each candidate (placeholders are filled for each) when the stage is Hired or Disqualified.
+	Message *MessageRequest `json:"message,omitempty"`
 }
 
 // bulkMoveStage godoc
@@ -329,7 +333,7 @@ func (h *Handler) bulkMoveStage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := svc.BulkMoveStage(r.Context(), c, jobID(r), req.ApplicationIDs,
-		applications.MoveInput{StageID: req.StageID, Reason: req.Reason, Note: req.Note})
+		applications.MoveInput{StageID: req.StageID, Reason: req.Reason, Note: req.Note, Message: req.Message.input()})
 	finish(w, r, http.StatusOK, out, err)
 }
 

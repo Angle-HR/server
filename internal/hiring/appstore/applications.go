@@ -459,6 +459,16 @@ func (s *Store) ApplyChange(ctx context.Context, tenantID string, ch *applicatio
 				return fmt.Errorf("appstore: reapply block: %w", err)
 			}
 		}
+		if ch.Message != nil {
+			out, merr := insertMessage(ctx, tx, tenantID, ch.Message)
+			if merr != nil {
+				return merr
+			}
+			if err = insertEvent(ctx, tx, tenantID, ch.JobID, ch.AppID, ch.ActorID, applications.EventMessage,
+				map[string]any{"message_id": out.ID, "with_decision": true}); err != nil {
+				return err
+			}
+		}
 		if ch.Email != nil {
 			if err = insertOutbox(ctx, tx, tenantID, ch.AppID, ch.Email, ch.Now, basis); err != nil {
 				return err

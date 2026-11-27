@@ -115,6 +115,10 @@ const (
 	EventNoteEdited    = "note_edited"
 	EventNoteDeleted   = "note_deleted"
 	EventTagsChanged   = "tags_changed"
+	// Candidate email: written, sent (by the sender, with no actor) and cancelled.
+	EventMessage          = "message_queued"
+	EventMessageSent      = "message_sent"
+	EventMessageCancelled = "message_cancelled"
 )
 
 // Event is one entry of an application's timeline. Data holds ids and short labels, never note text.
@@ -308,6 +312,8 @@ type MoveInput struct {
 	// Reason is a DisqualifyReasons code. Needed for the Disqualified stage.
 	Reason string
 	Note   string
+	// Message is emailed to the candidate when the move decides the application (Hired or Disqualified).
+	Message *MessageInput
 }
 
 // MoveResult is the outcome of a stage move.
@@ -361,11 +367,14 @@ func (s *Service) MoveStage(ctx context.Context, c Caller, jobID, appID string, 
 		if err != nil {
 			return nil, err
 		}
-		res, err := s.apply(ctx, c, a, st, appID, to, note, "", applyOpts{StageID: ms.Target.ID, Reason: reason})
+		res, err := s.apply(ctx, c, a, st, appID, to, note, "", applyOpts{StageID: ms.Target.ID, Reason: reason, Message: in.Message})
 		if err != nil {
 			return nil, err
 		}
 		return &MoveResult{Status: res.Status, StageID: ms.Target.ID, DecidedAt: res.DecidedAt}, nil
+	}
+	if in.Message != nil {
+		return nil, invalid("message", "a message goes with a hire or a disqualification")
 	}
 	to := ms.Status
 	if ms.Status == StatusReceived && ms.Target.Kind != KindApplied {

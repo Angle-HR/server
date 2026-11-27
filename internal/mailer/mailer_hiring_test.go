@@ -98,3 +98,24 @@ func TestHiringEmailsKeepCandidatesOutOfTheLogs(t *testing.T) {
 		t.Errorf("existing behaviour changed: %s", logs.String())
 	}
 }
+
+func TestCandidateMessageRendersParagraphsEscapedWithReplyTo(t *testing.T) {
+	var got []byte
+	m, _ := New(Config{Host: "smtp.test", Port: "25", From: "noreply@test"})
+	SetSendMailForTesting(m, func(_ string, _ smtp.Auth, _ string, _ []string, msg []byte) error { got = msg; return nil })
+	err := m.Send(context.Background(), EmailArgs{Type: TypeCandidateMessage, Recipient: "ada@x.test", FullName: "Ada",
+		OrganizationName: "Acme", JobTitle: "Engineer", Subject: "Hello\r\nBcc: evil@x.test", ReplyTo: "jobs@acme.test",
+		MessageBody: "Hi Ada,\n\nSee <b>this</b> & that."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(got)
+	for _, want := range []string{"Reply-To: jobs@acme.test\r\n", "Subject: HelloBcc: evil@x.test\r\n", "Hi Ada,", "&lt;b&gt;this&lt;/b&gt; &amp; that."} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in %s", want, s)
+		}
+	}
+	if strings.Contains(s, "\r\nBcc:") || strings.Contains(s, "<b>this") {
+		t.Errorf("header or markup injection: %s", s)
+	}
+}

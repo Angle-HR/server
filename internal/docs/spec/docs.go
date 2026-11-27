@@ -2560,6 +2560,279 @@ const docTemplate = `{
                 }
             }
         },
+        "/hiring/email-settings": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "The reply-to address of emails sent to candidates.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "Candidate email settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_apphttp.EmailSettingsEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Needs job.manage_any. An empty ` + "`" + `reply_to` + "`" + ` clears it: candidates are then told replies are not read. OpenHR does not read replies; they go to this address.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "Change candidate email settings",
+                "parameters": [
+                    {
+                        "description": "Settings",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_apphttp.EmailSettings"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_apphttp.EmailSettingsEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/hiring/email-templates": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "The company's email templates",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_apphttp.TemplatesEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Needs job.manage_any. Names are unique, ignoring case; at most 50 templates. Unknown placeholders are refused.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "Create an email template",
+                "parameters": [
+                    {
+                        "description": "Template",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_apphttp.TemplateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_apphttp.TemplateEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/hiring/email-templates/{template_id}": {
+            "put": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Needs job.manage_any. Messages already sent keep their text.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "Replace an email template",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Template id",
+                        "name": "template_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Template",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_apphttp.TemplateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_apphttp.TemplateEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Needs job.manage_any.",
+                "tags": [
+                    "hiring"
+                ],
+                "summary": "Delete an email template",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Template id",
+                        "name": "template_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/hiring/me": {
             "get": {
                 "security": [
@@ -4245,6 +4518,253 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/applications/{app_id}/emails": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Newest first, with scheduled ones that have not gone out. Seen by people who can see the job.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Emails sent to an application's candidate",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "app_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_apphttp.MessagesEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Sends now, or at ` + "`" + `schedule_at` + "`" + `. The message always goes to the application's candidate: there is no recipient field. Placeholders are filled in before it is saved, so the history shows what the candidate got. At most 10 messages to one candidate and 500 by one company in 24 hours. Needs to be the job's creator, a hiring manager or recruiter on it, or job.manage_any. Not for candidates who withdrew.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Email the candidate",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "app_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Message",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_apphttp.MessageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_apphttp.MessageEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/applications/{app_id}/emails/preview": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Fills the placeholders for this candidate and returns the subject and body, without sending anything.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Preview an email to the candidate",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "app_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Message",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_apphttp.MessageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_apphttp.PreviewEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/applications/{app_id}/emails/{message_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Only a message that has not gone out yet.",
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Cancel a scheduled email",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Application id",
+                        "name": "app_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Message id",
+                        "name": "message_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -8495,6 +9015,42 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_Angle-HR_server_internal_hiring_applications.Message": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "error": {
+                    "description": "Error is a short reason when Status is failed.",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "scheduled_at": {
+                    "type": "string"
+                },
+                "sender_id": {
+                    "type": "string"
+                },
+                "sent_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
+                },
+                "template_id": {
+                    "type": "string"
+                }
+            }
+        },
         "github_com_Angle-HR_server_internal_hiring_applications.MoveResult": {
             "type": "object",
             "properties": {
@@ -8556,6 +9112,17 @@ const docTemplate = `{
                     "additionalProperties": {
                         "type": "integer"
                     }
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_applications.Preview": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
                 }
             }
         },
@@ -8702,6 +9269,26 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_Angle-HR_server_internal_hiring_applications.Template": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 }
             }
@@ -10346,6 +10933,14 @@ const docTemplate = `{
                 "decision": {
                     "type": "string"
                 },
+                "message": {
+                    "description": "Message is emailed to the candidate with a rejection, instead of the standard email.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/internal_hiring_apphttp.MessageRequest"
+                        }
+                    ]
+                },
                 "note": {
                     "type": "string"
                 },
@@ -10358,6 +10953,14 @@ const docTemplate = `{
         "internal_hiring_apphttp.ApplicationStatusRequest": {
             "type": "object",
             "properties": {
+                "message": {
+                    "description": "Message is emailed to the candidate with a hire or a rejection, instead of the standard email.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/internal_hiring_apphttp.MessageRequest"
+                        }
+                    ]
+                },
                 "note": {
                     "type": "string"
                 },
@@ -10401,6 +11004,14 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "message": {
+                    "description": "Message is emailed to each candidate (placeholders are filled for each) when the stage is Hired or Disqualified.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/internal_hiring_apphttp.MessageRequest"
+                        }
+                    ]
+                },
                 "note": {
                     "type": "string"
                 },
@@ -10412,11 +11023,65 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_hiring_apphttp.EmailSettings": {
+            "type": "object",
+            "properties": {
+                "reply_to": {
+                    "description": "ReplyTo is where candidates' replies go. Empty means replies are not read.",
+                    "type": "string"
+                }
+            }
+        },
+        "internal_hiring_apphttp.EmailSettingsEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_hiring_apphttp.EmailSettings"
+                }
+            }
+        },
         "internal_hiring_apphttp.FileLinkEnvelope": {
             "type": "object",
             "properties": {
                 "data": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.FileLink"
+                }
+            }
+        },
+        "internal_hiring_apphttp.MessageEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Message"
+                }
+            }
+        },
+        "internal_hiring_apphttp.MessageRequest": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "schedule_at": {
+                    "description": "ScheduleAt sends the message then (RFC 3339), between a minute and 90 days from now. Not with a decision.",
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
+                },
+                "template_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_hiring_apphttp.MessagesEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Message"
+                    }
                 }
             }
         },
@@ -10431,6 +11096,14 @@ const docTemplate = `{
         "internal_hiring_apphttp.MoveStageRequest": {
             "type": "object",
             "properties": {
+                "message": {
+                    "description": "Message is emailed to the candidate when the move is to Hired or Disqualified, instead of the standard email.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/internal_hiring_apphttp.MessageRequest"
+                        }
+                    ]
+                },
                 "note": {
                     "type": "string"
                 },
@@ -10467,6 +11140,14 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Note"
                     }
+                }
+            }
+        },
+        "internal_hiring_apphttp.PreviewEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Preview"
                 }
             }
         },
@@ -10546,6 +11227,40 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Tag"
+                    }
+                }
+            }
+        },
+        "internal_hiring_apphttp.TemplateEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Template"
+                }
+            }
+        },
+        "internal_hiring_apphttp.TemplateRequest": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "description": "Body is plain text. Blank lines start a new paragraph. Placeholders: {{candidate_name}}, {{job_title}},\n{{company}}, {{sender_name}}.",
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_hiring_apphttp.TemplatesEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Template"
                     }
                 }
             }

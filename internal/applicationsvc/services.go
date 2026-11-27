@@ -91,6 +91,7 @@ func NewServices(d ServicesDeps) *Services {
 		svc := &applications.Service{
 			Store:     store,
 			Pipeline:  store,
+			Mail:      store,
 			Jobs:      jobs,
 			Hasher:    hasher,
 			NoticeURL: noticeURL(config.NormalizePublicAPIURL(d.Config.PublicAPIURL)),

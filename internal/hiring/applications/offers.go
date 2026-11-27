@@ -217,6 +217,7 @@ type DocWriter func(d *DocumentData) ([]byte, error)
 type OfferDocs interface {
 	Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) error
 	PresignGet(ctx context.Context, key string, opts blob.GetOptions) (string, error)
+	Delete(ctx context.Context, key string) error
 }
 
 func (s *Service) offers() (OfferStore, error) {

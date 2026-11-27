@@ -311,6 +311,9 @@ type Service struct {
 	Schedule InterviewStore
 	// Contracts keeps offers; Docs stores their signed documents and DocWriter makes them.
 	Contracts OfferStore
+	// Attach keeps files attached to candidate emails; Scanner checks them and Docs stores them.
+	Attach    AttachmentStore
+	Scanner   uploads.Scanner
 	Docs      OfferDocs
 	DocWriter DocWriter
 	// Names resolves actor names in the timeline. Optional.

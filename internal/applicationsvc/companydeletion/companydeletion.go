@@ -77,6 +77,7 @@ var deleteSQL = []string{
 	`DELETE FROM hiring.email_outbox WHERE tenant_id = $1::uuid`,
 	`DELETE FROM hiring.reapply_blocks WHERE tenant_id = $1::uuid`,
 	`DELETE FROM hiring.job_applicant_counts WHERE tenant_id = $1::uuid`,
+	`DELETE FROM hiring.app_message_attachments WHERE tenant_id = $1::uuid`,
 	`DELETE FROM hiring.app_offer_events WHERE tenant_id = $1::uuid`,
 	`DELETE FROM hiring.app_offers WHERE tenant_id = $1::uuid`,
 	`DELETE FROM hiring.app_offer_templates WHERE tenant_id = $1::uuid`,

@@ -65,7 +65,8 @@ func NewServices(d ServicesDeps) *Services {
 	}
 	s := &Services{Apply: apps, Lookup: &StoreLookup{Pool: pool}}
 
-	if scanners := regionScanners(); len(scanners) > 0 {
+	scanners := regionScanners()
+	if len(scanners) > 0 {
 		up := &uploads.Service{
 			Jobs:      d.Jobs,
 			Directory: uploadDirectory{pool: pool, router: d.Router},
@@ -95,6 +96,7 @@ func NewServices(d ServicesDeps) *Services {
 			Mail:      store,
 			Schedule:  store,
 			Contracts: store,
+			Attach:    store,
 			DocWriter: offerdoc.Write,
 			Jobs:      jobs,
 			Hasher:    hasher,
@@ -103,6 +105,7 @@ func NewServices(d ServicesDeps) *Services {
 		if files, ferr := d.Router.Blob(reg); ferr == nil {
 			svc.Files = files
 			svc.Docs = files
+			svc.Scanner = scanners[string(reg)]
 		} else {
 			d.Log.Warn("application file downloads are off for a region", "region", string(reg), "error", ferr)
 		}

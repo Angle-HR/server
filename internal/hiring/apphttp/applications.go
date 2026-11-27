@@ -133,6 +133,16 @@ func applicationsError(err error) error {
 		reason, msg = "offer_unavailable", "this offer is no longer available"
 	case errors.Is(err, applications.ErrNoOffers):
 		return apperror.New(apperror.CodeServiceUnavailable, "offers are not available")
+	case errors.Is(err, applications.ErrUnknownAttachment):
+		return apperror.NewWithDetails(apperror.CodeValidationError, "some fields need attention",
+			map[string]any{"fields": []map[string]string{{"path": "attachment_ids", "message": "unknown file; upload it again"}}})
+	case errors.Is(err, applications.ErrInfected):
+		return apperror.NewWithDetails(apperror.CodeValidationError, "some fields need attention",
+			map[string]any{"fields": []map[string]string{{"path": "file", "message": "the file did not pass the malware scan"}}})
+	case errors.Is(err, applications.ErrTooManyAttachments):
+		reason, msg = "too_many_attachments", "ten files are already waiting on this application; send or remove some first"
+	case errors.Is(err, applications.ErrNoAttachments):
+		return apperror.New(apperror.CodeServiceUnavailable, "attachments are not available")
 	case errors.Is(err, applications.ErrNoInterviews):
 		return apperror.New(apperror.CodeServiceUnavailable, "interviews are not available")
 	case errors.Is(err, applications.ErrQuota):

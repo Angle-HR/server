@@ -138,3 +138,32 @@ func TestCandidateMessageWithACalendarEventIsMultipart(t *testing.T) {
 		t.Errorf("boundaries: %s", s)
 	}
 }
+
+func TestComposeMessageWithAttachments(t *testing.T) {
+	args := EmailArgs{Type: TypeCandidateMessage, Recipient: "a@x.test", ICS: "BEGIN:VCALENDAR\nMETHOD:REQUEST\nEND:VCALENDAR\n",
+		Attachments: []Attachment{{Filename: "of\"fer\r\n.pdf", ContentType: "application/pdf", Content: bytes.Repeat([]byte("A"), 200)}}}
+	msg := string(composeMessage(args, "From <f@x.test>", "S", "<p>hi</p>"))
+	for _, want := range []string{"multipart/mixed", "multipart/alternative", "text/calendar", "Content-Transfer-Encoding: base64", "application/pdf"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	if strings.Contains(msg, "of\"fer") || strings.Count(msg, "filename=") != 1 {
+		t.Errorf("file name not made safe:\n%s", msg)
+	}
+	for _, line := range strings.Split(msg, "\r\n") {
+		if len(line) > 998 {
+			t.Fatalf("line of %d characters", len(line))
+		}
+	}
+	// without files nothing changes: a plain candidate message stays single part
+	plain := string(composeMessage(EmailArgs{Type: TypeCandidateMessage, Recipient: "a@x.test"}, "F", "S", "<p>hi</p>"))
+	if strings.Contains(plain, "multipart") {
+		t.Error("plain message is multipart")
+	}
+	// attachments are ignored on other email types
+	other := string(composeMessage(EmailArgs{Type: TypeEmailVerification, Recipient: "a@x.test", Attachments: args.Attachments}, "F", "S", "<p>hi</p>"))
+	if strings.Contains(other, "multipart") {
+		t.Error("attachment on a system email")
+	}
+}

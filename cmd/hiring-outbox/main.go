@@ -100,6 +100,9 @@ func run() error {
 		store := &appstore.Store{DB: pool}
 		jobs := jobsource.NewRegional(pool)
 		w := &outbox.Worker{Tenants: jobs.TenantIDs, Store: store, Sender: sender, Logger: slogger, LinkBase: appURL}
+		if files, ferr := router.Blob(reg); ferr == nil {
+			w.Files = files
+		}
 		res, err := w.Run(ctx)
 		// Messages people wrote to candidates, including scheduled ones that are now due.
 		mres, merr := w.RunMessages(ctx, store)

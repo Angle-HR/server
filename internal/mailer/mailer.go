@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"embed"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"html/template"
@@ -66,6 +67,15 @@ type EmailArgs struct {
 	// ICS, when set on a candidate message, is a calendar event (an interview invite, update or cancellation)
 	// sent as a second part of the email.
 	ICS string `json:"ics,omitempty"`
+	// Attachments are files sent with a candidate message.
+	Attachments []Attachment `json:"attachments,omitempty"`
+}
+
+// Attachment is a file sent with an email. Content is base64 in JSON.
+type Attachment struct {
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	Content     []byte `json:"content"`
 }
 
 // Kind returns the job kind name.
@@ -332,20 +342,64 @@ var icsMethodRe = regexp.MustCompile(`(?m)^METHOD:([A-Z]+)\r?$`)
 func composeMessage(args EmailArgs, from, subject, html string) []byte {
 	head := fmt.Sprintf("To: %s\r\nFrom: %s\r\n%sSubject: %s\r\nMIME-Version: 1.0\r\n",
 		args.Recipient, from, replyToHeader(args), subject)
-	if args.Type != TypeCandidateMessage || strings.TrimSpace(args.ICS) == "" {
-		return []byte(head + "Content-Type: text/html; charset=UTF-8\r\n\r\n" + html + "\r\n")
+	candidate := args.Type == TypeCandidateMessage
+	var inner string // the content headers, a blank line and the content
+	if !candidate || strings.TrimSpace(args.ICS) == "" {
+		inner = "Content-Type: text/html; charset=UTF-8\r\n\r\n" + html + "\r\n"
+	} else {
+		method := "REQUEST"
+		if m := icsMethodRe.FindStringSubmatch(args.ICS); m != nil {
+			method = m[1]
+		}
+		boundary := newBoundary()
+		ics := strings.ReplaceAll(strings.ReplaceAll(args.ICS, "\r\n", "\n"), "\n", "\r\n")
+		inner = "Content-Type: multipart/alternative; boundary=" + boundary + "\r\n\r\n" +
+			"--" + boundary + "\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n" + html + "\r\n" +
+			"--" + boundary + "\r\nContent-Type: text/calendar; charset=UTF-8; method=" + method + "\r\n\r\n" + ics +
+			"--" + boundary + "--\r\n"
 	}
-	method := "REQUEST"
-	if m := icsMethodRe.FindStringSubmatch(args.ICS); m != nil {
-		method = m[1]
+	if !candidate || len(args.Attachments) == 0 {
+		return []byte(head + inner)
 	}
+	boundary := newBoundary()
+	var b strings.Builder
+	b.WriteString(head + "Content-Type: multipart/mixed; boundary=" + boundary + "\r\n\r\n")
+	b.WriteString("--" + boundary + "\r\n" + inner)
+	for _, a := range args.Attachments {
+		name := attachmentName(a.Filename)
+		ct := a.ContentType
+		if ct == "" || strings.ContainsAny(ct, "\r\n;") {
+			ct = "application/octet-stream"
+		}
+		b.WriteString("--" + boundary + "\r\nContent-Type: " + ct + "; name=\"" + name + "\"\r\n" +
+			"Content-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"" + name + "\"\r\n\r\n")
+		enc := base64.StdEncoding.EncodeToString(a.Content)
+		for len(enc) > 76 {
+			b.WriteString(enc[:76] + "\r\n")
+			enc = enc[76:]
+		}
+		b.WriteString(enc + "\r\n")
+	}
+	b.WriteString("--" + boundary + "--\r\n")
+	return []byte(b.String())
+}
+
+func newBoundary() string {
 	var b [12]byte
 	_, _ = rand.Read(b[:])
-	boundary := "openhr-" + hex.EncodeToString(b[:])
-	ics := strings.ReplaceAll(strings.ReplaceAll(args.ICS, "\r\n", "\n"), "\n", "\r\n")
-	return []byte(head +
-		"Content-Type: multipart/alternative; boundary=" + boundary + "\r\n\r\n" +
-		"--" + boundary + "\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n" + html + "\r\n" +
-		"--" + boundary + "\r\nContent-Type: text/calendar; charset=UTF-8; method=" + method + "\r\n\r\n" + ics +
-		"--" + boundary + "--\r\n")
+	return "openhr-" + hex.EncodeToString(b[:])
+}
+
+// attachmentName keeps a file name safe inside a header: no quotes, control characters or path separators.
+func attachmentName(n string) string {
+	n = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f || r == '"' || r == '\\' || r == '/' || r > 0x7e {
+			return '_'
+		}
+		return r
+	}, n)
+	if strings.TrimSpace(n) == "" {
+		return "attachment"
+	}
+	return n
 }

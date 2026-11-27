@@ -65,6 +65,8 @@ type Worker struct {
 	MaxAttempts int // 0 uses MaxAttempts
 	// LinkBase is the candidate-facing site (APP_URL), for the links in messages that carry one.
 	LinkBase string
+	// Files reads attachments; required for messages that have them.
+	Files Files
 }
 
 // Result counts what a run did.

@@ -50,13 +50,15 @@ type MessageRequest struct {
 	Body       string `json:"body,omitempty"`
 	// ScheduleAt sends the message then (RFC 3339), between a minute and 90 days from now. Not with a decision.
 	ScheduleAt *time.Time `json:"schedule_at,omitempty"`
+	// AttachmentIDs are files uploaded with /email-attachments (at most 3).
+	AttachmentIDs []string `json:"attachment_ids,omitempty"`
 }
 
 func (m *MessageRequest) input() *applications.MessageInput {
 	if m == nil {
 		return nil
 	}
-	return &applications.MessageInput{TemplateID: m.TemplateID, Subject: m.Subject, Body: m.Body, ScheduleAt: m.ScheduleAt}
+	return &applications.MessageInput{TemplateID: m.TemplateID, Subject: m.Subject, Body: m.Body, ScheduleAt: m.ScheduleAt, AttachmentIDs: m.AttachmentIDs}
 }
 
 // EmailSettings are the company's candidate email settings.
@@ -70,6 +72,7 @@ func (h *Handler) registerEmailJobRoutes(r chi.Router) {
 	r.Post("/applications/{app_id}/emails", h.sendMessage)
 	r.Post("/applications/{app_id}/emails/preview", h.previewMessage)
 	r.Delete("/applications/{app_id}/emails/{message_id}", h.cancelMessage)
+	h.registerAttachmentRoutes(r)
 }
 
 func (h *Handler) registerEmailCompanyRoutes(r chi.Router) {

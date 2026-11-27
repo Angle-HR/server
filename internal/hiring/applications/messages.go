@@ -68,7 +68,8 @@ type Message struct {
 	SentAt      *time.Time `json:"sent_at,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	// Error is a short reason when Status is failed.
-	Error string `json:"error,omitempty"`
+	Error       string       `json:"error,omitempty"`
+	Attachments []Attachment `json:"attachments"`
 }
 
 // NewMessage is a message to store: the text is already rendered.
@@ -84,6 +85,8 @@ type NewMessage struct {
 	JobTitle    string
 	Status      string // MsgScheduled or MsgQueued
 	ScheduledAt time.Time
+	// AttachmentIDs are uploaded files to send with the message.
+	AttachmentIDs []string
 	// Enforce applies the daily limits. Messages that come with a decision skip them.
 	Enforce bool
 }
@@ -266,6 +269,8 @@ type MessageInput struct {
 	Body       string
 	// ScheduleAt, when set, sends the message then instead of now.
 	ScheduleAt *time.Time
+	// AttachmentIDs are files uploaded to the application (at most 3), sent with the message.
+	AttachmentIDs []string
 }
 
 // Preview is a message as the candidate would get it.
@@ -372,9 +377,13 @@ func (s *Service) SendMessage(ctx context.Context, c Caller, jobID, appID string
 	if err != nil {
 		return nil, err
 	}
+	ids, err := cleanAttachmentIDs(in.AttachmentIDs)
+	if err != nil {
+		return nil, err
+	}
 	now := s.now().UTC()
 	nm := &NewMessage{JobID: jobID, AppID: appID, SenderID: c.UserID, TemplateID: in.TemplateID, Subject: p.Subject, Body: p.Body,
-		ReplyTo: reply, Company: st.Company, JobTitle: st.JobTitle, Status: MsgQueued, ScheduledAt: now, Enforce: true}
+		ReplyTo: reply, Company: st.Company, JobTitle: st.JobTitle, Status: MsgQueued, ScheduledAt: now, Enforce: true, AttachmentIDs: ids}
 	if in.ScheduleAt != nil {
 		at := in.ScheduleAt.UTC()
 		if at.Before(now.Add(MinScheduleSeconds*time.Second)) || at.After(now.AddDate(0, 0, MaxScheduleDays)) {
@@ -433,6 +442,10 @@ func (s *Service) decisionMessage(ctx context.Context, c Caller, st *ChangeState
 	if err != nil {
 		return nil, err
 	}
+	ids, err := cleanAttachmentIDs(in.AttachmentIDs)
+	if err != nil {
+		return nil, err
+	}
 	return &NewMessage{JobID: jobID, AppID: appID, SenderID: c.UserID, TemplateID: in.TemplateID, Subject: p.Subject, Body: p.Body,
-		ReplyTo: reply, Company: st.Company, JobTitle: st.JobTitle, Status: MsgQueued, ScheduledAt: s.now().UTC()}, nil
+		ReplyTo: reply, Company: st.Company, JobTitle: st.JobTitle, Status: MsgQueued, ScheduledAt: s.now().UTC(), AttachmentIDs: ids}, nil
 }

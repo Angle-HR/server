@@ -67,8 +67,10 @@ const dueApplicationsSQL = `
 SELECT a.id::text, a.job_id::text,
        COALESCE((SELECT array_agg(f.id::text ORDER BY f.id) FROM hiring.application_files f
                  WHERE f.application_id = a.id AND f.tenant_id = a.tenant_id), '{}')::text[],
-       COALESCE((SELECT array_agg(o.pdf_key ORDER BY o.id) FROM hiring.app_offers o
-                 WHERE o.application_id = a.id AND o.tenant_id = a.tenant_id AND o.pdf_key <> ''), '{}')::text[]
+       (COALESCE((SELECT array_agg(o.pdf_key ORDER BY o.id) FROM hiring.app_offers o
+                  WHERE o.application_id = a.id AND o.tenant_id = a.tenant_id AND o.pdf_key <> ''), '{}')
+        || COALESCE((SELECT array_agg(t.object_key ORDER BY t.id) FROM hiring.app_message_attachments t
+                  WHERE t.application_id = a.id AND t.tenant_id = a.tenant_id), '{}'))::text[]
 FROM hiring.applications a
 WHERE a.tenant_id = $1::uuid AND a.retention_until < $2
 ORDER BY a.retention_until, a.id

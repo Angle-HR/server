@@ -191,6 +191,10 @@ func insertMessage(ctx context.Context, tx pgx.Tx, tenantID string, m *applicati
 	if err != nil {
 		return nil, fmt.Errorf("appstore: write message: %w", err)
 	}
+	if err = linkAttachments(ctx, tx, tenantID, m.AppID, out.ID, m.AttachmentIDs); err != nil {
+		return nil, err
+	}
+	out.Attachments = []applications.Attachment{}
 	return out, nil
 }
 
@@ -228,9 +232,27 @@ ORDER BY created_at DESC, id DESC LIMIT 100`, tenantID, appID)
 			if err = rows.Scan(&m.ID, &m.SenderID, &m.TemplateID, &m.Subject, &m.Body, &m.Status, &m.ScheduledAt, &m.SentAt, &m.CreatedAt, &m.Error); err != nil {
 				return fmt.Errorf("appstore: scan message: %w", err)
 			}
+			m.Attachments = []applications.Attachment{}
 			out = append(out, m)
 		}
-		return rows.Err()
+		rows.Close()
+		if err = rows.Err(); err != nil {
+			return err
+		}
+		ids := make([]string, len(out))
+		for i := range out {
+			ids[i] = out[i].ID
+		}
+		files, err := attachmentsOf(ctx, tx, tenantID, ids)
+		if err != nil {
+			return err
+		}
+		for i := range out {
+			if f := files[out[i].ID]; f != nil {
+				out[i].Attachments = f
+			}
+		}
+		return nil
 	})
 	return out, err
 }
@@ -296,7 +318,22 @@ func (s *Store) LeaseMessages(ctx context.Context, tenantID string, now time.Tim
 			}
 			out = append(out, m)
 		}
-		return rows.Err()
+		rows.Close()
+		if err = rows.Err(); err != nil {
+			return err
+		}
+		ids := make([]string, len(out))
+		for i := range out {
+			ids[i] = out[i].ID
+		}
+		files, err := dueAttachments(ctx, tx, tenantID, ids)
+		if err != nil {
+			return err
+		}
+		for i := range out {
+			out[i].Attachments = files[out[i].ID]
+		}
+		return nil
 	})
 	return out, err
 }

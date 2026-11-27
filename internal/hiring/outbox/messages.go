@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -23,8 +24,17 @@ type DueMessage struct {
 	ReplyTo   string
 	ICS       string
 	// Secret is the token of an offer link; the body's {{offer_link}} becomes the link.
-	Secret   string
-	Attempts int // including this one
+	Secret      string
+	Attachments []DueAttachment
+	Attempts    int // including this one
+}
+
+// DueAttachment is a file to send with a message, kept in the regional bucket.
+type DueAttachment struct{ Key, Filename, ContentType string }
+
+// Files reads objects of the regional bucket. blob.BlobStore implements it.
+type Files interface {
+	Open(ctx context.Context, key string) (io.ReadCloser, error)
 }
 
 // MessageStore is one region's database as the message sender uses it.
@@ -94,6 +104,9 @@ func (w *Worker) RunMessages(ctx context.Context, store MessageStore) (Result, e
 				done++
 				args, err := MessageArgs(m, w.LinkBase)
 				if err == nil {
+					err = w.attach(ctx, m, &args)
+				}
+				if err == nil {
 					err = w.Sender.Send(ctx, args)
 				}
 				if err == nil {
@@ -122,4 +135,34 @@ func (w *Worker) RunMessages(ctx context.Context, store MessageStore) (Result, e
 		}
 	}
 	return res, firstErr
+}
+
+// maxMailBytes is the most attachment data one email carries: it stays under what mail servers accept.
+const maxMailBytes = 10 << 20
+
+// attach reads the files of a message from the bucket into the mailer arguments.
+func (w *Worker) attach(ctx context.Context, m DueMessage, args *mailer.EmailArgs) error {
+	if len(m.Attachments) == 0 {
+		return nil
+	}
+	if w.Files == nil {
+		return errors.New("outbox: no bucket to read attachments from")
+	}
+	total := 0
+	for _, a := range m.Attachments {
+		r, err := w.Files.Open(ctx, a.Key)
+		if err != nil {
+			return fmt.Errorf("outbox: open attachment: %w", err)
+		}
+		data, err := io.ReadAll(io.LimitReader(r, maxMailBytes+1))
+		_ = r.Close()
+		if err != nil {
+			return fmt.Errorf("outbox: read attachment: %w", err)
+		}
+		if total += len(data); total > maxMailBytes {
+			return errors.New("outbox: attachments are too large")
+		}
+		args.Attachments = append(args.Attachments, mailer.Attachment{Filename: a.Filename, ContentType: a.ContentType, Content: data})
+	}
+	return nil
 }

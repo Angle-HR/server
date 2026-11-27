@@ -46,8 +46,8 @@ func (stubJobs) JobAccess(context.Context, string, string, string) (*application
 func (stubJobs) JobSummary(context.Context, string, string) (*appjobs.JobSummary, error) {
 	return &appjobs.JobSummary{Code: "JB-1", Title: "Engineer", Company: "Acme", PublicID: "abc", RetentionMonths: 6}, nil
 }
-func (s *stubAppStore) List(context.Context, string, string, applications.StoreListQuery) ([]applications.Summary, map[string]int, error) {
-	return nil, nil, nil
+func (s *stubAppStore) List(context.Context, string, string, applications.StoreListQuery) ([]applications.Summary, applications.Counts, error) {
+	return nil, applications.Counts{}, nil
 }
 func (s *stubAppStore) Open(_ context.Context, _ string, in applications.OpenInput) (*applications.Detail, error) {
 	return &applications.Detail{Summary: applications.Summary{ID: in.AppID, SubmittedAt: time.Unix(0, 0).UTC()}}, nil

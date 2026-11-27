@@ -2,6 +2,7 @@
 //
 //	applications.application.submitted.v1       a new application was stored
 //	applications.application.status_changed.v1  an application moved to another status (plain change or review)
+//	applications.application.stage_changed.v1   an application moved to another stage of its job's pipeline
 //
 // Events are written to the transactional outbox of the application's regional database in the same
 // transaction as the write, with the application id as partition key, and relayed to the bus by an outbox relay.
@@ -31,6 +32,7 @@ const Source = "/services/applications"
 const (
 	TypeSubmitted     = "applications.application.submitted.v1"
 	TypeStatusChanged = "applications.application.status_changed.v1"
+	TypeStageChanged  = "applications.application.stage_changed.v1"
 )
 
 // EnvVar switches emission. Anything but "on" (case-insensitive) leaves behaviour unchanged and writes nothing.
@@ -62,6 +64,20 @@ type StatusChanged struct {
 	ChangedAt       time.Time `json:"changed_at"`
 }
 
+// StageChanged is the data of applications.application.stage_changed.v1. Stage ids are the job's own; the kind
+// (applied, shortlisted, interview, offer, hired, disqualified or custom) is stable across jobs.
+type StageChanged struct {
+	ApplicationID   string    `json:"application_id"`
+	JobID           string    `json:"job_id"`
+	CompanyID       string    `json:"company_id"`
+	Region          string    `json:"region"`
+	FromStageID     string    `json:"from_stage_id,omitempty"`
+	ToStageID       string    `json:"to_stage_id"`
+	ToStageKind     string    `json:"to_stage_kind"`
+	ChangedByUserID string    `json:"changed_by_user_id"`
+	ChangedAt       time.Time `json:"changed_at"`
+}
+
 // ErrNoRegion is returned when events are on but the store has no region to stamp them with.
 var ErrNoRegion = errors.New("appevents: events are on but the store has no region")
 
@@ -88,6 +104,34 @@ func StatusChangedEvent(p StatusChanged) (events.Event, error) {
 	ev.ID = uuid.NewSHA1(idSpace, []byte(key)).String()
 	ev.Time = p.ChangedAt.UTC()
 	return ev.WithSubject(p.ApplicationID).WithCompany(p.CompanyID).WithRegion(p.Region).WithPartitionKey(p.ApplicationID), nil
+}
+
+// StageChangedEvent builds the event. Its id derives from the application, the stages and the time.
+func StageChangedEvent(p StageChanged) (events.Event, error) {
+	ev, err := events.NewJSON(Source, TypeStageChanged, p)
+	if err != nil {
+		return ev, err
+	}
+	key := strings.Join([]string{TypeStageChanged, p.ApplicationID, p.FromStageID, p.ToStageID, p.ChangedAt.UTC().Format(time.RFC3339Nano)}, "/")
+	ev.ID = uuid.NewSHA1(idSpace, []byte(key)).String()
+	ev.Time = p.ChangedAt.UTC()
+	return ev.WithSubject(p.ApplicationID).WithCompany(p.CompanyID).WithRegion(p.Region).WithPartitionKey(p.ApplicationID), nil
+}
+
+// EnqueueStageChanged writes the stage changed event into the outbox using the caller's transaction. It does
+// nothing unless Enabled. An error must abort the transaction (fail closed).
+func EnqueueStageChanged(ctx context.Context, tx outbox.Execer, p StageChanged) error {
+	if !Enabled() {
+		return nil
+	}
+	if p.Region == "" {
+		return ErrNoRegion
+	}
+	ev, err := StageChangedEvent(p)
+	if err != nil {
+		return err
+	}
+	return outbox.Enqueue(ctx, tx, ev)
 }
 
 // EnqueueSubmitted writes the submitted event into the outbox using the caller's transaction. It does nothing

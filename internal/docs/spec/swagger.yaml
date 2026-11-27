@@ -106,6 +106,15 @@ definitions:
                 example: abc123
                 type: string
         type: object
+    github_com_Angle-HR_server_internal_hiring_applications.ActivityPage:
+        properties:
+            items:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Event'
+                type: array
+            next_cursor:
+                type: string
+        type: object
     github_com_Angle-HR_server_internal_hiring_applications.Answer:
         properties:
             file_id:
@@ -136,6 +145,16 @@ definitions:
                 description: SendStatusEmails sends the candidate an email when they are rejected or hired.
                 type: boolean
         type: object
+    github_com_Angle-HR_server_internal_hiring_applications.BulkItem:
+        properties:
+            application_id:
+                type: string
+            ok:
+                type: boolean
+            reason:
+                description: 'Reason says why it was left where it is: not_found, flagged (review it first), final, invalid or changed.'
+                type: string
+        type: object
     github_com_Angle-HR_server_internal_hiring_applications.Detail:
         properties:
             answers:
@@ -151,6 +170,9 @@ definitions:
                 type: string
             decided_at:
                 type: string
+            disqualify_reason:
+                description: DisqualifyReason is the code of the reason a rejected application was disqualified for, if one was given.
+                type: string
             email:
                 type: string
             files:
@@ -163,6 +185,9 @@ definitions:
                 items:
                     type: integer
                 type: array
+            followed:
+                description: Followed is true when the caller follows the application.
+                type: boolean
             form_version:
                 type: integer
             has_files:
@@ -175,6 +200,8 @@ definitions:
                 type: string
             name:
                 type: string
+            note_count:
+                type: integer
             opened:
                 type: boolean
             privacy_notice_version:
@@ -185,11 +212,39 @@ definitions:
                 $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Review'
             source:
                 type: string
+            stage_id:
+                description: StageID is the application's stage in its job's pipeline; empty for a withdrawn application.
+                type: string
             status:
                 type: string
             status_note:
                 type: string
             submitted_at:
+                type: string
+            tag_ids:
+                items:
+                    type: string
+                type: array
+            tags:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Tag'
+                type: array
+        type: object
+    github_com_Angle-HR_server_internal_hiring_applications.Event:
+        properties:
+            actor_id:
+                type: string
+            actor_name:
+                type: string
+            created_at:
+                type: string
+            data:
+                items:
+                    type: integer
+                type: array
+            id:
+                type: integer
+            type:
                 type: string
         type: object
     github_com_Angle-HR_server_internal_hiring_applications.File:
@@ -214,6 +269,30 @@ definitions:
             url:
                 type: string
         type: object
+    github_com_Angle-HR_server_internal_hiring_applications.MoveResult:
+        properties:
+            decided_at:
+                type: string
+            stage_id:
+                type: string
+            status:
+                type: string
+        type: object
+    github_com_Angle-HR_server_internal_hiring_applications.Note:
+        properties:
+            author_id:
+                type: string
+            body:
+                type: string
+            created_at:
+                type: string
+            id:
+                type: string
+            mine:
+                type: boolean
+            updated_at:
+                type: string
+        type: object
     github_com_Angle-HR_server_internal_hiring_applications.Page:
         properties:
             counts:
@@ -225,6 +304,18 @@ definitions:
                     $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Summary'
                 type: array
             next_cursor:
+                type: string
+            stage_counts:
+                additionalProperties:
+                    type: integer
+                description: StageCounts are the applications per stage id for the whole job, whatever the filters.
+                type: object
+        type: object
+    github_com_Angle-HR_server_internal_hiring_applications.Reason:
+        properties:
+            code:
+                type: string
+            label:
                 type: string
         type: object
     github_com_Angle-HR_server_internal_hiring_applications.Result:
@@ -253,6 +344,25 @@ definitions:
                 description: open or done
                 type: string
         type: object
+    github_com_Angle-HR_server_internal_hiring_applications.Stage:
+        properties:
+            count:
+                description: Count is how many applications are in the stage now.
+                type: integer
+            final:
+                description: Final stages (Hired, Disqualified) end the application.
+                type: boolean
+            id:
+                type: string
+            key:
+                type: string
+            kind:
+                type: string
+            name:
+                type: string
+            position:
+                type: integer
+        type: object
     github_com_Angle-HR_server_internal_hiring_applications.Summary:
         properties:
             country:
@@ -261,6 +371,9 @@ definitions:
                 type: string
             flag_count:
                 type: integer
+            followed:
+                description: Followed is true when the caller follows the application.
+                type: boolean
             has_files:
                 type: boolean
             id:
@@ -269,13 +382,31 @@ definitions:
                 type: string
             name:
                 type: string
+            note_count:
+                type: integer
             opened:
                 type: boolean
             source:
                 type: string
+            stage_id:
+                description: StageID is the application's stage in its job's pipeline; empty for a withdrawn application.
+                type: string
             status:
                 type: string
             submitted_at:
+                type: string
+            tag_ids:
+                items:
+                    type: string
+                type: array
+        type: object
+    github_com_Angle-HR_server_internal_hiring_applications.Tag:
+        properties:
+            color:
+                type: string
+            id:
+                type: string
+            name:
                 type: string
         type: object
     github_com_Angle-HR_server_internal_hiring_draft.AuditEvent:
@@ -1294,6 +1425,11 @@ definitions:
             sort_order:
                 type: integer
         type: object
+    internal_hiring_apphttp.ActivityEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.ActivityPage'
+        type: object
     internal_hiring_apphttp.ApplicantSettingsEnvelope:
         properties:
             data:
@@ -1360,18 +1496,134 @@ definitions:
                 type: string
             note:
                 type: string
+            reason:
+                description: Reason is a disqualification reason code, optional when rejecting.
+                type: string
         type: object
     internal_hiring_apphttp.ApplicationStatusRequest:
         properties:
             note:
                 type: string
+            reason:
+                description: Reason is a disqualification reason code, optional with a rejection.
+                type: string
             status:
+                type: string
+        type: object
+    internal_hiring_apphttp.ApplicationTagsRequest:
+        properties:
+            tag_ids:
+                items:
+                    type: string
+                type: array
+        type: object
+    internal_hiring_apphttp.BulkMoveEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.BulkItem'
+                type: array
+        type: object
+    internal_hiring_apphttp.BulkMoveStageRequest:
+        properties:
+            application_ids:
+                items:
+                    type: string
+                type: array
+            note:
+                type: string
+            reason:
+                type: string
+            stage_id:
                 type: string
         type: object
     internal_hiring_apphttp.FileLinkEnvelope:
         properties:
             data:
                 $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.FileLink'
+        type: object
+    internal_hiring_apphttp.MoveResultEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.MoveResult'
+        type: object
+    internal_hiring_apphttp.MoveStageRequest:
+        properties:
+            note:
+                type: string
+            reason:
+                description: Reason is a disqualification reason code (GET /hiring/disqualification-reasons); needed for Disqualified.
+                type: string
+            stage_id:
+                type: string
+        type: object
+    internal_hiring_apphttp.NoteEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Note'
+        type: object
+    internal_hiring_apphttp.NoteRequest:
+        properties:
+            body:
+                type: string
+        type: object
+    internal_hiring_apphttp.NotesEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Note'
+                type: array
+        type: object
+    internal_hiring_apphttp.ReasonsEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Reason'
+                type: array
+        type: object
+    internal_hiring_apphttp.StageEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Stage'
+        type: object
+    internal_hiring_apphttp.StageNameRequest:
+        properties:
+            name:
+                type: string
+        type: object
+    internal_hiring_apphttp.StageOrderRequest:
+        properties:
+            stage_ids:
+                items:
+                    type: string
+                type: array
+        type: object
+    internal_hiring_apphttp.StagesEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Stage'
+                type: array
+        type: object
+    internal_hiring_apphttp.TagEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Tag'
+        type: object
+    internal_hiring_apphttp.TagRequest:
+        properties:
+            color:
+                description: Color is gray (default), red, orange, yellow, green, teal, blue, purple or pink.
+                type: string
+            name:
+                type: string
+        type: object
+    internal_hiring_apphttp.TagsEnvelope:
+        properties:
+            data:
+                items:
+                    $ref: '#/definitions/github_com_Angle-HR_server_internal_hiring_applications.Tag'
+                type: array
         type: object
     internal_hiring_apphttp.UploadRequest:
         properties:
@@ -5107,6 +5359,21 @@ paths:
             summary: Add a department
             tags:
                 - hiring
+    /hiring/disqualification-reasons:
+        get:
+            description: The codes a rejection or a move to Disqualified takes as `reason`.
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.ReasonsEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Disqualification reasons
+            tags:
+                - hiring
     /hiring/me:
         get:
             description: The signed-in person's company roles and the permissions they add up to, such as job.export. Use it to show or hide actions; the server still checks every request.
@@ -5225,6 +5492,84 @@ paths:
             security:
                 - SessionCookie: []
             summary: Search skills
+            tags:
+                - hiring
+    /hiring/tags:
+        get:
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.TagsEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: The company's tags
+            tags:
+                - hiring
+        post:
+            consumes:
+                - application/json
+            description: Needs job.manage_any. Names are unique, ignoring case.
+            parameters:
+                - description: Tag
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_apphttp.TagRequest'
+            produces:
+                - application/json
+            responses:
+                "201":
+                    description: Created
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.TagEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Create a tag
+            tags:
+                - hiring
+    /hiring/tags/{tag_id}:
+        delete:
+            description: Needs job.manage_any. The tag is removed from every application.
+            parameters:
+                - description: Tag id
+                  in: path
+                  name: tag_id
+                  required: true
+                  type: string
+            responses:
+                "204":
+                    description: No Content
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Delete a tag
             tags:
                 - hiring
     /hiring/templates:
@@ -5780,6 +6125,18 @@ paths:
                   in: query
                   name: new
                   type: boolean
+                - description: Only applications in this stage id
+                  in: query
+                  name: stage
+                  type: string
+                - description: Only applications with this tag id
+                  in: query
+                  name: tag
+                  type: string
+                - description: Only applications the caller follows
+                  in: query
+                  name: followed
+                  type: boolean
                 - description: next_cursor of the previous page
                   in: query
                   name: cursor
@@ -5838,6 +6195,48 @@ paths:
             summary: Open an application
             tags:
                 - jobs
+    /jobs/{id}/applications/{app_id}/activity:
+        get:
+            description: 'The timeline, newest first: arrival, stage and status changes, notes added, edited or deleted (never their text) and tag changes. 30 per page by default (100 at most).'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Application id
+                  in: path
+                  name: app_id
+                  required: true
+                  type: string
+                - description: next_cursor of the previous page
+                  in: query
+                  name: cursor
+                  type: string
+                - description: Page size
+                  in: query
+                  name: limit
+                  type: integer
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.ActivityEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: An application's activity
+            tags:
+                - jobs
     /jobs/{id}/applications/{app_id}/files/{file_id}:
         get:
             description: Returns a link that works for 5 minutes and downloads the file under its original name. The request is recorded in the job's audit log. Ask again for a new link.
@@ -5871,6 +6270,204 @@ paths:
             security:
                 - SessionCookie: []
             summary: Get a download link for an application's file
+            tags:
+                - jobs
+    /jobs/{id}/applications/{app_id}/follow:
+        delete:
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Application id
+                  in: path
+                  name: app_id
+                  required: true
+                  type: string
+            responses:
+                "204":
+                    description: No Content
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Unfollow an application
+            tags:
+                - jobs
+        put:
+            description: Stars the application for the caller. Repeating it is harmless.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Application id
+                  in: path
+                  name: app_id
+                  required: true
+                  type: string
+            responses:
+                "204":
+                    description: No Content
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Follow an application
+            tags:
+                - jobs
+    /jobs/{id}/applications/{app_id}/notes:
+        get:
+            description: 'Newest first. Internal: candidates never see them. Seen by people who can see the job.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Application id
+                  in: path
+                  name: app_id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.NotesEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: An application's notes
+            tags:
+                - jobs
+        post:
+            consumes:
+                - application/json
+            description: Anyone who can see the job can add one; interviewers leave their feedback this way. At most 4,000 characters.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Application id
+                  in: path
+                  name: app_id
+                  required: true
+                  type: string
+                - description: Note
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_apphttp.NoteRequest'
+            produces:
+                - application/json
+            responses:
+                "201":
+                    description: Created
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.NoteEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Add a note
+            tags:
+                - jobs
+    /jobs/{id}/applications/{app_id}/notes/{note_id}:
+        delete:
+            description: Only the author can.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Application id
+                  in: path
+                  name: app_id
+                  required: true
+                  type: string
+                - description: Note id
+                  in: path
+                  name: note_id
+                  required: true
+                  type: string
+            responses:
+                "204":
+                    description: No Content
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Delete a note
+            tags:
+                - jobs
+        patch:
+            consumes:
+                - application/json
+            description: Only the author can.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Application id
+                  in: path
+                  name: app_id
+                  required: true
+                  type: string
+                - description: Note id
+                  in: path
+                  name: note_id
+                  required: true
+                  type: string
+                - description: Note
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_apphttp.NoteRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.NoteEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Edit a note
             tags:
                 - jobs
     /jobs/{id}/applications/{app_id}/review:
@@ -5923,6 +6520,56 @@ paths:
             summary: Decide a flagged application
             tags:
                 - jobs
+    /jobs/{id}/applications/{app_id}/stage:
+        post:
+            consumes:
+                - application/json
+            description: 'To an open stage, a received application becomes in_review (unless the stage is Applied). To Hired or Disqualified the application is decided: it ends, its retention clock starts and the candidate is emailed unless the company turned that off. Disqualified needs a reason. A flagged application is moved only after its review; a decided one never moves.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Application id
+                  in: path
+                  name: app_id
+                  required: true
+                  type: string
+                - description: Stage
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_apphttp.MoveStageRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.MoveResultEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Move an application to a stage
+            tags:
+                - jobs
     /jobs/{id}/applications/{app_id}/status:
         post:
             consumes:
@@ -5971,6 +6618,85 @@ paths:
             security:
                 - SessionCookie: []
             summary: Change an application's status
+            tags:
+                - jobs
+    /jobs/{id}/applications/{app_id}/tags:
+        put:
+            consumes:
+                - application/json
+            description: 'Replaces the tags: send the full list. At most 10. Needs to be the job''s creator, a hiring manager or recruiter on it, or job.manage_any.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Application id
+                  in: path
+                  name: app_id
+                  required: true
+                  type: string
+                - description: Tags
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_apphttp.ApplicationTagsRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.TagsEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Set an application's tags
+            tags:
+                - jobs
+    /jobs/{id}/applications/bulk/stage:
+        post:
+            consumes:
+                - application/json
+            description: 'Up to 100 applications. Each is its own change; the answer says per application whether it moved, and why not (not_found, flagged, final, changed). Flagged applications are never moved in bulk: they are decided one by one through their review.'
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Applications and stage
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_apphttp.BulkMoveStageRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.BulkMoveEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Move several applications to a stage
             tags:
                 - jobs
     /jobs/{id}/archive:
@@ -6672,6 +7398,191 @@ paths:
             security:
                 - SessionCookie: []
             summary: Share kit
+            tags:
+                - jobs
+    /jobs/{id}/stages:
+        get:
+            description: Applied, Shortlisted, Interview, Offer, Hired and Disqualified, plus the company's custom stages, in order, each with the number of applications in it. The default stages are created the first time they are needed.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.StagesEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: A job's pipeline stages
+            tags:
+                - jobs
+        post:
+            consumes:
+                - application/json
+            description: The new stage goes right before Hired. A job has at most 20 stages and names are unique within it. Needs to be the job's creator, a hiring manager or recruiter on it, or job.manage_any.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Stage
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_apphttp.StageNameRequest'
+            produces:
+                - application/json
+            responses:
+                "201":
+                    description: Created
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.StageEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Add a custom stage
+            tags:
+                - jobs
+    /jobs/{id}/stages/{stage_id}:
+        delete:
+            description: Only an empty custom stage can be removed.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Stage id
+                  in: path
+                  name: stage_id
+                  required: true
+                  type: string
+            responses:
+                "204":
+                    description: No Content
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Remove a custom stage
+            tags:
+                - jobs
+        patch:
+            consumes:
+                - application/json
+            description: Applied, Hired and Disqualified keep their names.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Stage id
+                  in: path
+                  name: stage_id
+                  required: true
+                  type: string
+                - description: Name
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_apphttp.StageNameRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.StagesEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Rename a stage
+            tags:
+                - jobs
+    /jobs/{id}/stages/order:
+        put:
+            consumes:
+                - application/json
+            description: List every open stage once with Applied first. Hired and Disqualified always stay last. Returns the pipeline.
+            parameters:
+                - description: Job id
+                  in: path
+                  name: id
+                  required: true
+                  type: string
+                - description: Order
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_hiring_apphttp.StageOrderRequest'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_apphttp.StagesEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Reorder the open stages
             tags:
                 - jobs
     /jobs/{id}/to-draft:

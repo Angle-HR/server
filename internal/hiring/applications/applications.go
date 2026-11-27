@@ -101,6 +101,12 @@ type Summary struct {
 	Opened      bool      `json:"opened"`
 	HasFiles    bool      `json:"has_files"`
 	SubmittedAt time.Time `json:"submitted_at"`
+	// StageID is the application's stage in its job's pipeline; empty for a withdrawn application.
+	StageID string `json:"stage_id"`
+	// Followed is true when the caller follows the application.
+	Followed  bool     `json:"followed"`
+	NoteCount int      `json:"note_count"`
+	TagIDs    []string `json:"tag_ids"`
 }
 
 // StoreListQuery is a list request after validation.
@@ -109,6 +115,9 @@ type StoreListQuery struct {
 	Source   string
 	Search   string
 	NewOnly  bool
+	// StageID, TagID and FollowedOnly narrow the list; ActorID is the caller, for FollowedOnly and Summary.Followed.
+	StageID, TagID, ActorID string
+	FollowedOnly            bool
 	// After is the keyset position of the last row of the previous page; the zero value starts at the top.
 	AfterTime time.Time
 	AfterID   string
@@ -121,8 +130,11 @@ type ListQuery struct {
 	Source   string
 	Query    string
 	NewOnly  bool
-	Cursor   string
-	Limit    int
+	// StageID and TagID keep one stage or tag; Followed keeps what the caller follows.
+	StageID, TagID string
+	Followed       bool
+	Cursor         string
+	Limit          int
 }
 
 // Page is one page of the list with the per-status counts of the whole job.
@@ -130,6 +142,8 @@ type Page struct {
 	Items      []Summary      `json:"items"`
 	NextCursor string         `json:"next_cursor,omitempty"`
 	Counts     map[string]int `json:"counts"`
+	// StageCounts are the applications per stage id for the whole job, whatever the filters.
+	StageCounts map[string]int `json:"stage_counts"`
 }
 
 // Answer is one answer of an application, with the question as it was when the job was published.
@@ -166,17 +180,20 @@ type Review struct {
 // Detail is one application as a reviewer sees it.
 type Detail struct {
 	Summary
-	JobID          string          `json:"job_id"`
-	FormVersion    int             `json:"form_version"`
-	Flags          json.RawMessage `json:"flags"`
-	Answers        []Answer        `json:"answers"`
-	Files          []File          `json:"files"`
-	Review         *Review         `json:"review,omitempty"`
-	StatusNote     string          `json:"status_note,omitempty"`
-	DecidedAt      *time.Time      `json:"decided_at,omitempty"`
-	ConsentGivenAt *time.Time      `json:"consent_given_at,omitempty"`
-	NoticeVersion  string          `json:"privacy_notice_version"`
-	RetentionUntil time.Time       `json:"retention_until"`
+	JobID       string          `json:"job_id"`
+	FormVersion int             `json:"form_version"`
+	Flags       json.RawMessage `json:"flags"`
+	Answers     []Answer        `json:"answers"`
+	Files       []File          `json:"files"`
+	Review      *Review         `json:"review,omitempty"`
+	StatusNote  string          `json:"status_note,omitempty"`
+	// DisqualifyReason is the code of the reason a rejected application was disqualified for, if one was given.
+	DisqualifyReason string     `json:"disqualify_reason,omitempty"`
+	Tags             []Tag      `json:"tags"`
+	DecidedAt        *time.Time `json:"decided_at,omitempty"`
+	ConsentGivenAt   *time.Time `json:"consent_given_at,omitempty"`
+	NoticeVersion    string     `json:"privacy_notice_version"`
+	RetentionUntil   time.Time  `json:"retention_until"`
 	// CanDecide tells the client whether to offer status changes and review decisions.
 	CanDecide bool `json:"can_decide"`
 }
@@ -238,6 +255,9 @@ type Change struct {
 	Now                   time.Time
 	// RetentionMonths is the job's; used when To is final, to start the retention clock.
 	RetentionMonths int
+	// StageID is the stage the application ends in ("" lets the store use Hired or Disqualified for those
+	// statuses). Reason is the disqualification reason code, for a rejection.
+	StageID, Reason string
 	// Decision is the review decision, "" for a plain status change.
 	Decision string
 	Block    *Block
@@ -246,7 +266,7 @@ type Change struct {
 
 // Store is one region's database as this package uses it.
 type Store interface {
-	List(ctx context.Context, tenantID, jobID string, q StoreListQuery) ([]Summary, map[string]int, error)
+	List(ctx context.Context, tenantID, jobID string, q StoreListQuery) ([]Summary, Counts, error)
 	// Open loads one application, records that it was opened (counters, review task) and writes the audit entry,
 	// in one transaction. It returns ErrNotFound when the application is not on the job.
 	Open(ctx context.Context, tenantID string, in OpenInput) (*Detail, error)
@@ -262,6 +282,12 @@ type Store interface {
 	SaveApplicantSettings(ctx context.Context, tenantID string, reapplyMonths int, statusEmails bool) error
 }
 
+// Counts are the whole job's applications per status and per stage id.
+type Counts struct {
+	Status map[string]int
+	Stage  map[string]int
+}
+
 // Files makes short-lived download links. uploads.Storage implements it.
 type Files interface {
 	PresignGet(ctx context.Context, key string, opts blob.GetOptions) (string, error)
@@ -275,6 +301,10 @@ const FileLinkTTL = 5 * time.Minute
 // Service serves the hiring team of one region.
 type Service struct {
 	Store Store
+	// Pipeline holds stages, notes, tags, follows and the timeline. Nil turns those routes off.
+	Pipeline PipelineStore
+	// Names resolves actor names in the timeline. Optional.
+	Names UserNames
 	// Jobs is what the application side knows about jobs: access to a job and what a status email says about it.
 	Jobs   appjobs.RegionalJobs
 	Files  Files
@@ -342,7 +372,20 @@ func (s *Service) List(ctx context.Context, c Caller, jobID string, q ListQuery)
 	if _, err := s.access(ctx, c, jobID); err != nil {
 		return nil, err
 	}
-	sq := StoreListQuery{Source: strings.ToLower(strings.TrimSpace(q.Source)), NewOnly: q.NewOnly}
+	sq := StoreListQuery{Source: strings.ToLower(strings.TrimSpace(q.Source)), NewOnly: q.NewOnly,
+		ActorID: c.UserID, FollowedOnly: q.Followed}
+	if q.StageID != "" {
+		if !formschema.IsUUID(q.StageID) {
+			return nil, invalid("stage", "unknown stage")
+		}
+		sq.StageID = q.StageID
+	}
+	if q.TagID != "" {
+		if !formschema.IsUUID(q.TagID) {
+			return nil, invalid("tag", "unknown tag")
+		}
+		sq.TagID = q.TagID
+	}
 	for _, st := range q.Statuses {
 		if !contains(AllStatuses, st) {
 			return nil, invalid("status", "status must be one of "+strings.Join(AllStatuses, ", "))
@@ -379,7 +422,7 @@ func (s *Service) List(ctx context.Context, c Caller, jobID string, q ListQuery)
 	if err != nil {
 		return nil, err
 	}
-	page := &Page{Items: items, Counts: counts}
+	page := &Page{Items: items, Counts: counts.Status, StageCounts: counts.Stage}
 	if len(items) > limit {
 		page.Items = items[:limit]
 		last := page.Items[limit-1]
@@ -390,6 +433,9 @@ func (s *Service) List(ctx context.Context, c Caller, jobID string, q ListQuery)
 	}
 	if page.Counts == nil {
 		page.Counts = map[string]int{}
+	}
+	if page.StageCounts == nil {
+		page.StageCounts = map[string]int{}
 	}
 	return page, nil
 }
@@ -455,12 +501,31 @@ var transitions = map[string][]string{
 type StatusInput struct {
 	Status string
 	Note   string
+	// Reason is a disqualification reason code, optional with a rejection.
+	Reason string
 }
 
 // Result is the outcome of a status change.
 type Result struct {
 	Status    string     `json:"status"`
 	DecidedAt *time.Time `json:"decided_at,omitempty"`
+}
+
+// applyOpts are the pipeline parts of a change.
+type applyOpts struct{ StageID, Reason string }
+
+func cleanReason(to, reason string) (string, error) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return "", nil
+	}
+	if to != StatusRejected {
+		return "", invalid("reason", "a reason only goes with a rejection")
+	}
+	if !validReason(reason) {
+		return "", invalid("reason", "unknown reason")
+	}
+	return reason, nil
 }
 
 func cleanNote(note string) (string, error) {
@@ -500,13 +565,19 @@ func (s *Service) SetStatus(ctx context.Context, c Caller, jobID, appID string, 
 	if !contains(transitions[st.Status], in.Status) {
 		return nil, ErrInvalidTransition
 	}
-	return s.apply(ctx, c, a, st, appID, in.Status, note, "")
+	reason, err := cleanReason(in.Status, in.Reason)
+	if err != nil {
+		return nil, err
+	}
+	return s.apply(ctx, c, a, st, appID, in.Status, note, "", applyOpts{Reason: reason})
 }
 
 // ReviewInput is the decision on a flagged application.
 type ReviewInput struct {
 	Decision string
 	Note     string
+	// Reason is a disqualification reason code, optional with a rejection.
+	Reason string
 }
 
 // Review decides a flagged application. The reviewer must have opened the application since it was flagged: the
@@ -544,17 +615,22 @@ func (s *Service) Review(ctx context.Context, c Caller, jobID, appID string, in 
 	if in.Decision == DecisionReject {
 		to = StatusRejected
 	}
-	return s.apply(ctx, c, a, st, appID, to, note, in.Decision)
+	reason, err := cleanReason(to, in.Reason)
+	if err != nil {
+		return nil, err
+	}
+	return s.apply(ctx, c, a, st, appID, to, note, in.Decision, applyOpts{Reason: reason})
 }
 
 // apply works out everything a change brings with it and has the store do it in one transaction: the retention
 // clock for a final status, the reapply block and the email to the candidate for a rejection, the email for a
 // hire.
-func (s *Service) apply(ctx context.Context, c Caller, a *JobAccess, st *ChangeState, appID, to, note, decision string) (*Result, error) {
+func (s *Service) apply(ctx context.Context, c Caller, a *JobAccess, st *ChangeState, appID, to, note, decision string, o applyOpts) (*Result, error) {
 	now := s.now().UTC()
 	ch := &Change{
 		AppID: appID, JobID: a.JobID, ActorID: c.UserID, From: st.Status, To: to, Note: note, Now: now,
 		RetentionMonths: a.RetentionMonths, Decision: decision,
+		StageID: o.StageID, Reason: o.Reason,
 	}
 	if Final(to) {
 		if to == StatusRejected && st.ReapplyBlockMonths > 0 && s.Hasher.Enabled() {

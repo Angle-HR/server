@@ -47,9 +47,9 @@ func (f *fakeStore) JobAccess(_ context.Context, _, _, user string) (*JobAccess,
 	}
 	return &a, nil
 }
-func (f *fakeStore) List(_ context.Context, _, _ string, q StoreListQuery) ([]Summary, map[string]int, error) {
+func (f *fakeStore) List(_ context.Context, _, _ string, q StoreListQuery) ([]Summary, Counts, error) {
 	f.listQ = q
-	return f.items, map[string]int{"received": len(f.items)}, nil
+	return f.items, Counts{Status: map[string]int{"received": len(f.items)}}, nil
 }
 func (f *fakeStore) Open(_ context.Context, _ string, in OpenInput) (*Detail, error) {
 	f.opened = append(f.opened, in)

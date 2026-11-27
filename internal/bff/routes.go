@@ -15,7 +15,8 @@ type Route struct {
 }
 
 // ApplicationsPath reports whether the path belongs to the applications service: public apply and uploads,
-// the company side of a job's applications, and the applicant settings.
+// the company side of a job's applications and pipeline stages, and the applicant settings, tags and
+// disqualification reasons.
 func ApplicationsPath(p string) bool {
 	parts := strings.Split(strings.Trim(p, "/"), "/")
 	switch {
@@ -23,7 +24,12 @@ func ApplicationsPath(p string) bool {
 		return true
 	case len(parts) >= 3 && parts[0] == "jobs" && parts[2] == "applications":
 		return true
-	case len(parts) == 2 && parts[0] == "hiring" && parts[1] == "applicant-settings":
+	case len(parts) >= 3 && parts[0] == "jobs" && parts[2] == "stages":
+		return true
+	case len(parts) == 2 && parts[0] == "hiring" && (parts[1] == "applicant-settings" || parts[1] == "tags" ||
+		parts[1] == "disqualification-reasons"):
+		return true
+	case len(parts) == 3 && parts[0] == "hiring" && parts[1] == "tags":
 		return true
 	}
 	return false

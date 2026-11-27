@@ -24,7 +24,10 @@ const listApplicationsSQL = `
 SELECT a.id::text, a.candidate_name, a.candidate_email, a.candidate_country::text, a.candidate_market, a.status,
        a.source, jsonb_array_length(a.flags), a.first_opened_at IS NOT NULL,
        EXISTS (SELECT 1 FROM hiring.application_files f WHERE f.application_id = a.id AND f.tenant_id = a.tenant_id),
-       a.submitted_at
+       a.submitted_at, COALESCE(a.stage_id::text, ''),
+       EXISTS (SELECT 1 FROM hiring.app_follows fo WHERE fo.application_id = a.id AND fo.user_id = NULLIF($10::text, '')::uuid),
+       (SELECT count(*)::int FROM hiring.app_notes n WHERE n.application_id = a.id),
+       COALESCE((SELECT array_agg(t.tag_id::text ORDER BY t.created_at) FROM hiring.app_application_tags t WHERE t.application_id = a.id), '{}')::text[]
 FROM hiring.applications a
 WHERE a.tenant_id = $1::uuid AND a.job_id = $2::uuid
   AND (cardinality($3::text[]) = 0 OR a.status = ANY($3::text[]))
@@ -32,6 +35,9 @@ WHERE a.tenant_id = $1::uuid AND a.job_id = $2::uuid
   AND (NOT $5::boolean OR a.first_opened_at IS NULL)
   AND ($6::text = '' OR a.candidate_name ILIKE '%' || $6::text || '%' OR a.candidate_email ILIKE '%' || $6::text || '%')
   AND ($7::timestamptz IS NULL OR (a.submitted_at, a.id) < ($7::timestamptz, $8::uuid))
+  AND ($11::text = '' OR a.stage_id = NULLIF($11::text, '')::uuid)
+  AND (NOT $12::boolean OR EXISTS (SELECT 1 FROM hiring.app_follows fo WHERE fo.application_id = a.id AND fo.user_id = NULLIF($10::text, '')::uuid))
+  AND ($13::text = '' OR EXISTS (SELECT 1 FROM hiring.app_application_tags t WHERE t.application_id = a.id AND t.tag_id = NULLIF($13::text, '')::uuid))
 ORDER BY a.submitted_at DESC, a.id DESC
 LIMIT $9::int`
 
@@ -39,13 +45,17 @@ const countApplicationsSQL = `
 SELECT status, count(*)::int FROM hiring.applications
 WHERE tenant_id = $1::uuid AND job_id = $2::uuid GROUP BY status`
 
+const countStagesSQL = `
+SELECT stage_id::text, count(*)::int FROM hiring.applications
+WHERE tenant_id = $1::uuid AND job_id = $2::uuid AND stage_id IS NOT NULL GROUP BY stage_id`
+
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // List implements applications.Store.
-func (s *Store) List(ctx context.Context, tenantID, jobID string, q applications.StoreListQuery) ([]applications.Summary, map[string]int, error) {
+func (s *Store) List(ctx context.Context, tenantID, jobID string, q applications.StoreListQuery) ([]applications.Summary, applications.Counts, error) {
 	var (
 		out    []applications.Summary
-		counts = map[string]int{}
+		counts = applications.Counts{Status: map[string]int{}, Stage: map[string]int{}}
 	)
 	err := s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		statuses := q.Statuses
@@ -59,7 +69,7 @@ func (s *Store) List(ctx context.Context, tenantID, jobID string, q applications
 			after, afterID = &t, q.AfterID
 		}
 		rows, err := tx.Query(ctx, listApplicationsSQL, tenantID, jobID, statuses, q.Source, q.NewOnly,
-			likeEscaper.Replace(q.Search), after, afterID, q.Limit)
+			likeEscaper.Replace(q.Search), after, afterID, q.Limit, q.ActorID, q.StageID, q.FollowedOnly, q.TagID)
 		if err != nil {
 			return fmt.Errorf("appstore: list applications: %w", err)
 		}
@@ -67,7 +77,7 @@ func (s *Store) List(ctx context.Context, tenantID, jobID string, q applications
 		for rows.Next() {
 			var a applications.Summary
 			if err = rows.Scan(&a.ID, &a.Name, &a.Email, &a.Country, &a.Market, &a.Status, &a.Source, &a.FlagCount,
-				&a.Opened, &a.HasFiles, &a.SubmittedAt); err != nil {
+				&a.Opened, &a.HasFiles, &a.SubmittedAt, &a.StageID, &a.Followed, &a.NoteCount, &a.TagIDs); err != nil {
 				return fmt.Errorf("appstore: scan application: %w", err)
 			}
 			out = append(out, a)
@@ -87,12 +97,29 @@ func (s *Store) List(ctx context.Context, tenantID, jobID string, q applications
 			if err = crows.Scan(&st, &n); err != nil {
 				return fmt.Errorf("appstore: scan count: %w", err)
 			}
-			counts[st] = n
+			counts.Status[st] = n
 		}
-		return crows.Err()
+		if err = crows.Err(); err != nil {
+			return err
+		}
+		crows.Close()
+		srows, err := tx.Query(ctx, countStagesSQL, tenantID, jobID)
+		if err != nil {
+			return fmt.Errorf("appstore: count stages: %w", err)
+		}
+		defer srows.Close()
+		for srows.Next() {
+			var id string
+			var n int
+			if err = srows.Scan(&id, &n); err != nil {
+				return fmt.Errorf("appstore: scan stage count: %w", err)
+			}
+			counts.Stage[id] = n
+		}
+		return srows.Err()
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, applications.Counts{}, err
 	}
 	return out, counts, nil
 }
@@ -101,7 +128,10 @@ const openApplicationSQL = `
 SELECT a.id::text, a.candidate_name, a.candidate_email, a.candidate_country::text, a.candidate_market, a.status,
        a.source, jsonb_array_length(a.flags), a.first_opened_at IS NOT NULL, a.submitted_at,
        a.job_id::text, a.form_id::text, a.form_version, a.flags, a.answers, COALESCE(a.status_note, ''),
-       a.decided_at, a.consent_given_at, a.notice_version, a.retention_until
+       a.decided_at, a.consent_given_at, a.notice_version, a.retention_until,
+       COALESCE(a.stage_id::text, ''), COALESCE(a.disqualify_reason, ''),
+       EXISTS (SELECT 1 FROM hiring.app_follows fo WHERE fo.application_id = a.id AND fo.user_id = NULLIF($4::text, '')::uuid),
+       (SELECT count(*)::int FROM hiring.app_notes n WHERE n.application_id = a.id)
 FROM hiring.applications a
 WHERE a.id = $1::uuid AND a.job_id = $2::uuid AND a.tenant_id = $3::uuid
 FOR UPDATE`
@@ -152,10 +182,10 @@ func (s *Store) Open(ctx context.Context, tenantID string, in applications.OpenI
 			formID  string
 			answers []byte
 		)
-		err := tx.QueryRow(ctx, openApplicationSQL, in.AppID, in.JobID, tenantID).Scan(
+		err := tx.QueryRow(ctx, openApplicationSQL, in.AppID, in.JobID, tenantID, in.ActorID).Scan(
 			&d.ID, &d.Name, &d.Email, &d.Country, &d.Market, &d.Status, &d.Source, &d.FlagCount, &d.Opened,
 			&d.SubmittedAt, &d.JobID, &formID, &d.FormVersion, &d.Flags, &answers, &d.StatusNote, &d.DecidedAt,
-			&d.ConsentGivenAt, &d.NoticeVersion, &d.RetentionUntil)
+			&d.ConsentGivenAt, &d.NoticeVersion, &d.RetentionUntil, &d.StageID, &d.DisqualifyReason, &d.Followed, &d.NoteCount)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -166,6 +196,13 @@ func (s *Store) Open(ctx context.Context, tenantID string, in applications.OpenI
 			return err
 		}
 		d.Opened = true
+		if d.Tags, err = loadApplicationTags(ctx, tx, tenantID, in.AppID); err != nil {
+			return err
+		}
+		d.TagIDs = make([]string, len(d.Tags))
+		for i, t := range d.Tags {
+			d.TagIDs[i] = t.ID
+		}
 
 		questions, err := s.Jobs.FrozenQuestions(ctx, tenantID, formID, d.FormVersion)
 		if err != nil {
@@ -337,7 +374,9 @@ UPDATE hiring.applications SET
     decided_at = CASE WHEN $6::boolean THEN $7::timestamptz END,
     decided_by = CASE WHEN $6::boolean THEN $8::uuid END,
     retention_until = CASE WHEN $6::boolean THEN LEAST(retention_until, $7::timestamptz + make_interval(months => $9::int))
-                           ELSE retention_until END
+                           ELSE retention_until END,
+    stage_id = COALESCE(NULLIF($11::text, '')::uuid, stage_id),
+    disqualify_reason = NULLIF($12::text, '')
 WHERE id = $1::uuid AND job_id = $2::uuid AND tenant_id = $3::uuid AND status = $10 AND status NOT IN ('rejected', 'hired', 'withdrawn')
 RETURNING lawful_basis`
 
@@ -368,9 +407,29 @@ ON CONFLICT (tenant_id, email_hmac) DO UPDATE SET
 func (s *Store) ApplyChange(ctx context.Context, tenantID string, ch *applications.Change) error {
 	return s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		final := applications.Final(ch.To)
+		// A decision puts the application in Hired or Disqualified, unless the caller already chose that stage.
+		stageID, priorStage, toKind := ch.StageID, "", ""
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(stage_id::text, '') FROM hiring.applications WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+			ch.AppID, tenantID).Scan(&priorStage); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("appstore: current stage: %w", err)
+		}
+		if stageID == "" && (ch.To == applications.StatusHired || ch.To == applications.StatusRejected) {
+			toKind = applications.KindHired
+			if ch.To == applications.StatusRejected {
+				toKind = applications.KindDisqualified
+			}
+			if err := ensureStages(ctx, tx, tenantID, ch.JobID); err != nil {
+				return err
+			}
+			id, err := stageIDByKind(ctx, tx, tenantID, ch.JobID, toKind)
+			if err != nil {
+				return err
+			}
+			stageID = id
+		}
 		var basis string
 		err := tx.QueryRow(ctx, applyChangeSQL, ch.AppID, ch.JobID, tenantID, ch.To, ch.Note, final, ch.Now,
-			ch.ActorID, ch.RetentionMonths, ch.From).Scan(&basis)
+			ch.ActorID, ch.RetentionMonths, ch.From, stageID, ch.Reason).Scan(&basis)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return applications.ErrStale
 		}
@@ -414,11 +473,34 @@ func (s *Store) ApplyChange(ctx context.Context, tenantID string, ch *applicatio
 		if _, err = tx.Exec(ctx, insertAuditSQL, ch.JobID, tenantID, ch.ActorID, "application.status_changed", diff); err != nil {
 			return fmt.Errorf("appstore: audit status change: %w", err)
 		}
+		if err = insertEvent(ctx, tx, tenantID, ch.JobID, ch.AppID, ch.ActorID, applications.EventStatusChanged, map[string]any{
+			"from": ch.From, "to": ch.To, "decision": ch.Decision, "reason": ch.Reason, "has_note": ch.Note != "",
+		}); err != nil {
+			return err
+		}
 		if err = appevents.EnqueueStatusChanged(ctx, tx, appevents.StatusChanged{
 			ApplicationID: ch.AppID, JobID: ch.JobID, CompanyID: tenantID, Region: s.Region, FromStatus: ch.From,
 			ToStatus: ch.To, ChangedByUserID: ch.ActorID, ChangedAt: ch.Now,
 		}); err != nil {
 			return fmt.Errorf("appstore: emit status changed event: %w", err)
+		}
+		if stageID != "" && stageID != priorStage {
+			var name, kind string
+			if err = tx.QueryRow(ctx, `SELECT name, kind FROM hiring.app_job_stages WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+				stageID, tenantID).Scan(&name, &kind); err != nil {
+				return fmt.Errorf("appstore: to stage: %w", err)
+			}
+			if err = insertEvent(ctx, tx, tenantID, ch.JobID, ch.AppID, ch.ActorID, applications.EventStageChanged, map[string]any{
+				"from_stage_id": priorStage, "to_stage_id": stageID, "to_stage": name, "to_kind": kind,
+			}); err != nil {
+				return err
+			}
+			if err = appevents.EnqueueStageChanged(ctx, tx, appevents.StageChanged{
+				ApplicationID: ch.AppID, JobID: ch.JobID, CompanyID: tenantID, Region: s.Region, FromStageID: priorStage,
+				ToStageID: stageID, ToStageKind: kind, ChangedByUserID: ch.ActorID, ChangedAt: ch.Now,
+			}); err != nil {
+				return fmt.Errorf("appstore: emit stage changed event: %w", err)
+			}
 		}
 		return nil
 	})

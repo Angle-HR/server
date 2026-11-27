@@ -87,8 +87,10 @@ func NewServices(d ServicesDeps) *Services {
 		if err != nil {
 			return nil, err
 		}
+		store := &appstore.Store{DB: p, Jobs: jobs, Region: string(reg)}
 		svc := &applications.Service{
-			Store:     &appstore.Store{DB: p, Jobs: jobs, Region: string(reg)},
+			Store:     store,
+			Pipeline:  store,
 			Jobs:      jobs,
 			Hasher:    hasher,
 			NoticeURL: noticeURL(config.NormalizePublicAPIURL(d.Config.PublicAPIURL)),

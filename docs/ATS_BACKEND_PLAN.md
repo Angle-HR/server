@@ -31,6 +31,8 @@ Services stay as they are: applications owns applications, org owns companies, h
 
 ## Phase 2: pipeline, notes, tags, activity (size L)
 
+**Status: built (migration `000026`, `scripts/e2e-pipeline.sh`).** Deviations from the plan below: there is no reinstate (decision 1 makes Disqualified, Hired and Withdrawn final); a bulk move never moves flagged applications and a bulk disqualify needs one reason for the whole batch; timeline entries hold ids and labels only, never note text; actor names are not resolved yet (the timeline returns `actor_id`; identity wiring comes later); disqualifying through a stage move from `received` is allowed, unlike the status endpoint which asks for `in_review` first; the list and detail carry `stage_id`, `followed`, `note_count` and tag ids, and the list takes `stage`, `tag` and `followed` filters. Tags need `job.manage_any`; stages and tags on an application need the same access as deciding on it; notes and follows need only view access to the job.
+
 - **Stages:** `job_stages` (job, key, name, position, kind). Each job is seeded with Applied, Shortlisted, Interview, Offer, Hired and Disqualified, plus custom stages.
   - Add `stage_id` to applications. Keep `status` as the coarse lifecycle.
   - Backfill: received, in_review and flagged become Applied; hired becomes Hired; rejected becomes Disqualified.

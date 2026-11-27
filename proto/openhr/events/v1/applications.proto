@@ -41,6 +41,21 @@ message ApplicationStatusChanged {
   google.protobuf.Timestamp changed_at = 13;
 }
 
+// ApplicationStageChanged is emitted when an application moves to another stage of its job's pipeline.
+// The stage kind is one of applied, shortlisted, interview, offer, hired, disqualified or custom.
+// CloudEvent type: applications.application.stage_changed.
+message ApplicationStageChanged {
+  string application_id = 1;
+  string job_id = 2;
+  string company_id = 3;
+  string region = 4;
+  string from_stage_id = 5;
+  string to_stage_id = 6;
+  string to_stage_kind = 7;
+  string changed_by_user_id = 8;
+  google.protobuf.Timestamp changed_at = 9;
+}
+
 // RetentionDue is emitted when an application passes its retention period and must
 // be erased (or a pre-expiry notice is due). Consumed by applications' own retention
 // worker and by notifications for the notice email.

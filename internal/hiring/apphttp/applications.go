@@ -47,12 +47,14 @@ func (h *Handler) RegisterJobRoutes(r chi.Router) {
 	r.Post("/applications/{app_id}/status", h.setApplicationStatus)
 	r.Post("/applications/{app_id}/review", h.reviewApplication)
 	r.Get("/applications/{app_id}/files/{file_id}", h.applicationFile)
+	h.registerPipelineJobRoutes(r)
 }
 
 // RegisterSettingsRoutes mounts the company-level candidate settings. r is the router of /hiring.
 func (h *Handler) RegisterSettingsRoutes(r chi.Router) {
 	r.Get("/applicant-settings", h.getApplicantSettings)
 	r.Put("/applicant-settings", h.putApplicantSettings)
+	h.registerPipelineCompanyRoutes(r)
 }
 
 // appScope resolves who is calling and the applications service of their region.
@@ -97,6 +99,22 @@ func applicationsError(err error) error {
 		reason, msg = "not_opened", "open the application yourself before deciding it"
 	case errors.Is(err, applications.ErrStale):
 		reason, msg = "changed", "the application was changed by someone else; reload it and try again"
+	case errors.Is(err, applications.ErrStageLocked):
+		reason, msg = "stage_locked", "this stage cannot be changed"
+	case errors.Is(err, applications.ErrStageInUse):
+		reason, msg = "stage_in_use", "move the applications out of this stage first"
+	case errors.Is(err, applications.ErrTooManyStages):
+		reason, msg = "too_many_stages", "a job can have at most 20 stages"
+	case errors.Is(err, applications.ErrExists):
+		reason, msg = "name_taken", "that name is already used"
+	case errors.Is(err, applications.ErrInvalidOrder):
+		return apperror.NewWithDetails(apperror.CodeValidationError, "some fields need attention",
+			map[string]any{"fields": []map[string]string{{"path": "stage_ids", "message": applications.ErrInvalidOrder.Error()}}})
+	case errors.Is(err, applications.ErrUnknownTag):
+		return apperror.NewWithDetails(apperror.CodeValidationError, "some fields need attention",
+			map[string]any{"fields": []map[string]string{{"path": "tag_ids", "message": "unknown tag"}}})
+	case errors.Is(err, applications.ErrNoPipeline):
+		return apperror.New(apperror.CodeServiceUnavailable, "the pipeline is not available")
 	case errors.Is(err, apperror.ErrNotFound):
 		return apperror.New(apperror.CodeNotFound, "not found")
 	default:
@@ -126,6 +144,9 @@ func fileID(r *http.Request) string { return chi.URLParam(r, "file_id") }
 //	@Param			source	query		string	false	"Where the candidate came from"
 //	@Param			q		query		string	false	"Search name or email"
 //	@Param			new		query		bool	false	"Only applications nobody has opened"
+//	@Param			stage	query		string	false	"Only applications in this stage id"
+//	@Param			tag		query		string	false	"Only applications with this tag id"
+//	@Param			followed	query	bool	false	"Only applications the caller follows"
 //	@Param			cursor	query		string	false	"next_cursor of the previous page"
 //	@Param			limit	query		int		false	"Page size"
 //	@Success		200		{object}	apphttp.ApplicationPageEnvelope
@@ -140,6 +161,7 @@ func (h *Handler) listApplications(w http.ResponseWriter, r *http.Request) {
 	qs := r.URL.Query()
 	q := applications.ListQuery{
 		Source: qs.Get("source"), Query: qs.Get("q"), Cursor: qs.Get("cursor"), NewOnly: qs.Get("new") == "true",
+		StageID: qs.Get("stage"), TagID: qs.Get("tag"), Followed: qs.Get("followed") == "true",
 	}
 	for _, v := range qs["status"] {
 		for _, st := range strings.Split(v, ",") {
@@ -195,6 +217,8 @@ func (h *Handler) getApplication(w http.ResponseWriter, r *http.Request) {
 type ApplicationStatusRequest struct {
 	Status string `json:"status"`
 	Note   string `json:"note,omitempty"`
+	// Reason is a disqualification reason code, optional with a rejection.
+	Reason string `json:"reason,omitempty"`
 }
 
 // setApplicationStatus godoc
@@ -228,7 +252,7 @@ func (h *Handler) setApplicationStatus(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
-	res, err := svc.SetStatus(r.Context(), c, jobID(r), appID(r), applications.StatusInput{Status: req.Status, Note: req.Note})
+	res, err := svc.SetStatus(r.Context(), c, jobID(r), appID(r), applications.StatusInput{Status: req.Status, Note: req.Note, Reason: req.Reason})
 	if err != nil {
 		response.Error(w, r, applicationsError(err))
 		return
@@ -240,6 +264,8 @@ func (h *Handler) setApplicationStatus(w http.ResponseWriter, r *http.Request) {
 type ApplicationReviewRequest struct {
 	Decision string `json:"decision"`
 	Note     string `json:"note,omitempty"`
+	// Reason is a disqualification reason code, optional when rejecting.
+	Reason string `json:"reason,omitempty"`
 }
 
 // reviewApplication godoc
@@ -273,7 +299,7 @@ func (h *Handler) reviewApplication(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, r, apperror.InvalidBody(err))
 		return
 	}
-	res, err := svc.Review(r.Context(), c, jobID(r), appID(r), applications.ReviewInput{Decision: req.Decision, Note: req.Note})
+	res, err := svc.Review(r.Context(), c, jobID(r), appID(r), applications.ReviewInput{Decision: req.Decision, Note: req.Note, Reason: req.Reason})
 	if err != nil {
 		response.Error(w, r, applicationsError(err))
 		return

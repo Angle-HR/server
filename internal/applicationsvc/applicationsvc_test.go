@@ -53,12 +53,12 @@ type fakeStore struct {
 	listErr    error
 }
 
-func (s *fakeStore) List(_ context.Context, _, _ string, q applications.StoreListQuery) ([]applications.Summary, map[string]int, error) {
+func (s *fakeStore) List(_ context.Context, _, _ string, q applications.StoreListQuery) ([]applications.Summary, applications.Counts, error) {
 	if s.listErr != nil {
-		return nil, nil, s.listErr
+		return nil, applications.Counts{}, s.listErr
 	}
 	return []applications.Summary{{ID: tApp, Name: "Ada", Email: "ada@example.com", Status: "received", SubmittedAt: time.Unix(1700000000, 0).UTC()}},
-		map[string]int{"received": 1}, nil
+		applications.Counts{Status: map[string]int{"received": 1}}, nil
 }
 func (s *fakeStore) Open(_ context.Context, _ string, in applications.OpenInput) (*applications.Detail, error) {
 	return &applications.Detail{

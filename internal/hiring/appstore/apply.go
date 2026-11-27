@@ -107,6 +107,18 @@ func (s *Store) InsertApplication(ctx context.Context, tenantID string, a *apply
 				return fmt.Errorf("appstore: save special category answer: %w", mapPgError(err))
 			}
 		}
+		// The application starts in the job's Applied stage, and the timeline starts with its arrival.
+		if err = ensureStages(ctx, tx, tenantID, a.JobID); err != nil {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `UPDATE hiring.applications SET stage_id = (SELECT id FROM hiring.app_job_stages
+			WHERE tenant_id = $2::uuid AND job_id = $3::uuid AND kind = 'applied') WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+			id, tenantID, a.JobID); err != nil {
+			return fmt.Errorf("appstore: place application: %w", err)
+		}
+		if err = insertEvent(ctx, tx, tenantID, a.JobID, id, "", "applied", map[string]any{"status": a.Status, "source": a.Source}); err != nil {
+			return err
+		}
 		if a.Status == apply.StatusFlagged {
 			if _, err = tx.Exec(ctx, insertReviewTaskSQL, tenantID, a.JobID, id, flagsJSON, a.RetentionUntil, a.LawfulBasis); err != nil {
 				return fmt.Errorf("appstore: create review task: %w", err)

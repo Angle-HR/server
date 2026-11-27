@@ -70,7 +70,7 @@ func (x RetentionDue_Action) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RetentionDue_Action.Descriptor instead.
 func (RetentionDue_Action) EnumDescriptor() ([]byte, []int) {
-	return file_openhr_events_v1_applications_proto_rawDescGZIP(), []int{2, 0}
+	return file_openhr_events_v1_applications_proto_rawDescGZIP(), []int{3, 0}
 }
 
 // ApplicationSubmitted is emitted by applications after a candidate applies.
@@ -337,6 +337,117 @@ func (x *ApplicationStatusChanged) GetChangedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+// ApplicationStageChanged is emitted when an application moves to another stage of its job's pipeline.
+// The stage kind is one of applied, shortlisted, interview, offer, hired, disqualified or custom.
+// CloudEvent type: applications.application.stage_changed.
+type ApplicationStageChanged struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ApplicationId   string                 `protobuf:"bytes,1,opt,name=application_id,json=applicationId,proto3" json:"application_id,omitempty"`
+	JobId           string                 `protobuf:"bytes,2,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	CompanyId       string                 `protobuf:"bytes,3,opt,name=company_id,json=companyId,proto3" json:"company_id,omitempty"`
+	Region          string                 `protobuf:"bytes,4,opt,name=region,proto3" json:"region,omitempty"`
+	FromStageId     string                 `protobuf:"bytes,5,opt,name=from_stage_id,json=fromStageId,proto3" json:"from_stage_id,omitempty"`
+	ToStageId       string                 `protobuf:"bytes,6,opt,name=to_stage_id,json=toStageId,proto3" json:"to_stage_id,omitempty"`
+	ToStageKind     string                 `protobuf:"bytes,7,opt,name=to_stage_kind,json=toStageKind,proto3" json:"to_stage_kind,omitempty"`
+	ChangedByUserId string                 `protobuf:"bytes,8,opt,name=changed_by_user_id,json=changedByUserId,proto3" json:"changed_by_user_id,omitempty"`
+	ChangedAt       *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=changed_at,json=changedAt,proto3" json:"changed_at,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ApplicationStageChanged) Reset() {
+	*x = ApplicationStageChanged{}
+	mi := &file_openhr_events_v1_applications_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApplicationStageChanged) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApplicationStageChanged) ProtoMessage() {}
+
+func (x *ApplicationStageChanged) ProtoReflect() protoreflect.Message {
+	mi := &file_openhr_events_v1_applications_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApplicationStageChanged.ProtoReflect.Descriptor instead.
+func (*ApplicationStageChanged) Descriptor() ([]byte, []int) {
+	return file_openhr_events_v1_applications_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ApplicationStageChanged) GetApplicationId() string {
+	if x != nil {
+		return x.ApplicationId
+	}
+	return ""
+}
+
+func (x *ApplicationStageChanged) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+func (x *ApplicationStageChanged) GetCompanyId() string {
+	if x != nil {
+		return x.CompanyId
+	}
+	return ""
+}
+
+func (x *ApplicationStageChanged) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *ApplicationStageChanged) GetFromStageId() string {
+	if x != nil {
+		return x.FromStageId
+	}
+	return ""
+}
+
+func (x *ApplicationStageChanged) GetToStageId() string {
+	if x != nil {
+		return x.ToStageId
+	}
+	return ""
+}
+
+func (x *ApplicationStageChanged) GetToStageKind() string {
+	if x != nil {
+		return x.ToStageKind
+	}
+	return ""
+}
+
+func (x *ApplicationStageChanged) GetChangedByUserId() string {
+	if x != nil {
+		return x.ChangedByUserId
+	}
+	return ""
+}
+
+func (x *ApplicationStageChanged) GetChangedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ChangedAt
+	}
+	return nil
+}
+
 // RetentionDue is emitted when an application passes its retention period and must
 // be erased (or a pre-expiry notice is due). Consumed by applications' own retention
 // worker and by notifications for the notice email.
@@ -355,7 +466,7 @@ type RetentionDue struct {
 
 func (x *RetentionDue) Reset() {
 	*x = RetentionDue{}
-	mi := &file_openhr_events_v1_applications_proto_msgTypes[2]
+	mi := &file_openhr_events_v1_applications_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -367,7 +478,7 @@ func (x *RetentionDue) String() string {
 func (*RetentionDue) ProtoMessage() {}
 
 func (x *RetentionDue) ProtoReflect() protoreflect.Message {
-	mi := &file_openhr_events_v1_applications_proto_msgTypes[2]
+	mi := &file_openhr_events_v1_applications_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -380,7 +491,7 @@ func (x *RetentionDue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetentionDue.ProtoReflect.Descriptor instead.
 func (*RetentionDue) Descriptor() ([]byte, []int) {
-	return file_openhr_events_v1_applications_proto_rawDescGZIP(), []int{2}
+	return file_openhr_events_v1_applications_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *RetentionDue) GetApplicationId() string {
@@ -460,7 +571,19 @@ const file_openhr_events_v1_applications_proto_rawDesc = "" +
 	"\tjob_title\x18\v \x01(\tR\bjobTitle\x12!\n" +
 	"\fcompany_name\x18\f \x01(\tR\vcompanyName\x129\n" +
 	"\n" +
-	"changed_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tchangedAt\"\xbc\x02\n" +
+	"changed_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tchangedAt\"\xde\x02\n" +
+	"\x17ApplicationStageChanged\x12%\n" +
+	"\x0eapplication_id\x18\x01 \x01(\tR\rapplicationId\x12\x15\n" +
+	"\x06job_id\x18\x02 \x01(\tR\x05jobId\x12\x1d\n" +
+	"\n" +
+	"company_id\x18\x03 \x01(\tR\tcompanyId\x12\x16\n" +
+	"\x06region\x18\x04 \x01(\tR\x06region\x12\"\n" +
+	"\rfrom_stage_id\x18\x05 \x01(\tR\vfromStageId\x12\x1e\n" +
+	"\vto_stage_id\x18\x06 \x01(\tR\ttoStageId\x12\"\n" +
+	"\rto_stage_kind\x18\a \x01(\tR\vtoStageKind\x12+\n" +
+	"\x12changed_by_user_id\x18\b \x01(\tR\x0fchangedByUserId\x129\n" +
+	"\n" +
+	"changed_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tchangedAt\"\xbc\x02\n" +
 	"\fRetentionDue\x12%\n" +
 	"\x0eapplication_id\x18\x01 \x01(\tR\rapplicationId\x12\x15\n" +
 	"\x06job_id\x18\x02 \x01(\tR\x05jobId\x12\x1d\n" +
@@ -488,24 +611,26 @@ func file_openhr_events_v1_applications_proto_rawDescGZIP() []byte {
 }
 
 var file_openhr_events_v1_applications_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_openhr_events_v1_applications_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_openhr_events_v1_applications_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_openhr_events_v1_applications_proto_goTypes = []any{
 	(RetentionDue_Action)(0),         // 0: openhr.events.v1.RetentionDue.Action
 	(*ApplicationSubmitted)(nil),     // 1: openhr.events.v1.ApplicationSubmitted
 	(*ApplicationStatusChanged)(nil), // 2: openhr.events.v1.ApplicationStatusChanged
-	(*RetentionDue)(nil),             // 3: openhr.events.v1.RetentionDue
-	(*timestamppb.Timestamp)(nil),    // 4: google.protobuf.Timestamp
+	(*ApplicationStageChanged)(nil),  // 3: openhr.events.v1.ApplicationStageChanged
+	(*RetentionDue)(nil),             // 4: openhr.events.v1.RetentionDue
+	(*timestamppb.Timestamp)(nil),    // 5: google.protobuf.Timestamp
 }
 var file_openhr_events_v1_applications_proto_depIdxs = []int32{
-	4, // 0: openhr.events.v1.ApplicationSubmitted.submitted_at:type_name -> google.protobuf.Timestamp
-	4, // 1: openhr.events.v1.ApplicationStatusChanged.changed_at:type_name -> google.protobuf.Timestamp
-	0, // 2: openhr.events.v1.RetentionDue.action:type_name -> openhr.events.v1.RetentionDue.Action
-	4, // 3: openhr.events.v1.RetentionDue.due_at:type_name -> google.protobuf.Timestamp
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	5, // 0: openhr.events.v1.ApplicationSubmitted.submitted_at:type_name -> google.protobuf.Timestamp
+	5, // 1: openhr.events.v1.ApplicationStatusChanged.changed_at:type_name -> google.protobuf.Timestamp
+	5, // 2: openhr.events.v1.ApplicationStageChanged.changed_at:type_name -> google.protobuf.Timestamp
+	0, // 3: openhr.events.v1.RetentionDue.action:type_name -> openhr.events.v1.RetentionDue.Action
+	5, // 4: openhr.events.v1.RetentionDue.due_at:type_name -> google.protobuf.Timestamp
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_openhr_events_v1_applications_proto_init() }
@@ -519,7 +644,7 @@ func file_openhr_events_v1_applications_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_openhr_events_v1_applications_proto_rawDesc), len(file_openhr_events_v1_applications_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

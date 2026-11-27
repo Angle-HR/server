@@ -92,6 +92,7 @@ func NewServices(d ServicesDeps) *Services {
 			Store:     store,
 			Pipeline:  store,
 			Mail:      store,
+			Schedule:  store,
 			Jobs:      jobs,
 			Hasher:    hasher,
 			NoticeURL: noticeURL(config.NormalizePublicAPIURL(d.Config.PublicAPIURL)),

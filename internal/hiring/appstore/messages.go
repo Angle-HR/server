@@ -151,10 +151,10 @@ ON CONFLICT (tenant_id) DO UPDATE SET reply_to = EXCLUDED.reply_to, updated_by =
 
 const insertMessageSQL = `
 INSERT INTO hiring.app_messages
-    (tenant_id, job_id, application_id, sender_id, template_id, subject, body, reply_to, company, status, scheduled_at)
+    (tenant_id, job_id, application_id, sender_id, template_id, subject, body, reply_to, company, status, scheduled_at, ics)
 SELECT $1::uuid, a.job_id, a.id, NULLIF($3, '')::uuid,
        (SELECT id FROM hiring.app_email_templates WHERE id = NULLIF($4, '')::uuid AND tenant_id = $1::uuid),
-       $5, $6, $7, $8, $9, $10
+       $5, $6, $7, $8, $9, $10, $12
 FROM hiring.applications a WHERE a.id = $2::uuid AND a.tenant_id = $1::uuid AND a.job_id = $11::uuid
 RETURNING id::text, COALESCE(sender_id::text, ''), COALESCE(template_id::text, ''), subject, body, status, scheduled_at, sent_at, created_at, last_error`
 
@@ -184,7 +184,7 @@ func insertMessage(ctx context.Context, tx pgx.Tx, tenantID string, m *applicati
 		}
 	}
 	out, err := scanMessage(tx.QueryRow(ctx, insertMessageSQL, tenantID, m.AppID, m.SenderID, m.TemplateID, m.Subject, m.Body,
-		m.ReplyTo, m.Company, m.Status, m.ScheduledAt, m.JobID))
+		m.ReplyTo, m.Company, m.Status, m.ScheduledAt, m.JobID, m.ICS))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -277,7 +277,7 @@ FROM (SELECT m2.id FROM hiring.app_messages m2 JOIN hiring.applications a ON a.i
       ORDER BY m2.scheduled_at LIMIT $3 FOR UPDATE OF m2 SKIP LOCKED) due,
      hiring.applications a
 WHERE m.id = due.id AND a.id = m.application_id
-RETURNING m.id::text, a.candidate_email, a.candidate_name, m.company, m.subject, m.body, m.reply_to, m.attempts,
+RETURNING m.id::text, a.candidate_email, a.candidate_name, m.company, m.subject, m.body, m.reply_to, m.attempts, m.ics,
           COALESCE((SELECT title FROM hiring.job_postings j WHERE j.id = m.job_id), '')`
 
 // LeaseMessages implements outbox.MessageStore.
@@ -291,7 +291,7 @@ func (s *Store) LeaseMessages(ctx context.Context, tenantID string, now time.Tim
 		defer rows.Close()
 		for rows.Next() {
 			var m outbox.DueMessage
-			if err = rows.Scan(&m.ID, &m.Recipient, &m.Name, &m.Company, &m.Subject, &m.Body, &m.ReplyTo, &m.Attempts, &m.JobTitle); err != nil {
+			if err = rows.Scan(&m.ID, &m.Recipient, &m.Name, &m.Company, &m.Subject, &m.Body, &m.ReplyTo, &m.Attempts, &m.ICS, &m.JobTitle); err != nil {
 				return fmt.Errorf("appstore: scan message: %w", err)
 			}
 			out = append(out, m)

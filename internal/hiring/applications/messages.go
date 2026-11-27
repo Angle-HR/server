@@ -75,8 +75,10 @@ type Message struct {
 type NewMessage struct {
 	JobID, AppID, SenderID, TemplateID string
 	Subject, Body, ReplyTo, Company    string
-	Status                             string // MsgScheduled or MsgQueued
-	ScheduledAt                        time.Time
+	// ICS is the calendar event of an interview invite, update or cancellation.
+	ICS         string
+	Status      string // MsgScheduled or MsgQueued
+	ScheduledAt time.Time
 	// Enforce applies the daily limits. Messages that come with a decision skip them.
 	Enforce bool
 }

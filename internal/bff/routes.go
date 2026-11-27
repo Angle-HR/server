@@ -27,9 +27,9 @@ func ApplicationsPath(p string) bool {
 	case len(parts) >= 3 && parts[0] == "jobs" && parts[2] == "stages":
 		return true
 	case len(parts) == 2 && parts[0] == "hiring" && (parts[1] == "applicant-settings" || parts[1] == "tags" ||
-		parts[1] == "disqualification-reasons" || parts[1] == "email-settings" || parts[1] == "email-templates"):
+		parts[1] == "disqualification-reasons" || parts[1] == "email-settings" || parts[1] == "interviews" || parts[1] == "email-templates"):
 		return true
-	case len(parts) == 3 && parts[0] == "hiring" && (parts[1] == "tags" || parts[1] == "email-templates"):
+	case len(parts) == 3 && parts[0] == "hiring" && (parts[1] == "tags" || parts[1] == "email-templates" || parts[1] == "interviews"):
 		return true
 	}
 	return false

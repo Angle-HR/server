@@ -21,6 +21,7 @@ type DueMessage struct {
 	Subject   string
 	Body      string
 	ReplyTo   string
+	ICS       string
 	Attempts  int // including this one
 }
 
@@ -42,7 +43,7 @@ func MessageArgs(m DueMessage) (mailer.EmailArgs, error) {
 	}
 	return mailer.EmailArgs{
 		Type: mailer.TypeCandidateMessage, Recipient: m.Recipient, FullName: m.Name, OrganizationName: m.Company,
-		JobTitle: m.JobTitle, Subject: m.Subject, MessageBody: m.Body, ReplyTo: m.ReplyTo,
+		JobTitle: m.JobTitle, Subject: m.Subject, MessageBody: m.Body, ReplyTo: m.ReplyTo, ICS: m.ICS,
 	}, nil
 }
 

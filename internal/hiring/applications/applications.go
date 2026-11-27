@@ -307,6 +307,8 @@ type Service struct {
 	Pipeline PipelineStore
 	// Mail keeps email templates and the messages sent to candidates.
 	Mail MessageStore
+	// Schedule keeps interviews.
+	Schedule InterviewStore
 	// Names resolves actor names in the timeline. Optional.
 	Names UserNames
 	// Jobs is what the application side knows about jobs: access to a job and what a status email says about it.

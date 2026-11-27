@@ -3,11 +3,14 @@ package mailer
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"log/slog"
 	"net/smtp"
+	"regexp"
 	"strings"
 )
 
@@ -60,6 +63,9 @@ type EmailArgs struct {
 	MessageBody string `json:"message_body,omitempty"`
 	// ReplyTo, when set, is where a reply goes (a candidate message only).
 	ReplyTo string `json:"reply_to,omitempty"`
+	// ICS, when set on a candidate message, is a calendar event (an interview invite, update or cancellation)
+	// sent as a second part of the email.
+	ICS string `json:"ics,omitempty"`
 }
 
 // Kind returns the job kind name.
@@ -218,21 +224,7 @@ func (m *Mailer) Send(ctx context.Context, args EmailArgs) error {
 	fromHeader := formatFromHeader(m.cfg.FromName, m.cfg.From)
 
 	// Compose the RFC 822 email message.
-	message := []byte(fmt.Sprintf(
-		"To: %s\r\n"+
-			"From: %s\r\n"+
-			"%s"+
-			"Subject: %s\r\n"+
-			"MIME-Version: 1.0\r\n"+
-			"Content-Type: text/html; charset=UTF-8\r\n"+
-			"\r\n"+
-			"%s\r\n",
-		args.Recipient,
-		fromHeader,
-		replyToHeader(args),
-		subject,
-		body.String(),
-	))
+	message := composeMessage(args, fromHeader, subject, body.String())
 
 	authEnabled := m.cfg.User != "" || m.cfg.Password != ""
 	var auth smtp.Auth
@@ -331,4 +323,29 @@ func (e EmailArgs) Paragraphs() []string {
 		}
 	}
 	return out
+}
+
+var icsMethodRe = regexp.MustCompile(`(?m)^METHOD:([A-Z]+)\r?$`)
+
+// composeMessage builds the RFC 822 message: single-part HTML, or HTML with a calendar part when the email carries
+// an event (so mail clients offer to add or update it).
+func composeMessage(args EmailArgs, from, subject, html string) []byte {
+	head := fmt.Sprintf("To: %s\r\nFrom: %s\r\n%sSubject: %s\r\nMIME-Version: 1.0\r\n",
+		args.Recipient, from, replyToHeader(args), subject)
+	if args.Type != TypeCandidateMessage || strings.TrimSpace(args.ICS) == "" {
+		return []byte(head + "Content-Type: text/html; charset=UTF-8\r\n\r\n" + html + "\r\n")
+	}
+	method := "REQUEST"
+	if m := icsMethodRe.FindStringSubmatch(args.ICS); m != nil {
+		method = m[1]
+	}
+	var b [12]byte
+	_, _ = rand.Read(b[:])
+	boundary := "openhr-" + hex.EncodeToString(b[:])
+	ics := strings.ReplaceAll(strings.ReplaceAll(args.ICS, "\r\n", "\n"), "\n", "\r\n")
+	return []byte(head +
+		"Content-Type: multipart/alternative; boundary=" + boundary + "\r\n\r\n" +
+		"--" + boundary + "\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n" + html + "\r\n" +
+		"--" + boundary + "\r\nContent-Type: text/calendar; charset=UTF-8; method=" + method + "\r\n\r\n" + ics +
+		"--" + boundary + "--\r\n")
 }

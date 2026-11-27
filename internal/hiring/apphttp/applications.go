@@ -49,6 +49,7 @@ func (h *Handler) RegisterJobRoutes(r chi.Router) {
 	r.Get("/applications/{app_id}/files/{file_id}", h.applicationFile)
 	h.registerPipelineJobRoutes(r)
 	h.registerEmailJobRoutes(r)
+	h.registerInterviewJobRoutes(r)
 }
 
 // RegisterSettingsRoutes mounts the company-level candidate settings. r is the router of /hiring.
@@ -57,6 +58,7 @@ func (h *Handler) RegisterSettingsRoutes(r chi.Router) {
 	r.Put("/applicant-settings", h.putApplicantSettings)
 	h.registerPipelineCompanyRoutes(r)
 	h.registerEmailCompanyRoutes(r)
+	h.registerInterviewCompanyRoutes(r)
 }
 
 // appScope resolves who is calling and the applications service of their region.
@@ -115,6 +117,12 @@ func applicationsError(err error) error {
 	case errors.Is(err, applications.ErrUnknownTag):
 		return apperror.NewWithDetails(apperror.CodeValidationError, "some fields need attention",
 			map[string]any{"fields": []map[string]string{{"path": "tag_ids", "message": "unknown tag"}}})
+	case errors.Is(err, applications.ErrTooManyInterviews):
+		reason, msg = "too_many_interviews", "this application has the most scheduled interviews it can have"
+	case errors.Is(err, applications.ErrInterviewClosed):
+		reason, msg = "interview_closed", "this interview is completed or cancelled"
+	case errors.Is(err, applications.ErrNoInterviews):
+		return apperror.New(apperror.CodeServiceUnavailable, "interviews are not available")
 	case errors.Is(err, applications.ErrQuota):
 		return apperror.NewWithDetails(apperror.CodeTooManyRequests, "daily email limit reached; try again tomorrow", map[string]any{"reason": "message_limit"})
 	case errors.Is(err, applications.ErrNotCancellable):

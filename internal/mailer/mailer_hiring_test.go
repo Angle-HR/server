@@ -119,3 +119,22 @@ func TestCandidateMessageRendersParagraphsEscapedWithReplyTo(t *testing.T) {
 		t.Errorf("header or markup injection: %s", s)
 	}
 }
+
+func TestCandidateMessageWithACalendarEventIsMultipart(t *testing.T) {
+	var got []byte
+	m, _ := New(Config{Host: "smtp.test", Port: "25", From: "noreply@test"})
+	SetSendMailForTesting(m, func(_ string, _ smtp.Auth, _ string, _ []string, msg []byte) error { got = msg; return nil })
+	ics := "BEGIN:VCALENDAR\nMETHOD:CANCEL\nBEGIN:VEVENT\nUID:x@openhr\nEND:VEVENT\nEND:VCALENDAR\n"
+	if err := m.Send(context.Background(), EmailArgs{Type: TypeCandidateMessage, Recipient: "ada@x.test", Subject: "Interview", MessageBody: "Hi", ICS: ics}); err != nil {
+		t.Fatal(err)
+	}
+	s := string(got)
+	for _, want := range []string{"Content-Type: multipart/alternative; boundary=openhr-", "Content-Type: text/html; charset=UTF-8", "Content-Type: text/calendar; charset=UTF-8; method=CANCEL", "METHOD:CANCEL\r\nBEGIN:VEVENT\r\nUID:x@openhr\r\n"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in %s", want, s)
+		}
+	}
+	if strings.Count(s, "--openhr-") != 3 {
+		t.Errorf("boundaries: %s", s)
+	}
+}

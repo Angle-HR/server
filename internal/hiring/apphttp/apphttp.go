@@ -72,6 +72,7 @@ func Mount(r chi.Router, d Deps) { New(d).Mount(r) }
 // Mount is the method form of Mount.
 func (h *Handler) Mount(r chi.Router) {
 	r.Route("/public/jobs", h.RegisterPublicRoutes)
+	r.Route("/public/offers", h.RegisterOfferPublicRoutes)
 	r.Group(func(r chi.Router) {
 		if h.RequireAuth != nil {
 			r.Use(h.RequireAuth)

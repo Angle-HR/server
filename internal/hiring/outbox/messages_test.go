@@ -3,6 +3,7 @@ package outbox
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,7 +69,26 @@ func TestRunMessagesRetriesThenGivesUp(t *testing.T) {
 }
 
 func TestMessageWithoutARecipientIsNotSent(t *testing.T) {
-	if _, err := MessageArgs(DueMessage{ID: "m"}); err == nil {
+	if _, err := MessageArgs(DueMessage{ID: "m"}, ""); err == nil {
 		t.Error("no recipient")
+	}
+}
+
+func TestMessageArgsOfferLink(t *testing.T) {
+	m := DueMessage{ID: "m", Recipient: "a@x.test", Subject: "S", Body: "Open it:\n\n{{offer_link}}", Secret: "uk.t.s"}
+	a, err := MessageArgs(m, "https://app.example.test/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(a.MessageBody, "https://app.example.test/offers/uk.t.s") || strings.Contains(a.MessageBody, "{{") {
+		t.Fatalf("body = %q", a.MessageBody)
+	}
+	if _, err = MessageArgs(m, ""); err == nil {
+		t.Fatal("a link without a site address was sent")
+	}
+	// a message without a secret never has its text rewritten
+	plain, _ := MessageArgs(DueMessage{ID: "m", Body: "{{offer_link}}"}, "https://app.example.test")
+	if strings.Contains(plain.MessageBody, "offers/") {
+		t.Fatal("link made without a secret")
 	}
 }

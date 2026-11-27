@@ -24,7 +24,7 @@ check -> per-IP global rate limit -> per-class rate limits -> `SessionValidator`
 - **Rate limits** (Redis, atomic Lua sliding-window log, time from Redis `TIME`): global per IP, plus a class
   per abuse path (prefix `/api/v1` stripped): `LOGIN`, `LOGIN_OTP_REQUEST`, `LOGIN_OTP_VERIFY`, `LOGIN_TOTP`,
   `SIGNUP`, `VERIFY_EMAIL`, `RESEND_VERIFICATION`, `FORGOT_PASSWORD`, `RESET_PASSWORD` (POST) and
-  `PUBLIC_APPLY` (`POST /public/jobs/{id}/applications|uploads`). Classes with an email rule also key on the
+  `PUBLIC_APPLY` (`POST /public/jobs/{id}/applications|uploads`), `PUBLIC_OFFER` (`/public/offers/{token}[/sign|decline|document]`, 30 per minute per IP). Classes with an email rule also key on the
   SHA-256 of the lower-cased, trimmed JSON `email` (body peeked up to 64 KiB and restored). Denied: `429`,
   `Retry-After`, `{"error":{"code":"TOO_MANY_REQUESTS",...},"meta":{"request_id"}}`.
 - **Client IP**: socket peer, unless the peer is in `TRUSTED_PROXY_CIDRS`; then `X-Forwarded-For` is walked right

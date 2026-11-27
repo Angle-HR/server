@@ -63,6 +63,8 @@ type Worker struct {
 	Now         func() time.Time
 	Logger      *slog.Logger
 	MaxAttempts int // 0 uses MaxAttempts
+	// LinkBase is the candidate-facing site (APP_URL), for the links in messages that carry one.
+	LinkBase string
 }
 
 // Result counts what a run did.

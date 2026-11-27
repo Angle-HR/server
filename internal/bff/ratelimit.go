@@ -87,7 +87,12 @@ var classRoutes = []classRoute{
 	{method: http.MethodPost, path: "/auth/forgot-password", class: "FORGOT_PASSWORD"},
 	{method: http.MethodPost, path: "/auth/reset-password", class: "RESET_PASSWORD"},
 	{method: http.MethodPost, re: regexp.MustCompile(`^/public/jobs/[^/]+/(applications|uploads)$`), class: "PUBLIC_APPLY"},
+	{method: http.MethodGet, re: publicOfferRe, class: "PUBLIC_OFFER"},
+	{method: http.MethodPost, re: publicOfferRe, class: "PUBLIC_OFFER"},
 }
+
+// publicOfferRe matches the routes behind the link in an offer email.
+var publicOfferRe = regexp.MustCompile(`^/public/offers/[^/]+(/(sign|decline|document))?$`)
 
 // Classify returns the rate-limit class for a request path, or "" for none. prefix is the API prefix to strip.
 func Classify(method, path, prefix string) string {

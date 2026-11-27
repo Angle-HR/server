@@ -298,7 +298,7 @@ func (s *Service) inviteMessage(ctx context.Context, c Caller, st *ChangeState, 
 		Cancelled: what == "cancel", Now: s.now(),
 	})
 	return &NewMessage{JobID: iv.JobID, AppID: iv.ApplicationID, SenderID: c.UserID, Subject: subject, Body: body, ReplyTo: reply,
-		Company: st.Company, ICS: ics, Status: MsgQueued, ScheduledAt: s.now().UTC()}, nil
+		Company: st.Company, JobTitle: st.JobTitle, ICS: ics, Status: MsgQueued, ScheduledAt: s.now().UTC()}, nil
 }
 
 // ScheduleInterview creates an interview and, when asked, emails the candidate the invite in the same step.

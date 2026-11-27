@@ -58,11 +58,14 @@ func run() error {
 	if smtpPort == "" {
 		smtpPort = "587"
 	}
+	var appURL string
 	if sender == nil {
 		if os.Getenv("SMTP_HOST") == "" {
 			return errors.New("SMTP_HOST is required")
 		}
-		appURL, adminAppURL, uerr := mailer.AppLinkURLs(os.Getenv("APP_ENV"), os.Getenv("APP_URL"), os.Getenv("ADMIN_APP_URL"))
+		var adminAppURL string
+		var uerr error
+		appURL, adminAppURL, uerr = mailer.AppLinkURLs(os.Getenv("APP_ENV"), os.Getenv("APP_URL"), os.Getenv("ADMIN_APP_URL"))
 		if uerr != nil {
 			return uerr
 		}
@@ -96,7 +99,7 @@ func run() error {
 		}
 		store := &appstore.Store{DB: pool}
 		jobs := jobsource.NewRegional(pool)
-		w := &outbox.Worker{Tenants: jobs.TenantIDs, Store: store, Sender: sender, Logger: slogger}
+		w := &outbox.Worker{Tenants: jobs.TenantIDs, Store: store, Sender: sender, Logger: slogger, LinkBase: appURL}
 		res, err := w.Run(ctx)
 		// Messages people wrote to candidates, including scheduled ones that are now due.
 		mres, merr := w.RunMessages(ctx, store)

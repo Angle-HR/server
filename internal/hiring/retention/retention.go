@@ -31,6 +31,8 @@ type Due struct {
 	JobCode  string
 	JobTitle string
 	FileIDs  []string
+	// Keys are other objects of the application in the bucket: the signed offer documents.
+	Keys []string
 }
 
 // NoticeItem is one line of the email to the company.
@@ -208,6 +210,11 @@ func (w *Sweeper) delete(ctx context.Context, tid string, d Due, now time.Time) 
 			if err := w.Storage.Delete(ctx, key); err != nil {
 				return fmt.Errorf("remove file %s: %w", id, err)
 			}
+		}
+	}
+	for _, key := range d.Keys {
+		if err := w.Storage.Delete(ctx, key); err != nil {
+			return fmt.Errorf("remove document %s: %w", key, err)
 		}
 	}
 	return w.Store.DeleteApplication(ctx, tid, d, now)

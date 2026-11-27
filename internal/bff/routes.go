@@ -22,14 +22,16 @@ func ApplicationsPath(p string) bool {
 	switch {
 	case len(parts) >= 4 && parts[0] == "public" && parts[1] == "jobs" && (parts[3] == "applications" || parts[3] == "uploads"):
 		return true
+	case len(parts) >= 3 && len(parts) <= 4 && parts[0] == "public" && parts[1] == "offers":
+		return true
 	case len(parts) >= 3 && parts[0] == "jobs" && parts[2] == "applications":
 		return true
 	case len(parts) >= 3 && parts[0] == "jobs" && parts[2] == "stages":
 		return true
 	case len(parts) == 2 && parts[0] == "hiring" && (parts[1] == "applicant-settings" || parts[1] == "tags" ||
-		parts[1] == "disqualification-reasons" || parts[1] == "email-settings" || parts[1] == "interviews" || parts[1] == "email-templates"):
+		parts[1] == "disqualification-reasons" || parts[1] == "email-settings" || parts[1] == "interviews" || parts[1] == "email-templates" || parts[1] == "offer-templates"):
 		return true
-	case len(parts) == 3 && parts[0] == "hiring" && (parts[1] == "tags" || parts[1] == "email-templates" || parts[1] == "interviews"):
+	case len(parts) == 3 && parts[0] == "hiring" && (parts[1] == "tags" || parts[1] == "email-templates" || parts[1] == "interviews" || parts[1] == "offer-templates"):
 		return true
 	}
 	return false

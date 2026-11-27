@@ -309,6 +309,10 @@ type Service struct {
 	Mail MessageStore
 	// Schedule keeps interviews.
 	Schedule InterviewStore
+	// Contracts keeps offers; Docs stores their signed documents and DocWriter makes them.
+	Contracts OfferStore
+	Docs      OfferDocs
+	DocWriter DocWriter
 	// Names resolves actor names in the timeline. Optional.
 	Names UserNames
 	// Jobs is what the application side knows about jobs: access to a job and what a status email says about it.

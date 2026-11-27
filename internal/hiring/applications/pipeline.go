@@ -119,6 +119,8 @@ const (
 	EventMessage          = "message_queued"
 	EventMessageSent      = "message_sent"
 	EventMessageCancelled = "message_cancelled"
+	// EventOfferSent: an offer went to the candidate. The offer has its own audit trail.
+	EventOfferSent = "offer_sent"
 )
 
 // Event is one entry of an application's timeline. Data holds ids and short labels, never note text.

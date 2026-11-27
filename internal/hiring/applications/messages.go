@@ -76,7 +76,12 @@ type NewMessage struct {
 	JobID, AppID, SenderID, TemplateID string
 	Subject, Body, ReplyTo, Company    string
 	// ICS is the calendar event of an interview invite, update or cancellation.
-	ICS         string
+	ICS string
+	// Secret is carried to the sender and cleared once the message has gone: the token of an offer link, which the
+	// body names as {{offer_link}}.
+	Secret string
+	// JobTitle is the job\'s title, for the footer of the email.
+	JobTitle    string
 	Status      string // MsgScheduled or MsgQueued
 	ScheduledAt time.Time
 	// Enforce applies the daily limits. Messages that come with a decision skip them.
@@ -369,7 +374,7 @@ func (s *Service) SendMessage(ctx context.Context, c Caller, jobID, appID string
 	}
 	now := s.now().UTC()
 	nm := &NewMessage{JobID: jobID, AppID: appID, SenderID: c.UserID, TemplateID: in.TemplateID, Subject: p.Subject, Body: p.Body,
-		ReplyTo: reply, Company: st.Company, Status: MsgQueued, ScheduledAt: now, Enforce: true}
+		ReplyTo: reply, Company: st.Company, JobTitle: st.JobTitle, Status: MsgQueued, ScheduledAt: now, Enforce: true}
 	if in.ScheduleAt != nil {
 		at := in.ScheduleAt.UTC()
 		if at.Before(now.Add(MinScheduleSeconds*time.Second)) || at.After(now.AddDate(0, 0, MaxScheduleDays)) {
@@ -429,5 +434,5 @@ func (s *Service) decisionMessage(ctx context.Context, c Caller, st *ChangeState
 		return nil, err
 	}
 	return &NewMessage{JobID: jobID, AppID: appID, SenderID: c.UserID, TemplateID: in.TemplateID, Subject: p.Subject, Body: p.Body,
-		ReplyTo: reply, Company: st.Company, Status: MsgQueued, ScheduledAt: s.now().UTC()}, nil
+		ReplyTo: reply, Company: st.Company, JobTitle: st.JobTitle, Status: MsgQueued, ScheduledAt: s.now().UTC()}, nil
 }

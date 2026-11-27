@@ -1,6 +1,7 @@
 package applicationsvc
 
 import (
+	"github.com/Angle-HR/server/internal/hiring/offerdoc"
 	"log/slog"
 	"os"
 	"strings"
@@ -93,12 +94,15 @@ func NewServices(d ServicesDeps) *Services {
 			Pipeline:  store,
 			Mail:      store,
 			Schedule:  store,
+			Contracts: store,
+			DocWriter: offerdoc.Write,
 			Jobs:      jobs,
 			Hasher:    hasher,
 			NoticeURL: noticeURL(config.NormalizePublicAPIURL(d.Config.PublicAPIURL)),
 		}
 		if files, ferr := d.Router.Blob(reg); ferr == nil {
 			svc.Files = files
+			svc.Docs = files
 		} else {
 			d.Log.Warn("application file downloads are off for a region", "region", string(reg), "error", ferr)
 		}

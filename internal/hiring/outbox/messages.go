@@ -22,7 +22,9 @@ type DueMessage struct {
 	Body      string
 	ReplyTo   string
 	ICS       string
-	Attempts  int // including this one
+	// Secret is the token of an offer link; the body's {{offer_link}} becomes the link.
+	Secret   string
+	Attempts int // including this one
 }
 
 // MessageStore is one region's database as the message sender uses it.
@@ -36,10 +38,20 @@ type MessageStore interface {
 	MarkMessageFailed(ctx context.Context, tenantID, id, reason string, final bool, next time.Time) error
 }
 
-// MessageArgs turns a due message into the arguments of the mailer.
-func MessageArgs(m DueMessage) (mailer.EmailArgs, error) {
+// OfferLink is the page where a candidate reads and answers an offer.
+func OfferLink(base, token string) string { return strings.TrimRight(base, "/") + "/offers/" + token }
+
+// MessageArgs turns a due message into the arguments of the mailer. linkBase is the candidate-facing site, for the
+// link of an offer.
+func MessageArgs(m DueMessage, linkBase string) (mailer.EmailArgs, error) {
 	if strings.TrimSpace(m.Recipient) == "" {
 		return mailer.EmailArgs{}, errors.New("outbox: message has no recipient")
+	}
+	if m.Secret != "" {
+		if linkBase == "" {
+			return mailer.EmailArgs{}, errors.New("outbox: the offer link needs the site address (APP_URL)")
+		}
+		m.Body = strings.ReplaceAll(m.Body, "{{offer_link}}", OfferLink(linkBase, m.Secret))
 	}
 	return mailer.EmailArgs{
 		Type: mailer.TypeCandidateMessage, Recipient: m.Recipient, FullName: m.Name, OrganizationName: m.Company,
@@ -80,7 +92,7 @@ func (w *Worker) RunMessages(ctx context.Context, store MessageStore) (Result, e
 			}
 			for _, m := range list {
 				done++
-				args, err := MessageArgs(m)
+				args, err := MessageArgs(m, w.LinkBase)
 				if err == nil {
 					err = w.Sender.Send(ctx, args)
 				}

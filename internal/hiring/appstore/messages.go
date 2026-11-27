@@ -151,10 +151,10 @@ ON CONFLICT (tenant_id) DO UPDATE SET reply_to = EXCLUDED.reply_to, updated_by =
 
 const insertMessageSQL = `
 INSERT INTO hiring.app_messages
-    (tenant_id, job_id, application_id, sender_id, template_id, subject, body, reply_to, company, status, scheduled_at, ics)
+    (tenant_id, job_id, application_id, sender_id, template_id, subject, body, reply_to, company, status, scheduled_at, ics, secret, job_title)
 SELECT $1::uuid, a.job_id, a.id, NULLIF($3, '')::uuid,
        (SELECT id FROM hiring.app_email_templates WHERE id = NULLIF($4, '')::uuid AND tenant_id = $1::uuid),
-       $5, $6, $7, $8, $9, $10, $12
+       $5, $6, $7, $8, $9, $10, $12, $13, $14
 FROM hiring.applications a WHERE a.id = $2::uuid AND a.tenant_id = $1::uuid AND a.job_id = $11::uuid
 RETURNING id::text, COALESCE(sender_id::text, ''), COALESCE(template_id::text, ''), subject, body, status, scheduled_at, sent_at, created_at, last_error`
 
@@ -184,7 +184,7 @@ func insertMessage(ctx context.Context, tx pgx.Tx, tenantID string, m *applicati
 		}
 	}
 	out, err := scanMessage(tx.QueryRow(ctx, insertMessageSQL, tenantID, m.AppID, m.SenderID, m.TemplateID, m.Subject, m.Body,
-		m.ReplyTo, m.Company, m.Status, m.ScheduledAt, m.JobID, m.ICS))
+		m.ReplyTo, m.Company, m.Status, m.ScheduledAt, m.JobID, m.ICS, m.Secret, m.JobTitle))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -244,7 +244,7 @@ func (s *Store) CancelMessage(ctx context.Context, tenantID, jobID, appID, id st
 		var status string
 		// A message being sent right now holds a lease; it is no longer cancellable.
 		err := tx.QueryRow(ctx, `
-UPDATE hiring.app_messages SET status = 'cancelled'
+UPDATE hiring.app_messages SET status = 'cancelled', secret = ''
 WHERE id = $1::uuid AND application_id = $2::uuid AND tenant_id = $3::uuid
   AND status IN ('scheduled', 'queued') AND (lease_until IS NULL OR lease_until < now())
 RETURNING status`, id, appID, tenantID).Scan(&status)
@@ -277,8 +277,8 @@ FROM (SELECT m2.id FROM hiring.app_messages m2 JOIN hiring.applications a ON a.i
       ORDER BY m2.scheduled_at LIMIT $3 FOR UPDATE OF m2 SKIP LOCKED) due,
      hiring.applications a
 WHERE m.id = due.id AND a.id = m.application_id
-RETURNING m.id::text, a.candidate_email, a.candidate_name, m.company, m.subject, m.body, m.reply_to, m.attempts, m.ics,
-          COALESCE((SELECT title FROM hiring.job_postings j WHERE j.id = m.job_id), '')`
+RETURNING m.id::text, a.candidate_email, a.candidate_name, m.company, m.subject, m.body, m.reply_to, m.attempts, m.ics, m.secret,
+       COALESCE(NULLIF(m.job_title, ''), (SELECT title FROM hiring.job_postings j WHERE j.id = m.job_id), '')`
 
 // LeaseMessages implements outbox.MessageStore.
 func (s *Store) LeaseMessages(ctx context.Context, tenantID string, now time.Time, limit int, lease time.Duration) ([]outbox.DueMessage, error) {
@@ -291,7 +291,7 @@ func (s *Store) LeaseMessages(ctx context.Context, tenantID string, now time.Tim
 		defer rows.Close()
 		for rows.Next() {
 			var m outbox.DueMessage
-			if err = rows.Scan(&m.ID, &m.Recipient, &m.Name, &m.Company, &m.Subject, &m.Body, &m.ReplyTo, &m.Attempts, &m.ICS, &m.JobTitle); err != nil {
+			if err = rows.Scan(&m.ID, &m.Recipient, &m.Name, &m.Company, &m.Subject, &m.Body, &m.ReplyTo, &m.Attempts, &m.ICS, &m.Secret, &m.JobTitle); err != nil {
 				return fmt.Errorf("appstore: scan message: %w", err)
 			}
 			out = append(out, m)
@@ -305,7 +305,7 @@ func (s *Store) LeaseMessages(ctx context.Context, tenantID string, now time.Tim
 func (s *Store) MarkMessageSent(ctx context.Context, tenantID, id string, now time.Time) error {
 	return s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		var appID, jobID string
-		err := tx.QueryRow(ctx, `UPDATE hiring.app_messages SET status = 'sent', sent_at = $3, last_error = '', lease_until = NULL
+		err := tx.QueryRow(ctx, `UPDATE hiring.app_messages SET status = 'sent', sent_at = $3, last_error = '', lease_until = NULL, secret = ''
 WHERE id = $1::uuid AND tenant_id = $2::uuid RETURNING application_id::text, job_id::text`, id, tenantID, now).Scan(&appID, &jobID)
 		if err != nil {
 			return fmt.Errorf("appstore: mark message sent: %w", err)
@@ -319,6 +319,7 @@ func (s *Store) MarkMessageFailed(ctx context.Context, tenantID, id, reason stri
 	return s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `
 UPDATE hiring.app_messages SET last_error = $3, status = CASE WHEN $4::boolean THEN 'failed' ELSE status END,
+       secret = CASE WHEN $4::boolean THEN '' ELSE secret END,
        lease_until = CASE WHEN $4::boolean THEN NULL ELSE $5::timestamptz END
 WHERE id = $1::uuid AND tenant_id = $2::uuid`, id, tenantID, reason, final, next); err != nil {
 			return fmt.Errorf("appstore: mark message failed: %w", err)

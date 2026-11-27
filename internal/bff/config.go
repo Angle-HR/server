@@ -90,6 +90,7 @@ func DefaultClasses() map[string]ClassConfig {
 		"FORGOT_PASSWORD":     {IP: Rule{5, 15 * m}, Email: Rule{3, 15 * m}},
 		"RESET_PASSWORD":      {IP: Rule{10, 15 * m}},
 		"PUBLIC_APPLY":        {IP: Rule{10, 60 * m}},
+		"PUBLIC_OFFER":        {IP: Rule{30, 60 * m}},
 	}
 }
 

@@ -66,7 +66,9 @@ func (s *Store) ShortenForClosedJobs(ctx context.Context, tenantID string, close
 const dueApplicationsSQL = `
 SELECT a.id::text, a.job_id::text,
        COALESCE((SELECT array_agg(f.id::text ORDER BY f.id) FROM hiring.application_files f
-                 WHERE f.application_id = a.id AND f.tenant_id = a.tenant_id), '{}')::text[]
+                 WHERE f.application_id = a.id AND f.tenant_id = a.tenant_id), '{}')::text[],
+       COALESCE((SELECT array_agg(o.pdf_key ORDER BY o.id) FROM hiring.app_offers o
+                 WHERE o.application_id = a.id AND o.tenant_id = a.tenant_id AND o.pdf_key <> ''), '{}')::text[]
 FROM hiring.applications a
 WHERE a.tenant_id = $1::uuid AND a.retention_until < $2
 ORDER BY a.retention_until, a.id
@@ -83,7 +85,7 @@ func (s *Store) DueApplications(ctx context.Context, tenantID string, now time.T
 		defer rows.Close()
 		for rows.Next() {
 			var d retention.Due
-			if err = rows.Scan(&d.ID, &d.JobID, &d.FileIDs); err != nil {
+			if err = rows.Scan(&d.ID, &d.JobID, &d.FileIDs, &d.Keys); err != nil {
 				return fmt.Errorf("appstore: scan due application: %w", err)
 			}
 			out = append(out, d)

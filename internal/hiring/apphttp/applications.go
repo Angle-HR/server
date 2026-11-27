@@ -50,6 +50,7 @@ func (h *Handler) RegisterJobRoutes(r chi.Router) {
 	h.registerPipelineJobRoutes(r)
 	h.registerEmailJobRoutes(r)
 	h.registerInterviewJobRoutes(r)
+	h.registerOfferJobRoutes(r)
 }
 
 // RegisterSettingsRoutes mounts the company-level candidate settings. r is the router of /hiring.
@@ -59,6 +60,7 @@ func (h *Handler) RegisterSettingsRoutes(r chi.Router) {
 	h.registerPipelineCompanyRoutes(r)
 	h.registerEmailCompanyRoutes(r)
 	h.registerInterviewCompanyRoutes(r)
+	h.registerOfferCompanyRoutes(r)
 }
 
 // appScope resolves who is calling and the applications service of their region.
@@ -121,6 +123,16 @@ func applicationsError(err error) error {
 		reason, msg = "too_many_interviews", "this application has the most scheduled interviews it can have"
 	case errors.Is(err, applications.ErrInterviewClosed):
 		reason, msg = "interview_closed", "this interview is completed or cancelled"
+	case errors.Is(err, applications.ErrOfferLive):
+		reason, msg = "offer_live", "this application already has an offer that is not over; withdraw it first"
+	case errors.Is(err, applications.ErrOfferClosed):
+		reason, msg = "offer_closed", "this offer is signed, declined, withdrawn or expired"
+	case errors.Is(err, applications.ErrOfferNotDraft):
+		reason, msg = "offer_sent", "a sent offer cannot be changed; withdraw it and make a new one"
+	case errors.Is(err, applications.ErrOfferUnavailable):
+		reason, msg = "offer_unavailable", "this offer is no longer available"
+	case errors.Is(err, applications.ErrNoOffers):
+		return apperror.New(apperror.CodeServiceUnavailable, "offers are not available")
 	case errors.Is(err, applications.ErrNoInterviews):
 		return apperror.New(apperror.CodeServiceUnavailable, "interviews are not available")
 	case errors.Is(err, applications.ErrQuota):

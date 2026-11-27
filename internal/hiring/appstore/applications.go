@@ -405,115 +405,122 @@ ON CONFLICT (tenant_id, email_hmac) DO UPDATE SET
 
 // ApplyChange implements applications.Store.
 func (s *Store) ApplyChange(ctx context.Context, tenantID string, ch *applications.Change) error {
-	return s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error {
-		final := applications.Final(ch.To)
-		// A decision puts the application in Hired or Disqualified, unless the caller already chose that stage.
-		stageID, priorStage, toKind := ch.StageID, "", ""
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(stage_id::text, '') FROM hiring.applications WHERE id = $1::uuid AND tenant_id = $2::uuid`,
-			ch.AppID, tenantID).Scan(&priorStage); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("appstore: current stage: %w", err)
+	return s.inTenantTx(ctx, tenantID, func(tx pgx.Tx) error { return s.applyChangeTx(ctx, tx, tenantID, ch) })
+}
+
+// applyChangeTx is ApplyChange inside a transaction that already has the tenant set, for changes that go with other writes.
+func (s *Store) applyChangeTx(ctx context.Context, tx pgx.Tx, tenantID string, ch *applications.Change) error {
+	final := applications.Final(ch.To)
+	// A decision puts the application in Hired or Disqualified, unless the caller already chose that stage.
+	stageID, priorStage, toKind := ch.StageID, "", ""
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(stage_id::text, '') FROM hiring.applications WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+		ch.AppID, tenantID).Scan(&priorStage); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("appstore: current stage: %w", err)
+	}
+	if stageID == "" && (ch.To == applications.StatusHired || ch.To == applications.StatusRejected) {
+		toKind = applications.KindHired
+		if ch.To == applications.StatusRejected {
+			toKind = applications.KindDisqualified
 		}
-		if stageID == "" && (ch.To == applications.StatusHired || ch.To == applications.StatusRejected) {
-			toKind = applications.KindHired
-			if ch.To == applications.StatusRejected {
-				toKind = applications.KindDisqualified
-			}
-			if err := ensureStages(ctx, tx, tenantID, ch.JobID); err != nil {
-				return err
-			}
-			id, err := stageIDByKind(ctx, tx, tenantID, ch.JobID, toKind)
-			if err != nil {
-				return err
-			}
-			stageID = id
-		}
-		var basis string
-		err := tx.QueryRow(ctx, applyChangeSQL, ch.AppID, ch.JobID, tenantID, ch.To, ch.Note, final, ch.Now,
-			ch.ActorID, ch.RetentionMonths, ch.From, stageID, ch.Reason).Scan(&basis)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return applications.ErrStale
-		}
-		if err != nil {
-			return fmt.Errorf("appstore: change status: %w", mapPgError(err))
-		}
-		if err = markOpened(ctx, tx, tenantID, ch.JobID, ch.AppID, ch.ActorID); err != nil {
+		if err := ensureStages(ctx, tx, tenantID, ch.JobID); err != nil {
 			return err
 		}
-		if final {
-			var moved int
-			if err = tx.QueryRow(ctx, followOneRetentionSQL, ch.AppID, tenantID).Scan(&moved); err != nil {
-				return fmt.Errorf("appstore: follow retention: %w", err)
-			}
-		}
-		if ch.Decision != "" {
-			tag, err := tx.Exec(ctx, closeReviewSQL, ch.AppID, tenantID, ch.Decision, ch.ActorID, ch.Now, ch.Note)
-			if err != nil {
-				return fmt.Errorf("appstore: close review: %w", err)
-			}
-			if tag.RowsAffected() != 1 {
-				return applications.ErrNotOpened
-			}
-		}
-		if ch.Block != nil {
-			if _, err = tx.Exec(ctx, upsertBlockSQL, tenantID, ch.Block.EmailHMAC, ch.Block.Until); err != nil {
-				return fmt.Errorf("appstore: reapply block: %w", err)
-			}
-		}
-		if ch.Message != nil {
-			out, merr := insertMessage(ctx, tx, tenantID, ch.Message)
-			if merr != nil {
-				return merr
-			}
-			if err = insertEvent(ctx, tx, tenantID, ch.JobID, ch.AppID, ch.ActorID, applications.EventMessage,
-				map[string]any{"message_id": out.ID, "with_decision": true}); err != nil {
-				return err
-			}
-		}
-		if ch.Email != nil {
-			if err = insertOutbox(ctx, tx, tenantID, ch.AppID, ch.Email, ch.Now, basis); err != nil {
-				return err
-			}
-		}
-		diff, err := json.Marshal(map[string]any{
-			"application_id": ch.AppID, "from": ch.From, "to": ch.To, "decision": ch.Decision, "has_note": ch.Note != "",
-		})
+		id, err := stageIDByKind(ctx, tx, tenantID, ch.JobID, toKind)
 		if err != nil {
-			return fmt.Errorf("appstore: encode audit: %w", err)
-		}
-		if _, err = tx.Exec(ctx, insertAuditSQL, ch.JobID, tenantID, ch.ActorID, "application.status_changed", diff); err != nil {
-			return fmt.Errorf("appstore: audit status change: %w", err)
-		}
-		if err = insertEvent(ctx, tx, tenantID, ch.JobID, ch.AppID, ch.ActorID, applications.EventStatusChanged, map[string]any{
-			"from": ch.From, "to": ch.To, "decision": ch.Decision, "reason": ch.Reason, "has_note": ch.Note != "",
-		}); err != nil {
 			return err
 		}
-		if err = appevents.EnqueueStatusChanged(ctx, tx, appevents.StatusChanged{
-			ApplicationID: ch.AppID, JobID: ch.JobID, CompanyID: tenantID, Region: s.Region, FromStatus: ch.From,
-			ToStatus: ch.To, ChangedByUserID: ch.ActorID, ChangedAt: ch.Now,
-		}); err != nil {
-			return fmt.Errorf("appstore: emit status changed event: %w", err)
+		stageID = id
+	}
+	var basis string
+	err := tx.QueryRow(ctx, applyChangeSQL, ch.AppID, ch.JobID, tenantID, ch.To, ch.Note, final, ch.Now,
+		ch.ActorID, ch.RetentionMonths, ch.From, stageID, ch.Reason).Scan(&basis)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return applications.ErrStale
+	}
+	if err != nil {
+		return fmt.Errorf("appstore: change status: %w", mapPgError(err))
+	}
+	if err = markOpened(ctx, tx, tenantID, ch.JobID, ch.AppID, ch.ActorID); err != nil {
+		return err
+	}
+	if final {
+		var moved int
+		if err = tx.QueryRow(ctx, followOneRetentionSQL, ch.AppID, tenantID).Scan(&moved); err != nil {
+			return fmt.Errorf("appstore: follow retention: %w", err)
 		}
-		if stageID != "" && stageID != priorStage {
-			var name, kind string
-			if err = tx.QueryRow(ctx, `SELECT name, kind FROM hiring.app_job_stages WHERE id = $1::uuid AND tenant_id = $2::uuid`,
-				stageID, tenantID).Scan(&name, &kind); err != nil {
-				return fmt.Errorf("appstore: to stage: %w", err)
-			}
-			if err = insertEvent(ctx, tx, tenantID, ch.JobID, ch.AppID, ch.ActorID, applications.EventStageChanged, map[string]any{
-				"from_stage_id": priorStage, "to_stage_id": stageID, "to_stage": name, "to_kind": kind,
-			}); err != nil {
-				return err
-			}
-			if err = appevents.EnqueueStageChanged(ctx, tx, appevents.StageChanged{
-				ApplicationID: ch.AppID, JobID: ch.JobID, CompanyID: tenantID, Region: s.Region, FromStageID: priorStage,
-				ToStageID: stageID, ToStageKind: kind, ChangedByUserID: ch.ActorID, ChangedAt: ch.Now,
-			}); err != nil {
-				return fmt.Errorf("appstore: emit stage changed event: %w", err)
-			}
+		// A decision ends any offer that is still out: its link stops working.
+		if err = withdrawLiveOffers(ctx, tx, tenantID, ch.AppID, ch.Now); err != nil {
+			return err
 		}
-		return nil
+	}
+	if ch.Decision != "" {
+		tag, err := tx.Exec(ctx, closeReviewSQL, ch.AppID, tenantID, ch.Decision, ch.ActorID, ch.Now, ch.Note)
+		if err != nil {
+			return fmt.Errorf("appstore: close review: %w", err)
+		}
+		if tag.RowsAffected() != 1 {
+			return applications.ErrNotOpened
+		}
+	}
+	if ch.Block != nil {
+		if _, err = tx.Exec(ctx, upsertBlockSQL, tenantID, ch.Block.EmailHMAC, ch.Block.Until); err != nil {
+			return fmt.Errorf("appstore: reapply block: %w", err)
+		}
+	}
+	if ch.Message != nil {
+		out, merr := insertMessage(ctx, tx, tenantID, ch.Message)
+		if merr != nil {
+			return merr
+		}
+		if err = insertEvent(ctx, tx, tenantID, ch.JobID, ch.AppID, ch.ActorID, applications.EventMessage,
+			map[string]any{"message_id": out.ID, "with_decision": true}); err != nil {
+			return err
+		}
+	}
+	if ch.Email != nil {
+		if err = insertOutbox(ctx, tx, tenantID, ch.AppID, ch.Email, ch.Now, basis); err != nil {
+			return err
+		}
+	}
+	diff, err := json.Marshal(map[string]any{
+		"application_id": ch.AppID, "from": ch.From, "to": ch.To, "decision": ch.Decision, "has_note": ch.Note != "",
 	})
+	if err != nil {
+		return fmt.Errorf("appstore: encode audit: %w", err)
+	}
+	if _, err = tx.Exec(ctx, insertAuditSQL, ch.JobID, tenantID, ch.ActorID, "application.status_changed", diff); err != nil {
+		return fmt.Errorf("appstore: audit status change: %w", err)
+	}
+	if err = insertEvent(ctx, tx, tenantID, ch.JobID, ch.AppID, ch.ActorID, applications.EventStatusChanged, map[string]any{
+		"from": ch.From, "to": ch.To, "decision": ch.Decision, "reason": ch.Reason, "has_note": ch.Note != "",
+	}); err != nil {
+		return err
+	}
+	if err = appevents.EnqueueStatusChanged(ctx, tx, appevents.StatusChanged{
+		ApplicationID: ch.AppID, JobID: ch.JobID, CompanyID: tenantID, Region: s.Region, FromStatus: ch.From,
+		ToStatus: ch.To, ChangedByUserID: ch.ActorID, ChangedAt: ch.Now,
+	}); err != nil {
+		return fmt.Errorf("appstore: emit status changed event: %w", err)
+	}
+	if stageID != "" && stageID != priorStage {
+		var name, kind string
+		if err = tx.QueryRow(ctx, `SELECT name, kind FROM hiring.app_job_stages WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+			stageID, tenantID).Scan(&name, &kind); err != nil {
+			return fmt.Errorf("appstore: to stage: %w", err)
+		}
+		if err = insertEvent(ctx, tx, tenantID, ch.JobID, ch.AppID, ch.ActorID, applications.EventStageChanged, map[string]any{
+			"from_stage_id": priorStage, "to_stage_id": stageID, "to_stage": name, "to_kind": kind,
+		}); err != nil {
+			return err
+		}
+		if err = appevents.EnqueueStageChanged(ctx, tx, appevents.StageChanged{
+			ApplicationID: ch.AppID, JobID: ch.JobID, CompanyID: tenantID, Region: s.Region, FromStageID: priorStage,
+			ToStageID: stageID, ToStageKind: kind, ChangedByUserID: ch.ActorID, ChangedAt: ch.Now,
+		}); err != nil {
+			return fmt.Errorf("appstore: emit stage changed event: %w", err)
+		}
+	}
+	return nil
 }
 
 const getApplicantSettingsSQL = `

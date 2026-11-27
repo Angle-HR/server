@@ -196,7 +196,7 @@ func TestRateLimitClasses(t *testing.T) {
 		"LOGIN_OTP_VERIFY": "/api/v1/auth/login/otp/verify", "LOGIN_TOTP": "/api/v1/auth/login/totp",
 		"SIGNUP": "/api/v1/auth/signup", "VERIFY_EMAIL": "/api/v1/auth/verify-email",
 		"RESEND_VERIFICATION": "/api/v1/auth/resend-verification", "FORGOT_PASSWORD": "/api/v1/auth/forgot-password",
-		"RESET_PASSWORD": "/api/v1/auth/reset-password", "PUBLIC_APPLY": "/api/v1/public/jobs/abc/applications",
+		"RESET_PASSWORD": "/api/v1/auth/reset-password", "PUBLIC_APPLY": "/api/v1/public/jobs/abc/applications", "PUBLIC_OFFER": "/api/v1/public/offers/uk.t.s/sign",
 	}
 	if len(paths) != len(DefaultClasses()) {
 		t.Fatal("test must cover every class")

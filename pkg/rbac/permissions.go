@@ -41,6 +41,8 @@ const (
 	MemberRemove             Permission = "member.remove"
 	AccountOwnershipTransfer Permission = "account.ownership.transfer"
 	AccountAgreementsAccept  Permission = "account.agreements.accept"
+	// OrgProfileEdit changes the company's public profile and its careers page address.
+	OrgProfileEdit Permission = "org.profile.edit"
 )
 
 // Never-granted permissions: no endpoint exists for these, listed so a typo cannot grant them.

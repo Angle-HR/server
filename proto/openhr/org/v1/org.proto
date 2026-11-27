@@ -86,6 +86,12 @@ message Company {
   string privacy_contact_email = 6;
   string dpo_contact = 7;
   string region = 8;
+  // The public profile shown on the careers page. Empty when the company has not set it.
+  string slug = 9;
+  string display_name = 10;
+  string about = 11;
+  string website = 12;
+  string logo_url = 13;
 }
 
 message ResolveMembershipRequest {

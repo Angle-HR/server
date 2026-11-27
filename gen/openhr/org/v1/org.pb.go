@@ -90,8 +90,14 @@ type Company struct {
 	PrivacyContactEmail string                 `protobuf:"bytes,6,opt,name=privacy_contact_email,json=privacyContactEmail,proto3" json:"privacy_contact_email,omitempty"`
 	DpoContact          string                 `protobuf:"bytes,7,opt,name=dpo_contact,json=dpoContact,proto3" json:"dpo_contact,omitempty"`
 	Region              string                 `protobuf:"bytes,8,opt,name=region,proto3" json:"region,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// The public profile shown on the careers page. Empty when the company has not set it.
+	Slug          string `protobuf:"bytes,9,opt,name=slug,proto3" json:"slug,omitempty"`
+	DisplayName   string `protobuf:"bytes,10,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	About         string `protobuf:"bytes,11,opt,name=about,proto3" json:"about,omitempty"`
+	Website       string `protobuf:"bytes,12,opt,name=website,proto3" json:"website,omitempty"`
+	LogoUrl       string `protobuf:"bytes,13,opt,name=logo_url,json=logoUrl,proto3" json:"logo_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Company) Reset() {
@@ -176,6 +182,41 @@ func (x *Company) GetDpoContact() string {
 func (x *Company) GetRegion() string {
 	if x != nil {
 		return x.Region
+	}
+	return ""
+}
+
+func (x *Company) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *Company) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *Company) GetAbout() string {
+	if x != nil {
+		return x.About
+	}
+	return ""
+}
+
+func (x *Company) GetWebsite() string {
+	if x != nil {
+		return x.Website
+	}
+	return ""
+}
+
+func (x *Company) GetLogoUrl() string {
+	if x != nil {
+		return x.LogoUrl
 	}
 	return ""
 }
@@ -2400,7 +2441,7 @@ var File_openhr_org_v1_org_proto protoreflect.FileDescriptor
 
 const file_openhr_org_v1_org_proto_rawDesc = "" +
 	"\n" +
-	"\x17openhr/org/v1/org.proto\x12\ropenhr.org.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb1\x02\n" +
+	"\x17openhr/org/v1/org.proto\x12\ropenhr.org.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb3\x03\n" +
 	"\aCompany\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -2412,7 +2453,13 @@ const file_openhr_org_v1_org_proto_rawDesc = "" +
 	"\x15privacy_contact_email\x18\x06 \x01(\tR\x13privacyContactEmail\x12\x1f\n" +
 	"\vdpo_contact\x18\a \x01(\tR\n" +
 	"dpoContact\x12\x16\n" +
-	"\x06region\x18\b \x01(\tR\x06region\"3\n" +
+	"\x06region\x18\b \x01(\tR\x06region\x12\x12\n" +
+	"\x04slug\x18\t \x01(\tR\x04slug\x12!\n" +
+	"\fdisplay_name\x18\n" +
+	" \x01(\tR\vdisplayName\x12\x14\n" +
+	"\x05about\x18\v \x01(\tR\x05about\x12\x18\n" +
+	"\awebsite\x18\f \x01(\tR\awebsite\x12\x19\n" +
+	"\blogo_url\x18\r \x01(\tR\alogoUrl\"3\n" +
 	"\x18ResolveMembershipRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xfc\x01\n" +
 	"\x19ResolveMembershipResponse\x12\x1f\n" +

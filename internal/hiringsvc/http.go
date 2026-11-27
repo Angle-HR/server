@@ -103,6 +103,7 @@ func NewRouter(d HTTPDeps) http.Handler {
 		// Browsers must come from an allowed origin on unsafe methods (CSRF defence in depth).
 		r.Use(session.OriginGuard(d.AllowedOrigins))
 		d.Public.RegisterRoutes(r)
+		d.Public.RegisterCompanyRoutes(r)
 		r.Group(func(r chi.Router) {
 			r.Use(d.RequireAuth)
 			d.Hiring.RegisterProtectedRoutes(r)

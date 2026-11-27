@@ -70,6 +70,13 @@ func TestMatrixMatchesSQLSeed(t *testing.T) {
 	for _, m := range pair.FindAllStringSubmatch(ins, -1) {
 		grants[m[1]+"|"+m[2]] = true
 	}
+	// 000022 only inserts: the org.profile.edit grants.
+	if p3, rerr := os.ReadFile("../../db/migrations/global_registry/000022_org_profile_permission.sql"); rerr == nil {
+		up3 := strings.SplitN(string(p3), "-- +goose Down", 2)[0]
+		for _, m := range pair.FindAllStringSubmatch(up3[strings.Index(up3, "INSERT INTO"):], -1) {
+			grants[m[1]+"|"+m[2]] = true
+		}
+	}
 	var sqlPairs, goPairs []string
 	for k := range grants {
 		sqlPairs = append(sqlPairs, k)

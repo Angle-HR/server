@@ -36,6 +36,9 @@ type CompanyStore interface {
 	Extras(ctx context.Context, reg region.Region, id string) (orgstore.SetupExtras, error)
 	AcceptAgreement(ctx context.Context, reg region.Region, companyID, userID, kind, version string) (time.Time, error)
 	SetPrivacyContact(ctx context.Context, reg region.Region, companyID, email, dpo string) error
+	Profile(ctx context.Context, reg region.Region, companyID string) (*orgstore.Profile, error)
+	SetProfile(ctx context.Context, reg region.Region, companyID string, p orgstore.Profile) error
+	SlugAvailable(ctx context.Context, companyID, slug string) (bool, string, error)
 }
 
 var _ CompanyStore = (*orgstore.Store)(nil)
@@ -54,6 +57,9 @@ func (h *CompanyHandler) RegisterProtectedRoutes(r chi.Router) {
 	r.Get("/organization/agreements", h.companySetup)
 	r.Post("/organization/agreements", h.acceptAgreement)
 	r.Put("/organization/privacy-contact", h.putPrivacyContact)
+	r.Get("/organization/profile", h.getProfile)
+	r.Put("/organization/profile", h.putProfile)
+	r.Get("/organization/profile/slug-check", h.checkSlug)
 }
 
 // CompanySetup is the company's publish prerequisites as the settings page shows them (the same shape hiring

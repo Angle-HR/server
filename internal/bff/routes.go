@@ -43,7 +43,7 @@ func HiringPath(p string) bool {
 	case "jobs", "hiring":
 		return true
 	case "public":
-		return len(parts) == 3 && parts[1] == "jobs"
+		return len(parts) == 3 && (parts[1] == "jobs" || parts[1] == "companies")
 	case "j":
 		return len(parts) == 2 || len(parts) == 3 && parts[2] == "privacy"
 	case "organization":
@@ -90,9 +90,11 @@ func OrgPath(p string) bool {
 	case "organization":
 		switch len(parts) {
 		case 2:
-			return parts[1] == "verification" || parts[1] == "agreements" || parts[1] == "privacy-contact"
+			return parts[1] == "verification" || parts[1] == "agreements" || parts[1] == "privacy-contact" ||
+				parts[1] == "profile"
 		case 3:
-			return parts[1] == "verification" && orgVerification[parts[2]]
+			return parts[1] == "verification" && orgVerification[parts[2]] ||
+				parts[1] == "profile" && parts[2] == "slug-check"
 		}
 	}
 	return false

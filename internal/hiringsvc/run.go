@@ -162,7 +162,7 @@ func Run() error {
 
 	g := &hiringstore.Global{DB: global}
 	pub := &public.Service{
-		Registry: g, Directory: hiringhttp.PublicDirectory{Pool: hiringhttp.RegionalDB(regional), Org: orgWiring.Company}, Catalog: g,
+		Registry: g, Slugs: g, Directory: hiringhttp.PublicDirectory{Pool: hiringhttp.RegionalDB(regional), Org: orgWiring.Company}, Catalog: g,
 		SiteURL: publicSiteURL(cfg),
 	}
 	publicHandler := hiringhttp.NewPublicHandler(pub, nil)

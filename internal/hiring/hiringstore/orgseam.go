@@ -22,7 +22,12 @@ type CompanyOrg interface {
 }
 
 // CompanyProfile is what the company told candidates about itself.
-type CompanyProfile struct{ Name, PrivacyEmail, DPOContact string }
+type CompanyProfile struct {
+	// Name is the legal name. DisplayName, when set, is what the careers page shows instead.
+	Name, PrivacyEmail, DPOContact string
+	// The public profile: the careers page address, display name, about text, website and logo.
+	Slug, DisplayName, About, Website, LogoURL string
+}
 
 // CompanyReadiness is the company part of CompanySetup.
 type CompanyReadiness struct {
@@ -45,7 +50,8 @@ func (s *Store) companyProfile(ctx context.Context, tx pgx.Tx, tenantID string) 
 		return s.Org.Profile(ctx, s.Region, tenantID)
 	}
 	var p CompanyProfile
-	if err := tx.QueryRow(ctx, publicCompanySQL, tenantID).Scan(&p.Name, &p.PrivacyEmail, &p.DPOContact); err != nil {
+	if err := tx.QueryRow(ctx, publicCompanyFullSQL, tenantID).Scan(&p.Name, &p.PrivacyEmail, &p.DPOContact,
+		&p.Slug, &p.DisplayName, &p.About, &p.Website, &p.LogoURL); err != nil {
 		return p, fmt.Errorf("hiringstore: load company: %w", err)
 	}
 	return p, nil

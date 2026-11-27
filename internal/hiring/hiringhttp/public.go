@@ -3,6 +3,8 @@ package hiringhttp
 import (
 	"errors"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -111,6 +113,14 @@ func (h *PublicHandler) RegisterRoutes(r chi.Router) {
 	})
 }
 
+// RegisterCompanyRoutes mounts the careers page JSON, /public/companies/{slug}. It needs no sign-in.
+func (h *PublicHandler) RegisterCompanyRoutes(r chi.Router) {
+	if h.Remote {
+		return
+	}
+	r.Get("/public/companies/{slug}", h.getCompany)
+}
+
 // RegisterPages mounts the server-rendered pages at the site root. They are separate from the JSON API because
 // link previews and Google read them as HTML.
 func (h *PublicHandler) RegisterPages(r chi.Router) {
@@ -173,6 +183,99 @@ func (h *PublicHandler) getJob(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "public, max-age=60")
 	response.Success(w, r, http.StatusOK, data)
+}
+
+// PublicCompanyData is the careers page of one company.
+type PublicCompanyData struct {
+	Slug    string `json:"slug"`
+	Name    string `json:"name"`
+	About   string `json:"about"`
+	Website string `json:"website,omitempty"`
+	LogoURL string `json:"logo_url,omitempty"`
+	// Teams are the departments with an open job, for the Team filter.
+	Teams []string `json:"teams"`
+	// Total counts the open jobs that match the filters, across all pages.
+	Total      int                `json:"total"`
+	Jobs       []PublicCompanyJob `json:"jobs"`
+	NextCursor string             `json:"next_cursor,omitempty"`
+}
+
+// PublicCompanyJob is one open job in the careers page list.
+type PublicCompanyJob struct {
+	PublicID       string `json:"public_id"`
+	Title          string `json:"title"`
+	Team           string `json:"team"`
+	Location       string `json:"location,omitempty"`
+	Workplace      string `json:"workplace_type,omitempty"`
+	EmploymentType string `json:"employment_type,omitempty"`
+	PublishedAt    string `json:"published_at"`
+	ClosingDate    string `json:"closing_date,omitempty"`
+	URL            string `json:"url"`
+}
+
+// PublicCompanyEnvelope is a successful careers page response.
+type PublicCompanyEnvelope struct {
+	Data PublicCompanyData `json:"data"`
+	Meta *apidoc.Meta      `json:"meta,omitempty"`
+}
+
+// getCompany godoc
+//
+//	@Summary		Company careers page
+//	@Description	The company's public profile and its open jobs, newest first, with filters and cursor paging. Only published jobs that are shown on the career page and are inside their closing date are listed. No sign-in.
+//	@Tags			jobs
+//	@Produce		json
+//	@Param			slug			path		string	true	"Careers page address"
+//	@Param			team			query		string	false	"Department name"
+//	@Param			workplace_type	query		string	false	"onsite, hybrid or remote"
+//	@Param			employment_type	query		string	false	"full_time, part_time, contract or internship"
+//	@Param			location		query		string	false	"Text in the job's location"
+//	@Param			q				query		string	false	"Text in the job title"
+//	@Param			limit			query		int		false	"Page size, default 20, at most 50"
+//	@Param			cursor			query		string	false	"next_cursor of the previous page"
+//	@Success		200				{object}	hiringhttp.PublicCompanyEnvelope
+//	@Failure		400				{object}	apidoc.ErrorEnvelope
+//	@Failure		404				{object}	apidoc.ErrorEnvelope
+//	@Router			/public/companies/{slug} [get]
+func (h *PublicHandler) getCompany(w http.ResponseWriter, r *http.Request) {
+	qs := r.URL.Query()
+	q := public.CompanyQuery{
+		Team: qs.Get("team"), Workplace: qs.Get("workplace_type"), EmploymentType: qs.Get("employment_type"),
+		Location: qs.Get("location"), Search: qs.Get("q"), Cursor: qs.Get("cursor"),
+	}
+	if v := qs.Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			response.Error(w, r, apperror.New(apperror.CodeValidationError, "limit must be a positive number"))
+			return
+		}
+		q.Limit = n
+	}
+	page, err := h.Public.Company(r.Context(), chi.URLParam(r, "slug"), q)
+	switch {
+	case errors.Is(err, public.ErrNotFound):
+		err = apperror.New(apperror.CodeNotFound, "company not found")
+	case errors.Is(err, public.ErrBadQuery):
+		err = apperror.New(apperror.CodeValidationError, "the filters or the cursor are not valid")
+	}
+	if err != nil {
+		response.Error(w, r, err)
+		return
+	}
+	out := PublicCompanyData{
+		Slug: page.Company.Slug, Name: page.Company.Name, About: page.Company.About, Website: page.Company.Website,
+		LogoURL: page.Company.LogoURL, Teams: page.Teams, Total: page.Total, NextCursor: page.NextCursor,
+		Jobs: make([]PublicCompanyJob, 0, len(page.Jobs)),
+	}
+	for _, j := range page.Jobs {
+		out.Jobs = append(out.Jobs, PublicCompanyJob{
+			PublicID: j.PublicID, Title: j.Title, Team: j.Team, Location: j.Location, Workplace: j.Workplace,
+			EmploymentType: j.EmploymentType, PublishedAt: j.PublishedAt.UTC().Format(time.RFC3339),
+			ClosingDate: j.ClosingDate, URL: h.Public.JobURL(j.PublicID),
+		})
+	}
+	w.Header().Set("Cache-Control", "public, max-age=60")
+	response.Success(w, r, http.StatusOK, out)
 }
 
 // sitemap serves the jobs search engines may index.

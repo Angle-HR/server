@@ -6248,6 +6248,120 @@ const docTemplate = `{
                 }
             }
         },
+        "/organization/profile": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "The careers page address, name, about text, website and logo. Anyone in the company can read it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "organization"
+                ],
+                "summary": "Show the company's public profile",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_orghttp.ProfileEnvelope"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Replaces the profile; a field left empty is cleared. The slug is the careers page address and is unique across all companies. Founder and HR 1.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "organization"
+                ],
+                "summary": "Change the company's public profile",
+                "parameters": [
+                    {
+                        "description": "Profile",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_orghttp.ProfileInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_orghttp.ProfileEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/organization/profile/slug-check": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Says whether the company can take the address: well formed, not reserved and not used by another company.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "organization"
+                ],
+                "summary": "Check a careers page address",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Address to check",
+                        "name": "slug",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_orghttp.SlugCheckEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/organization/verification": {
             "get": {
                 "security": [
@@ -6603,6 +6717,89 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/public/companies/{slug}": {
+            "get": {
+                "description": "The company's public profile and its open jobs, newest first, with filters and cursor paging. Only published jobs that are shown on the career page and are inside their closing date are listed. No sign-in.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Company careers page",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Careers page address",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Department name",
+                        "name": "team",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "onsite, hybrid or remote",
+                        "name": "workplace_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "full_time, part_time, contract or internship",
+                        "name": "employment_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Text in the job's location",
+                        "name": "location",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Text in the job title",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, default 20, at most 50",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "next_cursor of the previous page",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_hiring_hiringhttp.PublicCompanyEnvelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope"
                         }
@@ -9232,6 +9429,89 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_hiring_hiringhttp.PublicCompanyData": {
+            "type": "object",
+            "properties": {
+                "about": {
+                    "type": "string"
+                },
+                "jobs": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_hiring_hiringhttp.PublicCompanyJob"
+                    }
+                },
+                "logo_url": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "next_cursor": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "teams": {
+                    "description": "Teams are the departments with an open job, for the Team filter.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "total": {
+                    "description": "Total counts the open jobs that match the filters, across all pages.",
+                    "type": "integer"
+                },
+                "website": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.PublicCompanyEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_hiring_hiringhttp.PublicCompanyData"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_hiring_hiringhttp.PublicCompanyJob": {
+            "type": "object",
+            "properties": {
+                "closing_date": {
+                    "type": "string"
+                },
+                "employment_type": {
+                    "type": "string"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "public_id": {
+                    "type": "string"
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "team": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                },
+                "workplace_type": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_hiring_hiringhttp.PublicJobData": {
             "type": "object",
             "properties": {
@@ -11715,6 +11995,63 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_orghttp.ProfileData": {
+            "type": "object",
+            "properties": {
+                "about": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "legal_name": {
+                    "description": "LegalName is shown on the careers page when DisplayName is empty.",
+                    "type": "string"
+                },
+                "logo_url": {
+                    "type": "string"
+                },
+                "slug": {
+                    "description": "Slug is the careers page address: /company/\u003cslug\u003e. Empty until the owner chooses one.",
+                    "type": "string"
+                },
+                "suggested_slug": {
+                    "description": "SuggestedSlug is offered while Slug is empty.",
+                    "type": "string"
+                },
+                "website": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.ProfileEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.ProfileData"
+                }
+            }
+        },
+        "internal_orghttp.ProfileInput": {
+            "type": "object",
+            "properties": {
+                "about": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "logo_url": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "website": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_orghttp.RegionReissue": {
             "type": "object",
             "properties": {
@@ -11756,6 +12093,29 @@ const docTemplate = `{
                 },
                 "meta": {
                     "$ref": "#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta"
+                }
+            }
+        },
+        "internal_orghttp.SlugCheckData": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "reason": {
+                    "description": "Reason is why not, when Available is false.",
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_orghttp.SlugCheckEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/internal_orghttp.SlugCheckData"
                 }
             }
         },

@@ -1560,6 +1560,61 @@ definitions:
             meta:
                 $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
         type: object
+    internal_hiring_hiringhttp.PublicCompanyData:
+        properties:
+            about:
+                type: string
+            jobs:
+                items:
+                    $ref: '#/definitions/internal_hiring_hiringhttp.PublicCompanyJob'
+                type: array
+            logo_url:
+                type: string
+            name:
+                type: string
+            next_cursor:
+                type: string
+            slug:
+                type: string
+            teams:
+                description: Teams are the departments with an open job, for the Team filter.
+                items:
+                    type: string
+                type: array
+            total:
+                description: Total counts the open jobs that match the filters, across all pages.
+                type: integer
+            website:
+                type: string
+        type: object
+    internal_hiring_hiringhttp.PublicCompanyEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/internal_hiring_hiringhttp.PublicCompanyData'
+            meta:
+                $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_hiring_hiringhttp.PublicCompanyJob:
+        properties:
+            closing_date:
+                type: string
+            employment_type:
+                type: string
+            location:
+                type: string
+            public_id:
+                type: string
+            published_at:
+                type: string
+            team:
+                type: string
+            title:
+                type: string
+            url:
+                type: string
+            workplace_type:
+                type: string
+        type: object
     internal_hiring_hiringhttp.PublicJobData:
         properties:
             accepting:
@@ -3231,6 +3286,44 @@ definitions:
                 example: angle
                 type: string
         type: object
+    internal_orghttp.ProfileData:
+        properties:
+            about:
+                type: string
+            display_name:
+                type: string
+            legal_name:
+                description: LegalName is shown on the careers page when DisplayName is empty.
+                type: string
+            logo_url:
+                type: string
+            slug:
+                description: 'Slug is the careers page address: /company/<slug>. Empty until the owner chooses one.'
+                type: string
+            suggested_slug:
+                description: SuggestedSlug is offered while Slug is empty.
+                type: string
+            website:
+                type: string
+        type: object
+    internal_orghttp.ProfileEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/internal_orghttp.ProfileData'
+        type: object
+    internal_orghttp.ProfileInput:
+        properties:
+            about:
+                type: string
+            display_name:
+                type: string
+            logo_url:
+                type: string
+            slug:
+                type: string
+            website:
+                type: string
+        type: object
     internal_orghttp.RegionReissue:
         properties:
             csrf_token:
@@ -3259,6 +3352,21 @@ definitions:
                 type: array
             meta:
                 $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.Meta'
+        type: object
+    internal_orghttp.SlugCheckData:
+        properties:
+            available:
+                type: boolean
+            reason:
+                description: Reason is why not, when Available is false.
+                type: string
+            slug:
+                type: string
+        type: object
+    internal_orghttp.SlugCheckEnvelope:
+        properties:
+            data:
+                $ref: '#/definitions/internal_orghttp.SlugCheckData'
         type: object
     internal_orghttp.TeamSize:
         properties:
@@ -7371,6 +7479,77 @@ paths:
             summary: Set the privacy contact
             tags:
                 - organization
+    /organization/profile:
+        get:
+            description: The careers page address, name, about text, website and logo. Anyone in the company can read it.
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_orghttp.ProfileEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Show the company's public profile
+            tags:
+                - organization
+        put:
+            consumes:
+                - application/json
+            description: Replaces the profile; a field left empty is cleared. The slug is the careers page address and is unique across all companies. Founder and HR 1.
+            parameters:
+                - description: Profile
+                  in: body
+                  name: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/internal_orghttp.ProfileInput'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_orghttp.ProfileEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "403":
+                    description: Forbidden
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "409":
+                    description: Conflict
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Change the company's public profile
+            tags:
+                - organization
+    /organization/profile/slug-check:
+        get:
+            description: 'Says whether the company can take the address: well formed, not reserved and not used by another company.'
+            parameters:
+                - description: Address to check
+                  in: query
+                  name: slug
+                  required: true
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_orghttp.SlugCheckEnvelope'
+            security:
+                - SessionCookie: []
+            summary: Check a careers page address
+            tags:
+                - organization
     /organization/verification:
         get:
             produces:
@@ -7599,6 +7778,61 @@ paths:
             summary: Create organization invite
             tags:
                 - auth
+    /public/companies/{slug}:
+        get:
+            description: The company's public profile and its open jobs, newest first, with filters and cursor paging. Only published jobs that are shown on the career page and are inside their closing date are listed. No sign-in.
+            parameters:
+                - description: Careers page address
+                  in: path
+                  name: slug
+                  required: true
+                  type: string
+                - description: Department name
+                  in: query
+                  name: team
+                  type: string
+                - description: onsite, hybrid or remote
+                  in: query
+                  name: workplace_type
+                  type: string
+                - description: full_time, part_time, contract or internship
+                  in: query
+                  name: employment_type
+                  type: string
+                - description: Text in the job's location
+                  in: query
+                  name: location
+                  type: string
+                - description: Text in the job title
+                  in: query
+                  name: q
+                  type: string
+                - description: Page size, default 20, at most 50
+                  in: query
+                  name: limit
+                  type: integer
+                - description: next_cursor of the previous page
+                  in: query
+                  name: cursor
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        $ref: '#/definitions/internal_hiring_hiringhttp.PublicCompanyEnvelope'
+                "400":
+                    description: Bad Request
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+                "404":
+                    description: Not Found
+                    schema:
+                        $ref: '#/definitions/github_com_Angle-HR_server_internal_apidoc.ErrorEnvelope'
+            summary: Company careers page
+            tags:
+                - jobs
     /public/jobs/{public_id}:
         get:
             description: The job and its application form as a candidate sees it. No sign-in. Knockout rules, the lawful basis and the assessment link are never included. Closed, paused and archived jobs say so in state.

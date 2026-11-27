@@ -14,6 +14,16 @@ Services stay as they are: applications owns applications, org owns companies, h
 
 ## Phase 1: public careers API (size M)
 
+**Status: built** (not yet deployed). What differs from the plan below:
+
+- Hiring does not keep a read model of the profile. It reads the profile through `OrgService.GetCompany` (new fields on `Company`), cached for a minute like the rest of the company row, so there is no extra event consumer.
+- `org.company_slugs` is written by org in the same request that saves the profile (claim first, regional row second, claim rolled back on failure). Org events are not used to keep it in sync.
+- A new permission `org.profile.edit` (Founder and HR 1) guards the writes; any member can read the profile.
+- There is no "allow indexing" flag on jobs yet, so only `show_on_career_page` is respected.
+- Public rate limiting is not added: the page is `GET`, cached for 60 seconds, and reads only published data.
+- Once chosen, a slug can be changed but not removed (links to it are out in the world).
+- Code: `orgstore/{slug,profile}.go`, `orghttp/company_profile.go`, `hiring/public/company.go`, `hiringstore/company_page.go`; migrations `000025`, `global_registry/000021` and `000022`; `scripts/e2e-careers.sh`.
+
 - **Org:** add `slug`, `about`, `website` and `logo` to organizations, with `GET/PUT /organization/profile`. Slug uniqueness checks and a reserved-word list.
 - **Global registry:** a `company_slugs` table (slug to company and region), kept in sync by org events. The public URL carries no region, so the lookup must be global.
 - **Hiring:** a read model of the public profile, fed by an event such as `org.company.profile_updated.v1`. Add `GET /public/companies/{slug}` returning the profile and open roles, with filters (location, team, employment type, remote) and cursor paging. Only jobs with "show on career page" on are included; the indexing flag is respected.

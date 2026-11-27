@@ -131,7 +131,7 @@ func Run() error {
 	sessions := session.NewManager(redisClient, session.ManagerConfig{
 		Kind: session.KindProduct, IdleTTL: cfg.SessionIdleTTL, AbsoluteTTL: cfg.SessionAbsoluteTTL, Secure: cfg.CookieSecure,
 	})
-	store := regionalStore(router)
+	store := regionalStore(router, global)
 	// REGION_MOVE=saga: the onboarding steps that give the account a country run the region-migration saga
 	// (identity over gRPC) instead of the inline copy.
 	saga, stopSaga, err := regionsaga.Start(ctx, global, regionsaga.Regional(router.DB), log)

@@ -24,7 +24,7 @@ func TestHiringPath(t *testing.T) {
 		"/hiring/catalog", "/hiring/timezones", "/hiring/skills", "/hiring/me", "/hiring/people", "/hiring/departments",
 		"/hiring/templates", "/hiring/templates/1/export", "/hiring/settings",
 		"/organization/dpia",
-		"/public/jobs/sitemap.xml", "/public/jobs/abc",
+		"/public/jobs/sitemap.xml", "/public/jobs/abc", "/public/companies/acme",
 		"/j/abc", "/j/abc/privacy",
 	}
 	no := []string{
@@ -32,7 +32,8 @@ func TestHiringPath(t *testing.T) {
 		"/public/jobs/abc/applications", "/public/jobs/abc/uploads", "/jobs/1/applications", "/jobs/1/applications/2/status",
 		"/jobs/1/applications/2/files/3", "/hiring/applicant-settings",
 		// everything else stays on the monolith
-		"/auth/login", "/auth/me", "/organization", "/organization/members", "/organization/agreements", "/organization/privacy-contact", "/organization/agreements/x", "/public", "/public/jobs",
+		"/auth/login", "/auth/me", "/organization", "/organization/members", "/organization/agreements", "/organization/privacy-contact", "/organization/agreements/x", "/public", "/public/jobs", "/public/companies", "/public/companies/acme/jobs",
+		"/organization/profile",
 		"/countries", "/admin/users", "/j", "/j/abc/other", "/jobsx", "/kyb/submit",
 	}
 	for _, p := range yes {
@@ -74,20 +75,23 @@ func TestRoutedToFourUpstreams(t *testing.T) {
 	edge := httptest.NewServer(h)
 	t.Cleanup(edge.Close)
 	cases := map[string]string{
-		"/api/v1/jobs":                         "hiring",
-		"/api/v1/jobs/1/publish":               "hiring",
-		"/api/v1/jobs/1/applications":          "applications",
-		"/api/v1/public/jobs/abc":              "hiring",
-		"/api/v1/public/jobs/abc/applications": "applications",
-		"/api/v1/public/jobs/sitemap.xml":      "hiring",
-		"/api/v1/hiring/settings":              "hiring",
-		"/api/v1/hiring/applicant-settings":    "applications",
-		"/api/v1/organization/agreements":      "org",
-		"/api/v1/organization/dpia":            "hiring",
-		"/api/v1/countries":                    "org",
-		"/j/abc":                               "hiring",
-		"/api/v1/auth/me":                      "monolith",
-		"/api/v1/organization/other":           "monolith",
+		"/api/v1/jobs":                            "hiring",
+		"/api/v1/jobs/1/publish":                  "hiring",
+		"/api/v1/jobs/1/applications":             "applications",
+		"/api/v1/public/jobs/abc":                 "hiring",
+		"/api/v1/public/jobs/abc/applications":    "applications",
+		"/api/v1/public/jobs/sitemap.xml":         "hiring",
+		"/api/v1/public/companies/acme":           "hiring",
+		"/api/v1/organization/profile":            "org",
+		"/api/v1/organization/profile/slug-check": "org",
+		"/api/v1/hiring/settings":                 "hiring",
+		"/api/v1/hiring/applicant-settings":       "applications",
+		"/api/v1/organization/agreements":         "org",
+		"/api/v1/organization/dpia":               "hiring",
+		"/api/v1/countries":                       "org",
+		"/j/abc":                                  "hiring",
+		"/api/v1/auth/me":                         "monolith",
+		"/api/v1/organization/other":              "monolith",
 	}
 	for path, want := range cases {
 		resp, err := http.Get(edge.URL + path)

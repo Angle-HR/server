@@ -34,6 +34,12 @@ const publicCompanySQL = `
 SELECT legal_name, COALESCE(privacy_contact_email, ''), COALESCE(dpo_contact, '')
 FROM accounts.organizations WHERE id = $1::uuid`
 
+// publicCompanyFullSQL is publicCompanySQL plus the public profile.
+const publicCompanyFullSQL = `
+SELECT legal_name, COALESCE(privacy_contact_email, ''), COALESCE(dpo_contact, ''),
+       COALESCE(slug, ''), COALESCE(display_name, ''), COALESCE(about, ''), COALESCE(website, ''), COALESCE(logo_url, '')
+FROM accounts.organizations WHERE id = $1::uuid`
+
 // frozenSchema is the shape freezeFormSQL writes: the form's questions as they were at publish.
 type frozenSchema struct {
 	Questions []formschema.FormQuestion `json:"questions"`

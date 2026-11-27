@@ -35,7 +35,11 @@ var (
 )
 
 // Store is the data layer.
-type Store struct{ Regional RegionalDB }
+type Store struct {
+	Regional RegionalDB
+	// Slugs is the global careers page address registry. Only the profile calls need it.
+	Slugs SlugRegistry
+}
 
 func (s *Store) db(reg region.Region) (DB, error) {
 	if reg == region.RegionGlobal || !region.Valid(reg) {
@@ -50,14 +54,18 @@ type Company struct {
 	KYBStatus                           string
 	PrivacyEmail, DPOContact            string
 	Region                              string
+	// Public profile: what the careers page shows. Empty when not set.
+	Slug, DisplayName, About, Website, LogoURL string
 }
 
 const companyCols = `o.id::text, o.legal_name, coalesce(o.business_registered_address, ''), o.owner_user_id::text,
-       o.kyb_status, coalesce(o.privacy_contact_email, ''), coalesce(o.dpo_contact, '')`
+       o.kyb_status, coalesce(o.privacy_contact_email, ''), coalesce(o.dpo_contact, ''),
+       coalesce(o.slug, ''), coalesce(o.display_name, ''), coalesce(o.about, ''), coalesce(o.website, ''), coalesce(o.logo_url, '')`
 
 func scanCompany(row pgx.Row, reg region.Region) (*Company, error) {
 	var c Company
-	err := row.Scan(&c.ID, &c.LegalName, &c.Address, &c.OwnerUserID, &c.KYBStatus, &c.PrivacyEmail, &c.DPOContact)
+	err := row.Scan(&c.ID, &c.LegalName, &c.Address, &c.OwnerUserID, &c.KYBStatus, &c.PrivacyEmail, &c.DPOContact,
+		&c.Slug, &c.DisplayName, &c.About, &c.Website, &c.LogoURL)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

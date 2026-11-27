@@ -97,7 +97,10 @@ func (g *GRPCCompany) Profile(ctx context.Context, region, tenantID string) (hir
 		return hiringstore.CompanyProfile{}, mapErr("get company", err)
 	}
 	co := resp.GetCompany()
-	p := hiringstore.CompanyProfile{Name: co.GetLegalName(), PrivacyEmail: co.GetPrivacyContactEmail(), DPOContact: co.GetDpoContact()}
+	p := hiringstore.CompanyProfile{
+		Name: co.GetLegalName(), PrivacyEmail: co.GetPrivacyContactEmail(), DPOContact: co.GetDpoContact(),
+		Slug: co.GetSlug(), DisplayName: co.GetDisplayName(), About: co.GetAbout(), Website: co.GetWebsite(), LogoURL: co.GetLogoUrl(),
+	}
 	g.put(tenantID, p)
 	return p, nil
 }

@@ -96,7 +96,9 @@ type Catalog interface {
 
 // Service reads public jobs.
 type Service struct {
-	Registry  Registry
+	Registry Registry
+	// Slugs finds a company by its careers page address. Nil turns the careers page off.
+	Slugs     SlugRegistry
 	Directory Directory
 	Catalog   Catalog
 	// SiteURL is the public origin of the job pages, without a trailing slash, e.g. https://jobs.example.com.

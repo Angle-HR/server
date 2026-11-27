@@ -146,6 +146,7 @@ func companyMsg(c *orgstore.Company) *orgv1.Company {
 	return &orgv1.Company{
 		Id: c.ID, LegalName: c.LegalName, RegisteredAddress: c.Address, OwnerUserId: c.OwnerUserID,
 		KybStatus: kybStatus(c.KYBStatus), PrivacyContactEmail: c.PrivacyEmail, DpoContact: c.DPOContact, Region: c.Region,
+		Slug: c.Slug, DisplayName: c.DisplayName, About: c.About, Website: c.Website, LogoUrl: c.LogoURL,
 	}
 }
 

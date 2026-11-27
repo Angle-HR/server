@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Angle-HR/server/internal/dbrouter"
 	"github.com/Angle-HR/server/internal/kyb"
@@ -21,8 +22,8 @@ import (
 )
 
 // regionalStore adapts the database router to orgstore.
-func regionalStore(router *dbrouter.DBRouter) *orgstore.Store {
-	return &orgstore.Store{Regional: func(reg region.Region) (orgstore.DB, error) {
+func regionalStore(router *dbrouter.DBRouter, global *pgxpool.Pool) *orgstore.Store {
+	return &orgstore.Store{Slugs: orgstore.GlobalSlugs{DB: global}, Regional: func(reg region.Region) (orgstore.DB, error) {
 		p, err := router.DB(reg)
 		if err != nil {
 			return nil, err

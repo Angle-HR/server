@@ -45,6 +45,7 @@ var DefaultMatrix = map[Role][]Permission{
 		"member.remove",
 		"account.ownership.transfer",
 		"account.agreements.accept",
+		"org.profile.edit",
 	},
 	RoleHR1: {
 		"job.create",
@@ -82,6 +83,7 @@ var DefaultMatrix = map[Role][]Permission{
 		"member.invite",
 		"member.role.assign",
 		"member.remove",
+		"org.profile.edit",
 	},
 	RoleHR2: {
 		"job.create",

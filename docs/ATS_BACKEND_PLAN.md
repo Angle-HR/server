@@ -71,6 +71,29 @@ Services stay as they are: applications owns applications, org owns companies, h
 - **Audit and output:** audit trail (document hash, consent, IP and user agent, timestamps) and a signed PDF in the regional bucket.
 - **Event:** `offer.signed` moves the candidate to Hired.
 
+## Phase 6: what is left (planned, not started)
+
+Phases 1 to 5 are built and on staging (migrations up to `000030`). This phase collects what they left out. Items are in the order to do them.
+
+1. **Verify what exists (small).** Run `scripts/e2e-pipeline.sh`, `e2e-email.sh`, `e2e-interviews.sh` and `e2e-offers.sh` against staging (the offers script needs `TOKEN_SQL_CMD`). Check that `APP_URL` is set for `hiring-outbox`, then send one real offer, one email and one attachment through Brevo to a test inbox. None of these paths has run end to end yet, and the later items build on them. Staging swagger (`/api/docs`) answers 401; find out where (gateway or WAF) and decide whether it stays closed.
+2. **Actor names (small).** Add a batch lookup `Names(region, ids)` to the identity service over gRPC and wire it into `Service.Names`. It fills `actor_id` on the timeline, email history and offer audit with names, makes `{{sender_name}}` the sender's name instead of "the hiring team", and shows interviewers by name. Extend the lookup to return email addresses for item 3.
+3. **Interviewer invites (small, after 2).** Email the calendar event to each interviewer through the Phase 3 message path. Recommended: a separate internal invite per interviewer, so the candidate's email never shows who else is on the panel. Needs a way to send a message whose recipient is not the application's candidate (today the recipient is always read from the application, on purpose), so this is a new, narrow path for internal recipients.
+4. **Delivery status (medium; decision needed).** Delivered, bounced, blocked and opened for candidate emails.
+   - **Option A, Brevo API (recommended):** send candidate messages through Brevo's HTTP API, which returns a message id; a public webhook route (shared-secret check, idempotent) maps events back to `app_messages` through new `delivery_status` and `delivered_at` columns. System emails stay on SMTP. Needs a Brevo API key in Secrets Manager. The API call carries attachments too.
+   - **Option B, own Message-ID over SMTP:** set a Message-ID we generate and match webhooks to it. Smaller change, less reliable matching.
+   - Surfaces: a status on each email in the history, and a bounce shown on the application. Not decided.
+5. **Offer extras (medium; each is independent).**
+   - **Expiry reminder:** the outbox sends one reminder 48 hours before an unsigned offer expires. Cheap; do it.
+   - **Counter-offer:** the candidate declines with a request, the company sees it and sends a revised offer. The biggest change, as it relaxes the one-live-offer rule. Deferred.
+   - **Countersignature by the company** and **several signers:** deferred until a customer asks.
+6. **Calendar sync (large; deferred).** Google and Microsoft OAuth, token storage and a sync worker. A project of its own with a security review; not before the core flow is proven.
+
+Other gaps to close along the way: company deletion removes offer, attachment and interview rows but not the objects in the bucket (retention does remove them per application); the local monolith does not mount `/public/offers`, so offers are reachable only through the applications service and the BFF; an unsent attachment is only removed with its application, with no sweeper for stale uploads; delivery of events-transport email (`NOTIFICATIONS_TRANSPORT=events`) with attachments is untested and a NATS message may be too small for them.
+
+Outside the backend: the client needs a page at `/offers/{token}` (read, sign, decline, then the signed PDF), and its careers page still uses fixtures.
+
+**Open decisions:** Brevo API or own Message-ID (item 4); which offer extras beyond the reminder (item 5).
+
 ## Cross-cutting
 
 - **Migrations:** applications regional migrations from 000025 on, plus one global-registry migration for slugs. Staging holds real legacy data, so every migration needs a backfill.

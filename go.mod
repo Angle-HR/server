@@ -7,7 +7,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.3
 	github.com/Software78/sql-go-query-builder v0.5.2
 	github.com/bdpiprava/scalar-go v0.13.0
-	github.com/go-chi/chi/v5 v5.2.5
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/go-chi/cors v1.2.2
 	github.com/go-pdf/fpdf v0.9.0
 	github.com/google/uuid v1.6.0
